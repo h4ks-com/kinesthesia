@@ -333,16 +333,20 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
         )}
       </div>
 
-      {live && song.status === "ready" ? (
+      {song.status === "ready" ? (
         <OpponentView
           song={song.song}
           hiddenTracks={new Set()}
           opponent={opponent ?? noOpponent}
           part={theirPart}
           pressed={opponentPressed}
-          connected={live}
+          state={live ? "playing" : opponent !== null ? "gone" : "waiting"}
         />
-      ) : null}
+      ) : (
+        <section className="flex min-h-0 min-w-0 flex-1 items-center justify-center border-line bg-void text-muted text-sm max-lg:border-t lg:border-l">
+          waiting for a player
+        </section>
+      )}
     </div>
   );
 }

@@ -511,7 +511,7 @@ export function Player({
             waiting for you
           </p>
         ) : null}
-        {playback.soundReady ? null : (
+        {playback.soundReady || mode === "battle" ? null : (
           <p className="-translate-x-1/2 absolute top-6 left-1/2 flex items-center gap-2 whitespace-nowrap rounded-full border border-line-strong bg-panel/90 px-4 py-1.5 text-muted text-xs backdrop-blur">
             <Volume2 className="size-3.5 shrink-0" aria-hidden="true" />
             press play to start the sound

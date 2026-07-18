@@ -8,7 +8,7 @@ test("a battle is set up and previewed before anyone is invited", async ({
   await page.goto(`/battle?${playerQuery()}`);
 
   // The song is playable straight away, so the host can try the part first.
-  await expect(page.locator("canvas")).toBeVisible();
+  await expect(page.locator("canvas").first()).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Play", exact: true }),
   ).toBeVisible();
@@ -40,7 +40,7 @@ test("the room stores the difficulty and the link stays short", async ({
   });
 
   await page.goto(`/battle?${playerQuery()}`);
-  await expect(page.locator("canvas")).toBeVisible();
+  await expect(page.locator("canvas").first()).toBeVisible();
   await page.getByRole("button", { name: "Simplify" }).click();
   await page.getByRole("button", { name: "Invite a player" }).click();
 
@@ -100,7 +100,7 @@ test("confirming the invite freezes the settings", async ({ page }) => {
   );
 
   await page.goto(`/battle?${playerQuery()}`);
-  await expect(page.locator("canvas")).toBeVisible();
+  await expect(page.locator("canvas").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Simplify" })).toBeVisible();
 
   await page.getByRole("button", { name: "Invite a player" }).click();
@@ -125,7 +125,7 @@ test("claiming a track is frozen once the invite is out", async ({ page }) => {
   );
 
   await page.goto(`/battle?${playerQuery()}`);
-  await expect(page.locator("canvas")).toBeVisible();
+  await expect(page.locator("canvas").first()).toBeVisible();
   await page.getByRole("button", { name: "Tracks" }).click();
   await expect(
     page.getByRole("button", { name: /Play .* yourself/ }).first(),
@@ -142,4 +142,16 @@ test("claiming a track is frozen once the invite is out", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: /Play .* yourself/ }),
   ).toHaveCount(0);
+});
+
+test("battle is split with an opponent side from the start", async ({
+  page,
+}) => {
+  await serveFixture(page);
+  await page.goto(`/battle?${playerQuery()}`);
+
+  // Two rolls before anyone joins: yours and the opponent's, which waits.
+  await expect(page.locator("canvas")).toHaveCount(2);
+  await expect(page.getByText("Opponent")).toBeVisible();
+  await expect(page.getByText("waiting for a player")).toBeVisible();
 });

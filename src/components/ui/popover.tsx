@@ -58,7 +58,7 @@ export function Popover({
       </button>
       {open ? (
         <div
-          className={`rise absolute z-50 max-h-[70vh] overflow-auto rounded-xl border border-line-strong bg-panel p-1.5 shadow-[0_20px_60px_-12px_rgba(0,0,0,0.9)] ${
+          className={`rise absolute z-50 max-h-[70vh] overflow-y-auto overflow-x-clip rounded-xl border border-line-strong bg-panel p-1.5 shadow-[0_20px_60px_-12px_rgba(0,0,0,0.9)] ${
             align === "right" ? "right-0" : "left-0"
           } ${
             side === "top" ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]"

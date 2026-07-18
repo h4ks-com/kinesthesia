@@ -39,10 +39,23 @@ export function SongRow({
   favorite,
   onToggleFavorite,
 }: SongRowProps) {
+  const watchHref = playerPath("watch", {
+    url,
+    name,
+    source,
+    tracks: null,
+    speed: defaultSpeed,
+  });
+
   return (
     <li className="group flex min-w-0 items-center justify-between gap-3 rounded-xl border border-transparent px-3 py-2.5 transition-colors hover:border-line hover:bg-panel">
       <div className="min-w-0 flex-1">
-        <p className="truncate font-medium">{name}</p>
+        <Link
+          href={watchHref}
+          className="block truncate font-medium transition-colors hover:text-accent"
+        >
+          {name}
+        </Link>
         <div className="mt-0.5 flex min-w-0 items-center gap-2 font-mono text-faint text-xs">
           {source !== null && sourceUrl !== null ? (
             <a

@@ -55,6 +55,9 @@ test.describe("nothing overflows sideways", () => {
 
     const menu = page.locator("div.rise");
     await expect(menu).toBeVisible();
+    expect(
+      await menu.evaluate((node) => node.scrollWidth - node.clientWidth),
+    ).toBe(0);
     const box = await menu.boundingBox();
     expect(box).not.toBeNull();
     if (box !== null) {

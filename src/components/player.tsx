@@ -337,9 +337,11 @@ export function Player({
     return pitches[Math.floor(pitches.length / 2)] ?? null;
   }, [song, owed, interactive, hiddenTracks]);
 
+  // Interactive modes light only the part you owe and ghost the rest, so the
+  // accompaniment and any other track stay visible without competing with it.
   const yoursSet = useMemo(
-    () => (simplified && interactive ? owedIds : null),
-    [simplified, interactive, owedIds],
+    () => (interactive ? owedIds : null),
+    [interactive, owedIds],
   );
   const yoursRef = useRef(yoursSet);
   yoursRef.current = yoursSet;

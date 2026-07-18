@@ -205,3 +205,22 @@ test("space plays even when a control was just clicked", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
   await expect(page).toHaveURL(/simple=1/);
 });
+
+test("learn ghosts every track but the one you play, without simplify", async ({
+  page,
+}) => {
+  await serveFixture(page);
+
+  // Watch draws the whole song bright.
+  await page.goto(`/watch?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+  await expect.poll(async () => brightNotePixels(page)).toBeGreaterThan(1000);
+  const whole = await brightNotePixels(page);
+
+  // Learn, claiming one track, lights only that track and ghosts the rest.
+  await page.goto(`/learn?${playerQuery()}&tracks=0`);
+  await expect(page.locator("canvas")).toBeVisible();
+  await expect
+    .poll(async () => brightNotePixels(page))
+    .toBeLessThan(whole * 0.9);
+});

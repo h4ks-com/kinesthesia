@@ -35,14 +35,16 @@ export function OpponentView({
   connected,
 }: OpponentViewProps) {
   const getPosition = useCallback(() => opponent.position, [opponent.position]);
+  // Their roll lights the part they owe and ghosts the rest, the same as your
+  // own side, so both halves read alike.
   const theirs = useMemo(() => {
-    if (part === null || !part.simplified) {
+    if (part === null) {
       return null;
     }
-    const line = reduceToMelody(song, {
-      tracks: new Set(part.tracks),
-      maxNotesPerSecond: part.melodyRate,
-    });
+    const tracks = new Set(part.tracks);
+    const line = part.simplified
+      ? reduceToMelody(song, { tracks, maxNotesPerSecond: part.melodyRate })
+      : song.notes.filter((note) => tracks.has(note.track));
     return new Set(line.map((note) => note.id));
   }, [song, part]);
   const getTheirs = useCallback(() => theirs, [theirs]);

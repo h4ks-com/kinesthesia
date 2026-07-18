@@ -1,3 +1,4 @@
+import { defaultMelodyRate } from "@/lib/midi/melody";
 import {
   buildPlayerUrl,
   defaultSpeed,
@@ -37,6 +38,8 @@ export async function searchMidi({
           source: result.source,
           tracks: null,
           speed: defaultSpeed,
+          simplified: false,
+          melodyRate: defaultMelodyRate,
         });
       return {
         ...result,

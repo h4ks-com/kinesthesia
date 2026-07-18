@@ -52,6 +52,9 @@ export type Frame = {
   /** The pitches the player still owes at the current gate, so a strike that
    * lands on one can be celebrated differently from a wrong one. */
   readonly owed: ReadonlySet<number>;
+  /** Note ids the player has to play. Everything else is drawn faintly, so a
+   * reduced part still shows the song it came from. Null draws them all. */
+  readonly yours: ReadonlySet<number> | null;
 };
 
 export class PianoRollRenderer {
@@ -201,8 +204,9 @@ export class PianoRollRenderer {
       if (note.end < position || frame.hiddenTracks.has(note.track)) {
         continue;
       }
+      const ghost = frame.yours !== null && !frame.yours.has(note.id);
       const color = trackColor(note.track);
-      if (note.start <= position) {
+      if (note.start <= position && !ghost) {
         active.set(note.pitch, color);
       }
 
@@ -222,11 +226,18 @@ export class PianoRollRenderer {
       gradient.addColorStop(0, color.core);
       gradient.addColorStop(0.5, color.glow);
       gradient.addColorStop(1, color.glow);
+      ctx.globalAlpha = ghost ? 0.22 : 1;
       ctx.fillStyle = gradient;
       roundRect(ctx, x, y, noteWidth, noteHeight, 4);
       ctx.fill();
+      ctx.globalAlpha = 1;
 
-      if (position < note.start && noteWidth >= 17 && noteHeight >= 20) {
+      if (
+        !ghost &&
+        position < note.start &&
+        noteWidth >= 17 &&
+        noteHeight >= 20
+      ) {
         const centerX = x + noteWidth / 2;
         const centerY = Math.min(y + noteHeight - 13, keyboardTop - 13);
         const label = noteName(note.pitch);

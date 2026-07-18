@@ -13,6 +13,7 @@ import {
   noOpponent,
   type Opponent,
 } from "@/lib/battle/protocol";
+import { clampMelodyRate } from "@/lib/midi/melody";
 import { useSong } from "@/lib/midi/use-song";
 import type { PlayerParams } from "@/lib/player-url";
 import { accuracy, type Score, scorePoints } from "@/lib/scoring/judge";
@@ -34,9 +35,11 @@ export function Battle({ params, playerName, ice }: BattleProps) {
   const [connection, setConnection] = useState<Connection>({ status: "idle" });
   const [opponent, setOpponent] = useState<Opponent | null>(null);
   const [joinCode, setJoinCode] = useState("");
+  const [agreed, setAgreed] = useState<PlayerParams | null>(null);
   const [copied, setCopied] = useState(false);
   const opponentKeys = useRef<Set<number>>(new Set());
-  const song = useSong(params);
+  const match = agreed ?? params;
+  const song = useSong(match);
   const linkRef = useRef<DataConnection | null>(null);
 
   const attach = useCallback(
@@ -103,6 +106,8 @@ export function Battle({ params, playerName, ice }: BattleProps) {
           name: params.name,
           source: params.source,
           tracks: params.tracks ?? [],
+          simplified: params.simplified,
+          melodyRate: params.melodyRate,
         }),
       });
       if (!response.ok) {
@@ -127,7 +132,24 @@ export function Battle({ params, playerName, ice }: BattleProps) {
       setConnection({ status: "failed", message: "That room is not open" });
       return;
     }
-    const room: { peerId: string } = await response.json();
+    const room: {
+      peerId: string;
+      url: string;
+      name: string;
+      source: string | null;
+      tracks: number[];
+      simplified: boolean;
+      melodyRate: number;
+    } = await response.json();
+    setAgreed({
+      ...params,
+      url: room.url,
+      name: room.name,
+      source: room.source,
+      tracks: room.tracks,
+      simplified: room.simplified,
+      melodyRate: clampMelodyRate(room.melodyRate),
+    });
     const { Peer } = await import("peerjs");
     const peer = new Peer({ config: { iceServers: [...ice] } });
     peer.on("error", (error) =>
@@ -177,7 +199,7 @@ export function Battle({ params, playerName, ice }: BattleProps) {
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <Player
               mode="battle"
-              params={params}
+              params={match}
               onScore={onScore}
               onPress={onPress}
               onRelease={onRelease}
@@ -200,7 +222,7 @@ export function Battle({ params, playerName, ice }: BattleProps) {
     <main className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-[#05060a] px-6 text-zinc-100">
       <div className="flex flex-col items-center gap-1">
         <h1 className="font-semibold text-2xl">Battle</h1>
-        <p className="text-zinc-400">{params.name}</p>
+        <p className="text-zinc-400">{match.name}</p>
       </div>
 
       {connection.status === "hosting" ? (

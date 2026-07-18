@@ -10,20 +10,24 @@ export class PlaybackEngine {
   private bank: InstrumentBank | null = null;
   private transport: Transport | null = null;
   private song: Song | null = null;
-  private autoTracks: ReadonlySet<number> = new Set();
+  private autoNotes: ReadonlySet<number> = new Set();
   private cursor = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private pendingPosition = 0;
   private pendingRate = 1;
 
-  setSong(song: Song, autoTracks: ReadonlySet<number>): void {
+  setSong(song: Song, autoNotes: ReadonlySet<number>): void {
     this.song = song;
-    this.autoTracks = autoTracks;
+    this.autoNotes = autoNotes;
     this.resetCursor();
   }
 
-  setAutoTracks(autoTracks: ReadonlySet<number>): void {
-    this.autoTracks = autoTracks;
+  /** A player who owes only the melody still hears the rest of their part. */
+  setAutoNotes(autoNotes: ReadonlySet<number>): void {
+    this.autoNotes = autoNotes;
+    // Notes inside the look ahead window are already with a voice, so the
+    // cursor alone would hand them out a second time.
+    this.bank?.stopAll();
     this.resetCursor();
   }
 
@@ -165,7 +169,7 @@ export class PlaybackEngine {
       if (note === undefined || note.start > horizon) {
         break;
       }
-      if (!this.autoTracks.has(note.track)) {
+      if (!this.autoNotes.has(note.id)) {
         this.cursor += 1;
         continue;
       }

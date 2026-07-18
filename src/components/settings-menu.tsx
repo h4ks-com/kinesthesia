@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/ui/popover";
 import { latencyAdvice, latencyRange } from "@/lib/audio/latency";
 import type { InputStatus } from "@/lib/input/use-note-input";
+import { melodyRateRange } from "@/lib/midi/melody";
 import { defaultSpeed, type Speed, speeds } from "@/lib/player-url";
 import { keyWidthRange } from "@/lib/render/keyboard";
 
@@ -15,6 +16,9 @@ type SettingsMenuProps = {
   showSpeed: boolean;
   keyWidth: number;
   onKeyWidth: (width: number) => void;
+  melodyRate: number;
+  onMelodyRate: (rate: number) => void;
+  showMelodyRate: boolean;
   octave: number | null;
   onOctave: (octave: number) => void;
   inputStatus: InputStatus;
@@ -30,6 +34,9 @@ export function SettingsMenu({
   showSpeed,
   keyWidth,
   onKeyWidth,
+  melodyRate,
+  onMelodyRate,
+  showMelodyRate,
   octave,
   onOctave,
   inputStatus,
@@ -90,6 +97,21 @@ export function SettingsMenu({
           />
           <Note>Widen the keys to tap them, then drag the roll sideways.</Note>
         </Section>
+
+        {showMelodyRate ? (
+          <Section title="Note speed">
+            <SliderRow
+              ariaLabel="Maximum notes per second"
+              min={melodyRateRange.min}
+              max={melodyRateRange.max}
+              step={1}
+              value={melodyRate}
+              valueText={`${melodyRate}/sec`}
+              onChange={onMelodyRate}
+            />
+            <Note>Lower keeps the peaks of the tune and drops the rest.</Note>
+          </Section>
+        ) : null}
 
         {octave === null ? null : (
           <Section title="Octave">

@@ -95,6 +95,8 @@ const roomSchema = z
     name: z.string(),
     source: z.string().nullable(),
     tracks: z.array(z.number().int()),
+    simplified: z.boolean(),
+    melodyRate: z.number().int(),
   })
   .openapi("BattleRoom");
 
@@ -114,6 +116,8 @@ const createRoomRoute = createRoute({
             name: z.string(),
             source: z.string().nullable().default(null),
             tracks: z.array(z.number().int()).default([]),
+            simplified: z.boolean().default(false),
+            melodyRate: z.number().int().min(1).max(12).default(8),
           }),
         },
       },

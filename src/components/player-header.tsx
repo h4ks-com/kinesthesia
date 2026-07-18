@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, GraduationCap, Piano, Swords } from "lucide-react";
+import { Eye, GraduationCap, Music2, Piano, Swords } from "lucide-react";
 import Link from "next/link";
 import { TrackMenu } from "@/components/track-menu";
 import type { SongTrack } from "@/lib/midi/song";
@@ -28,6 +28,8 @@ type PlayerHeaderProps = {
   hiddenTracks: ReadonlySet<number>;
   playerTracks: ReadonlySet<number>;
   interactive: boolean;
+  simplified: boolean;
+  onSimplified: (simplified: boolean) => void;
   score: Score;
   opponent: { name: string; points: number; accuracy: number } | null;
   onToggleVisible: (index: number) => void;
@@ -42,6 +44,8 @@ export function PlayerHeader({
   hiddenTracks,
   playerTracks,
   interactive,
+  simplified,
+  onSimplified,
   score,
   opponent,
   onToggleVisible,
@@ -94,13 +98,30 @@ export function PlayerHeader({
         onSolo={onSolo}
       />
 
+      {interactive && mode !== "battle" ? (
+        <button
+          type="button"
+          onClick={() => onSimplified(!simplified)}
+          aria-pressed={simplified}
+          data-tip={
+            simplified ? "Play the full part" : "Play one note at a time"
+          }
+          aria-label="Simplify to one note at a time"
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 font-medium text-sm transition-colors sm:px-3 ${
+            simplified
+              ? "border-accent bg-accent-soft text-accent"
+              : "border-line-strong text-muted hover:border-accent hover:text-accent"
+          }`}
+        >
+          <Music2 className="size-4" aria-hidden="true" />
+          <span className="hidden lg:inline">Simplify</span>
+        </button>
+      ) : null}
+
       {switchable.map(({ mode: target, label, icon: Icon }) => (
         <Link
           key={target}
-          href={playerPath(target, {
-            ...params,
-            tracks: [...playerTracks],
-          })}
+          href={playerPath(target, params)}
           data-tip={`Switch to ${label.toLowerCase()}`}
           aria-label={`Switch to ${label}`}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line-strong px-2.5 py-2 font-medium text-sm transition-colors hover:border-accent hover:text-accent sm:px-3"

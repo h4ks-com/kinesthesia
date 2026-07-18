@@ -27,11 +27,17 @@ function song(notes: SongNote[]): Song {
   return { name: "test", duration: 10, notes, tracks };
 }
 
+function owned(source: Song, tracks: ReadonlySet<number>): SongNote[] {
+  return source.notes.filter((entry) => tracks.has(entry.track));
+}
+
 describe("buildGates", () => {
   it("groups notes struck together into one gate", () => {
     const gates = buildGates(
-      song([note(60, 0, 0), note(64, 0.01, 0), note(67, 0.02, 0)]),
-      new Set([0]),
+      owned(
+        song([note(60, 0, 0), note(64, 0.01, 0), note(67, 0.02, 0)]),
+        new Set([0]),
+      ),
     );
     expect(gates).toHaveLength(1);
     expect(gates[0]?.pitches).toEqual([60, 64, 67]);
@@ -39,23 +45,21 @@ describe("buildGates", () => {
 
   it("keeps notes further apart as separate gates", () => {
     const gates = buildGates(
-      song([note(60, 0, 0), note(62, 0.5, 0)]),
-      new Set([0]),
+      owned(song([note(60, 0, 0), note(62, 0.5, 0)]), new Set([0])),
     );
     expect(gates).toHaveLength(2);
   });
 
   it("only takes the tracks the player owns", () => {
     const gates = buildGates(
-      song([note(60, 0, 0), note(62, 1, 1)]),
-      new Set([1]),
+      owned(song([note(60, 0, 0), note(62, 1, 1)]), new Set([1])),
     );
     expect(gates).toHaveLength(1);
     expect(gates[0]?.pitches).toEqual([62]);
   });
 
   it("is empty when the player owns nothing", () => {
-    expect(buildGates(song([note(60, 0, 0)]), new Set())).toEqual([]);
+    expect(buildGates(owned(song([note(60, 0, 0)]), new Set()))).toEqual([]);
   });
 });
 

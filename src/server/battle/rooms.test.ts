@@ -7,6 +7,8 @@ const host: NewRoom = {
   name: "A song",
   source: "bitmidi",
   tracks: [0, 2],
+  simplified: true,
+  melodyRate: 4,
 };
 
 describe("battle rooms", () => {

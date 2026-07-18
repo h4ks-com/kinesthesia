@@ -1,3 +1,9 @@
+import {
+  clampMelodyRate,
+  defaultMelodyRate,
+  type MelodyRate,
+} from "@/lib/midi/melody";
+
 export const playerModes = ["watch", "learn", "battle"] as const;
 
 export type PlayerMode = (typeof playerModes)[number];
@@ -13,10 +19,22 @@ export type PlayerParams = {
   readonly source: string | null;
   readonly tracks: readonly number[] | null;
   readonly speed: Speed;
+  /** Reduces the part you owe to one note at a time. It rides in the URL so
+   * both sides of a battle play the identical line. */
+  readonly simplified: boolean;
+  readonly melodyRate: MelodyRate;
 };
 
 function isSpeed(value: number): value is Speed {
   return speeds.some((option) => option === value);
+}
+
+function readRate(raw: string | null): MelodyRate {
+  if (raw === null) {
+    return defaultMelodyRate;
+  }
+  const value = Number(raw);
+  return Number.isFinite(value) ? clampMelodyRate(value) : defaultMelodyRate;
 }
 
 function isPlayableUrl(url: string): boolean {
@@ -39,6 +57,12 @@ export function buildPlayerUrl(
   }
   if (params.speed !== defaultSpeed) {
     target.searchParams.set("speed", String(params.speed));
+  }
+  if (params.simplified) {
+    target.searchParams.set("simple", "1");
+  }
+  if (params.melodyRate !== defaultMelodyRate) {
+    target.searchParams.set("rate", String(params.melodyRate));
   }
   return target.toString();
 }
@@ -75,5 +99,7 @@ export function parsePlayerParams(
     source: searchParams.get("source"),
     tracks,
     speed: isSpeed(speed) ? speed : defaultSpeed,
+    simplified: searchParams.get("simple") === "1",
+    melodyRate: readRate(searchParams.get("rate")),
   };
 }

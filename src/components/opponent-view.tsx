@@ -17,6 +17,7 @@ type OpponentViewProps = {
 /** The opponent's roll is driven entirely by what arrives over the wire, and it
  * is silent by design: you watch their hands, you do not hear them. */
 const nothingOwed = (): ReadonlySet<number> => new Set();
+const everyNote = (): null => null;
 
 export function OpponentView({
   song,
@@ -46,6 +47,7 @@ export function OpponentView({
           getPosition={getPosition}
           getPressed={pressed}
           getOwed={nothingOwed}
+          getYours={everyNote}
         />
         {connected ? null : (
           <p className="-translate-x-1/2 absolute top-4 left-1/2 rounded-full border border-line-strong bg-panel/90 px-3 py-1 text-muted text-xs backdrop-blur">

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  brightNotePixels,
   isPureWhite,
   keyRowFromBottom,
   litKeyCentre,
@@ -105,4 +106,50 @@ test("a javascript url is refused", async ({ page }) => {
   await expect(
     page.getByText("That link has no playable song on it."),
   ).toBeVisible();
+});
+
+test("simplify reduces the part and ghosts the rest", async ({ page }) => {
+  await serveFixture(page);
+  // Track 0 is the chord line, so there is real polyphony to reduce.
+  await page.goto(`/learn?${playerQuery()}&tracks=0`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  // The roll paints on an animation frame, so wait for it to settle before
+  // taking the reading everything else is measured against.
+  await expect.poll(async () => brightNotePixels(page)).toBeGreaterThan(1000);
+  const full = await brightNotePixels(page);
+
+  await page.getByRole("button", { name: "Simplify" }).click();
+  await expect(page).toHaveURL(/simple=1/);
+  await expect
+    .poll(async () => brightNotePixels(page))
+    .toBeLessThan(full * 0.9);
+});
+
+test("the note speed slider follows the simplify toggle", async ({ page }) => {
+  await serveFixture(page);
+  await page.goto(`/learn?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByLabel("Maximum notes per second")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "Simplify" }).click();
+  await page.getByRole("button", { name: "Settings" }).click();
+  const rate = page.getByLabel("Maximum notes per second");
+  await expect(rate).toBeVisible();
+  await rate.fill("3");
+  await expect(page).toHaveURL(/rate=3/);
+});
+
+test("a battle keeps the simplify setting fixed for both players", async ({
+  page,
+}) => {
+  await serveFixture(page);
+  await page.goto(`/learn?${playerQuery()}`);
+  await page.getByRole("button", { name: "Simplify" }).click();
+
+  const battle = page.getByRole("link", { name: "Switch to Battle" });
+  await expect(battle).toHaveAttribute("href", /simple=1/);
 });

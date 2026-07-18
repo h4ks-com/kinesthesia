@@ -1,4 +1,4 @@
-import type { Song } from "@/lib/midi/song";
+import type { Song, SongNote } from "@/lib/midi/song";
 
 const chordWindow = 0.03;
 
@@ -9,15 +9,9 @@ export type Gate = {
 
 /** Notes struck together become one gate, so a chord is judged as a unit
  * rather than as notes the player has to hit in a particular order. */
-export function buildGates(
-  song: Song,
-  playerTracks: ReadonlySet<number>,
-): Gate[] {
+export function buildGates(notes: readonly SongNote[]): Gate[] {
   const gates: Gate[] = [];
-  for (const note of song.notes) {
-    if (!playerTracks.has(note.track)) {
-      continue;
-    }
+  for (const note of notes) {
     const last = gates[gates.length - 1];
     if (last !== undefined && note.start - last.start <= chordWindow) {
       gates[gates.length - 1] = {

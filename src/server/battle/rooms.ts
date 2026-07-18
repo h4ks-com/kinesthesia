@@ -5,6 +5,10 @@ export type BattleRoom = {
   readonly name: string;
   readonly source: string | null;
   readonly tracks: readonly number[];
+  /** The host's settings travel with the room, so a joiner cannot hand
+   * themselves an easier part than the player they are up against. */
+  readonly simplified: boolean;
+  readonly melodyRate: number;
   readonly createdAt: number;
 };
 

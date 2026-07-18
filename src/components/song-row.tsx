@@ -2,6 +2,7 @@
 
 import { ExternalLink, Eye, GraduationCap, Star, Swords } from "lucide-react";
 import Link from "next/link";
+import { defaultMelodyRate } from "@/lib/midi/melody";
 import { defaultSpeed, type PlayerMode, playerPath } from "@/lib/player-url";
 
 const modes = [
@@ -45,6 +46,8 @@ export function SongRow({
     source,
     tracks: null,
     speed: defaultSpeed,
+    simplified: false,
+    melodyRate: defaultMelodyRate,
   });
 
   return (
@@ -100,6 +103,8 @@ export function SongRow({
               source,
               tracks: null,
               speed: defaultSpeed,
+              simplified: false,
+              melodyRate: defaultMelodyRate,
             })}
             data-tip={tip}
             data-tip-side="top"

@@ -8,6 +8,11 @@ import { PlayerTransport } from "@/components/player-transport";
 import { clampLatency, judgedPosition } from "@/lib/audio/latency";
 import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
 import { useNoteInput } from "@/lib/input/use-note-input";
+import {
+  clampMelodyRate,
+  type MelodyRate,
+  reduceToMelody,
+} from "@/lib/midi/melody";
 import type { Song } from "@/lib/midi/song";
 import { useSong } from "@/lib/midi/use-song";
 import {
@@ -52,6 +57,8 @@ export function Player({
   const [speed, setSpeed] = useState(params.speed);
   const [latencyOffset, setLatencyOffset] = useState(0);
   const [keyWidth, setKeyWidth] = useState(defaultKeyWidth);
+  const [simplified, setSimplified] = useState(params.simplified);
+  const [melodyRate, setMelodyRate] = useState(params.melodyRate);
 
   useEffect(() => {
     if (song === null || !interactive || playerTracks.size > 0) {
@@ -78,32 +85,48 @@ export function Player({
     );
   }, [song, interactive, playerTracks]);
 
+  const owed = useMemo(() => {
+    if (song === null || !interactive) {
+      return [];
+    }
+    const mine = song.notes.filter((note) => playerTracks.has(note.track));
+    return simplified
+      ? reduceToMelody(song, {
+          tracks: playerTracks,
+          maxNotesPerSecond: melodyRate,
+        })
+      : mine;
+  }, [song, playerTracks, interactive, simplified, melodyRate]);
+
+  const owedIds = useMemo(() => new Set(owed.map((note) => note.id)), [owed]);
+
   // Learning shows only the part you owe while the rest keeps playing, so
   // hiding a track is a view choice there rather than a mute.
-  const autoTracks = useMemo(() => {
+  const autoNotes = useMemo(() => {
     if (song === null) {
       return new Set<number>();
     }
     return new Set(
-      song.tracks
-        .map((track) => track.index)
-        .filter((index) =>
-          interactive ? !playerTracks.has(index) : !hiddenTracks.has(index),
-        ),
+      song.notes
+        .filter(
+          (note) =>
+            !owedIds.has(note.id) &&
+            (interactive || !hiddenTracks.has(note.track)),
+        )
+        .map((note) => note.id),
     );
-  }, [song, hiddenTracks, playerTracks, interactive]);
+  }, [song, hiddenTracks, interactive, owedIds]);
 
   const resetGates = useCallback(() => gatesRef.current?.reset(), []);
   const playback = usePlaybackEngine({
     song,
-    autoTracks,
+    autoNotes,
     speed,
     onRestart: resetGates,
   });
 
   const gates = useGates({
-    song,
-    playerTracks,
+    owed,
     active: interactive,
     waitsForYou,
     getPosition: playback.getPosition,
@@ -142,6 +165,14 @@ export function Player({
     onToggle: useCallback(() => void playback.toggle(), [playback]),
   });
 
+  const yoursSet = useMemo(
+    () => (simplified && interactive ? owedIds : null),
+    [simplified, interactive, owedIds],
+  );
+  const yoursRef = useRef(yoursSet);
+  yoursRef.current = yoursSet;
+  const yours = useCallback(() => yoursRef.current, []);
+
   const positionRef = useRef(playback.getPosition);
   positionRef.current = playback.getPosition;
   useEffect(() => {
@@ -153,7 +184,12 @@ export function Player({
     gates.moveTo(position);
   }
 
-  function updateUrl(next: { tracks?: readonly number[]; speed?: Speed }) {
+  function updateUrl(next: {
+    tracks?: readonly number[];
+    speed?: Speed;
+    simplified?: boolean;
+    melodyRate?: MelodyRate;
+  }) {
     window.history.replaceState(
       null,
       "",
@@ -161,8 +197,21 @@ export function Player({
         ...params,
         tracks: next.tracks ?? [...playerTracks],
         speed: next.speed ?? speed,
+        simplified: next.simplified ?? simplified,
+        melodyRate: next.melodyRate ?? melodyRate,
       }),
     );
+  }
+
+  function changeSimplified(next: boolean) {
+    setSimplified(next);
+    updateUrl({ simplified: next });
+  }
+
+  function changeMelodyRate(next: number) {
+    const rate = clampMelodyRate(next);
+    setMelodyRate(rate);
+    updateUrl({ melodyRate: rate });
   }
 
   function changeSpeed(next: Speed) {
@@ -221,11 +270,19 @@ export function Player({
     <div className="flex h-dvh flex-col overflow-hidden bg-void">
       <PlayerHeader
         mode={mode}
-        params={params}
+        params={{
+          ...params,
+          tracks: [...playerTracks],
+          speed,
+          simplified,
+          melodyRate,
+        }}
         tracks={song.tracks}
         hiddenTracks={hiddenTracks}
         playerTracks={playerTracks}
         interactive={interactive}
+        simplified={simplified}
+        onSimplified={changeSimplified}
         score={gates.score}
         opponent={opponent}
         onToggleVisible={toggleTrack}
@@ -241,6 +298,7 @@ export function Player({
           getPosition={playback.getPosition}
           getPressed={input.pressed}
           getOwed={gates.owed}
+          getYours={yours}
           onStrike={(pitch) => input.press(pitch, 0.8)}
           onRelease={input.release}
         />
@@ -265,6 +323,9 @@ export function Player({
         showSpeed={mode !== "battle"}
         keyWidth={keyWidth}
         onKeyWidth={(next) => setKeyWidth(clampKeyWidth(next))}
+        melodyRate={melodyRate}
+        onMelodyRate={changeMelodyRate}
+        showMelodyRate={interactive && simplified && mode !== "battle"}
         octave={interactive ? input.octave : null}
         latencyOffset={latencyOffset}
         onLatencyOffset={(next) => setLatencyOffset(clampLatency(next))}

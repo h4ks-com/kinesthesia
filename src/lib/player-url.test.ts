@@ -12,6 +12,8 @@ const song: PlayerParams = {
   source: "bitmidi",
   tracks: null,
   speed: 1,
+  simplified: false,
+  melodyRate: 6,
 };
 
 describe("buildPlayerUrl", () => {

@@ -147,3 +147,27 @@ export async function keyIsLit(page: Page, x: number): Promise<boolean> {
   );
   return distance > 25;
 }
+
+/** One measure of how much of the song is drawn as yours, since ghosted notes
+ * are painted faintly. */
+export async function brightNotePixels(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const canvas = document.querySelector("canvas");
+    if (canvas === null) {
+      return 0;
+    }
+    const context = canvas.getContext("2d");
+    if (context === null) {
+      return 0;
+    }
+    const height = Math.round(canvas.height * 0.6);
+    const { data } = context.getImageData(0, 0, canvas.width, height);
+    let bright = 0;
+    for (let index = 0; index < data.length; index += 4) {
+      if ((data[index + 1] ?? 0) > 120) {
+        bright += 1;
+      }
+    }
+    return bright;
+  });
+}

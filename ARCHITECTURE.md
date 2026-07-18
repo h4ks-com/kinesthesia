@@ -40,6 +40,7 @@ src/lib/
   player-url.ts               builds and parses player URLs
   search-params.ts            route search params to URLSearchParams
   midi/song.ts                parses a .mid into a flat note list
+  midi/melody.ts              reduces a part to one playable note at a time
   midi/palette.ts             per track and per pitch colours
   audio/transport.ts          song position on the audio clock
   audio/engine.ts             instruments and the look ahead scheduler
@@ -73,7 +74,11 @@ backwards.
 ## Modes
 
 `watch` plays every track. `learn` and `battle` hand the chosen tracks to the
-player: those tracks are muted and the roll shows only them. `learn` pauses when
+player: the notes they owe are muted and the roll shows only them. Simplify
+reduces that part to one note at a time, and the notes it drops are played by
+the engine and drawn faintly, so the song still sounds whole. The reduction is
+a pure function of the file and the URL parameters, because both sides of a
+battle derive it separately and have to agree. `learn` pauses when
 it reaches a note the player owes and resumes once they press it, while `battle`
 plays straight through and simply counts the miss.
 

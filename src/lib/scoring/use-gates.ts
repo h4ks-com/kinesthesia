@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Song } from "@/lib/midi/song";
+import type { SongNote } from "@/lib/midi/song";
 import { buildGates, type Gate, gateIndexAt } from "@/lib/scoring/gates";
 import {
   applyJudgement,
@@ -21,8 +21,7 @@ export type Gates = {
 };
 
 type Options = {
-  song: Song | null;
-  playerTracks: ReadonlySet<number>;
+  owed: readonly SongNote[];
   active: boolean;
   waitsForYou: boolean;
   getPosition: () => number;
@@ -32,8 +31,7 @@ type Options = {
 };
 
 export function useGates({
-  song,
-  playerTracks,
+  owed,
   active,
   waitsForYou,
   getPosition,
@@ -54,14 +52,16 @@ export function useGates({
   }, []);
 
   useEffect(() => {
-    if (song === null || !active) {
+    if (!active) {
       gatesRef.current = [];
       return;
     }
-    gatesRef.current = buildGates(song, playerTracks);
-    openAt(0);
+    gatesRef.current = buildGates(owed);
+    // Changing what you owe part way through must not drag the gate back to
+    // the first note while the song plays on without it.
+    openAt(gateIndexAt(gatesRef.current, getPosition()));
     setScore(emptyScore);
-  }, [song, playerTracks, active, openAt]);
+  }, [owed, active, openAt, getPosition]);
 
   useEffect(() => {
     if (!active) {

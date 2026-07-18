@@ -20,14 +20,14 @@ export type Playback = {
 
 type Options = {
   song: Song | null;
-  autoTracks: ReadonlySet<number>;
+  autoNotes: ReadonlySet<number>;
   speed: number;
   onRestart: () => void;
 };
 
 export function usePlaybackEngine({
   song,
-  autoTracks,
+  autoNotes,
   speed,
   onRestart,
 }: Options): Playback {
@@ -36,8 +36,8 @@ export function usePlaybackEngine({
   const [soundReady, setSoundReady] = useState(false);
   const engineRef = useRef<PlaybackEngine | null>(null);
 
-  const autoTracksRef = useRef(autoTracks);
-  autoTracksRef.current = autoTracks;
+  const autoNotesRef = useRef(autoNotes);
+  autoNotesRef.current = autoNotes;
   const restartRef = useRef(onRestart);
   restartRef.current = onRestart;
 
@@ -47,7 +47,7 @@ export function usePlaybackEngine({
     }
     const engine = new PlaybackEngine();
     engineRef.current = engine;
-    engine.setSong(song, autoTracksRef.current);
+    engine.setSong(song, autoNotesRef.current);
     setPlaying(false);
     setElapsed(0);
     setSoundReady(false);
@@ -58,8 +58,8 @@ export function usePlaybackEngine({
   }, [song]);
 
   useEffect(() => {
-    engineRef.current?.setAutoTracks(autoTracks);
-  }, [autoTracks]);
+    engineRef.current?.setAutoNotes(autoNotes);
+  }, [autoNotes]);
 
   useEffect(() => {
     engineRef.current?.setRate(speed);

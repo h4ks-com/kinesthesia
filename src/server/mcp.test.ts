@@ -14,6 +14,8 @@ vi.mock("@/server/midi/search", () => ({
       downloadUrl: "https://bitmidi.com/uploads/1.mid",
       sourceUrl: "https://bitmidi.com/a-song-mid",
       playUrl: "https://kinesthesia.h4ks.com/watch?url=x",
+      learnUrl: "https://kinesthesia.h4ks.com/learn?url=x",
+      battleUrl: "https://kinesthesia.h4ks.com/battle?url=x",
     },
   ]),
 }));
@@ -82,5 +84,7 @@ describe("mcp endpoint", () => {
     const [match] = JSON.parse(first.text).results;
     expect(match.downloadUrl).toMatch(/\.mid$/);
     expect(match.playUrl).toContain("/watch");
+    expect(match.learnUrl).toContain("/learn");
+    expect(match.battleUrl).toContain("/battle");
   });
 });

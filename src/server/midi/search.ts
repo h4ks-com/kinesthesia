@@ -1,4 +1,8 @@
-import { buildPlayerUrl, defaultSpeed } from "@/lib/player-url";
+import {
+  buildPlayerUrl,
+  defaultSpeed,
+  type PlayerMode,
+} from "@/lib/player-url";
 import { config } from "@/server/config";
 import { findSource, midiSources } from "@/server/midi/registry";
 import type { MidiSearchItem, MidiSourceId } from "@/server/midi/types";
@@ -25,14 +29,20 @@ export async function searchMidi({
     .flat()
     .sort((left, right) => right.plays - left.plays)
     .slice(0, limit)
-    .map((result) => ({
-      ...result,
-      playUrl: buildPlayerUrl(config.appBaseUrl, "watch", {
-        url: result.downloadUrl,
-        name: result.name,
-        source: result.source,
-        tracks: null,
-        speed: defaultSpeed,
-      }),
-    }));
+    .map((result) => {
+      const link = (mode: PlayerMode) =>
+        buildPlayerUrl(config.appBaseUrl, mode, {
+          url: result.downloadUrl,
+          name: result.name,
+          source: result.source,
+          tracks: null,
+          speed: defaultSpeed,
+        });
+      return {
+        ...result,
+        playUrl: link("watch"),
+        learnUrl: link("learn"),
+        battleUrl: link("battle"),
+      };
+    });
 }

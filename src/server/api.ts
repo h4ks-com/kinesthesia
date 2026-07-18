@@ -26,7 +26,13 @@ const midiSearchItemSchema = z
     plays: z.number(),
     downloadUrl: z.string().describe("Direct link to the .mid file"),
     sourceUrl: z.string().describe("Page this file came from"),
-    playUrl: z.string().describe("Link that opens the file in the player"),
+    playUrl: z.string().describe("Link that plays the file back in a browser"),
+    learnUrl: z
+      .string()
+      .describe("Link that waits for the player to hit each note"),
+    battleUrl: z
+      .string()
+      .describe("Link that scores two people racing on this song"),
   })
   .openapi("MidiSearchItem");
 
@@ -333,7 +339,7 @@ function createMcpServer(): McpServer {
     {
       title: "Search MIDI files",
       description:
-        "Find MIDI files by song name. Returns, for each match, the source, a direct .mid download URL to fetch the file, and a link that plays it in a browser.",
+        "Find MIDI files by song name. Returns, for each match, the source, a direct .mid download URL to fetch the file, and browser links to play it back (playUrl), practise it (learnUrl) or race someone on it (battleUrl).",
       inputSchema: searchInputShape,
     },
     async ({ q, source, limit }) => {

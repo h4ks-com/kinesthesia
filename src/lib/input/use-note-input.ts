@@ -15,13 +15,13 @@ export type NoteInput = {
   setOctave: (octave: number) => void;
   midiReady: boolean;
   pressed: () => ReadonlySet<number>;
-  press: (pitch: number, velocity: number) => void;
+  press: (pitch: number, velocity: number, at?: number) => void;
   release: (pitch: number) => void;
 };
 
 type Options = {
   active: boolean;
-  onPress: (pitch: number, velocity: number) => void;
+  onPress: (pitch: number, velocity: number, at: number) => void;
   onRelease?: (pitch: number) => void;
   onToggle: () => void;
 };
@@ -51,9 +51,9 @@ export function useNoteInput({
   const releaseRef = useRef(onRelease);
   releaseRef.current = onRelease;
 
-  const press = useCallback((pitch: number, velocity: number) => {
+  const press = useCallback((pitch: number, velocity: number, at?: number) => {
     pressedRef.current.add(pitch);
-    pressRef.current(pitch, velocity);
+    pressRef.current(pitch, velocity, at ?? performance.now());
   }, []);
 
   const release = useCallback((pitch: number) => {
@@ -115,7 +115,7 @@ export function useNoteInput({
     let disconnect: (() => void) | null = null;
     connectMidiInputs((event) => {
       if (event.down) {
-        press(event.pitch, event.velocity);
+        press(event.pitch, event.velocity, event.at);
       } else {
         release(event.pitch);
       }

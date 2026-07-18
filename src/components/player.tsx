@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PianoRollView } from "@/components/piano-roll-view";
 import { PlayerHeader } from "@/components/player-header";
 import { PlayerTransport } from "@/components/player-transport";
+import { clampLatency, judgedPosition } from "@/lib/audio/latency";
 import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
 import { useNoteInput } from "@/lib/input/use-note-input";
 import type { Song } from "@/lib/midi/song";
@@ -47,6 +48,7 @@ export function Player({
     new Set(params.tracks ?? []),
   );
   const [speed, setSpeed] = useState(params.speed);
+  const [latencyOffset, setLatencyOffset] = useState(0);
 
   useEffect(() => {
     if (song === null || !interactive || playerTracks.size > 0) {
@@ -109,15 +111,26 @@ export function Player({
   const gatesRef = useRef(gates);
   gatesRef.current = gates;
 
+  const offsetRef = useRef(latencyOffset);
+  offsetRef.current = latencyOffset;
   const ownedTrack = [...playerTracks][0] ?? 0;
   const input = useNoteInput({
     active: interactive,
     onPress: useCallback(
-      (pitch: number, velocity: number) => {
+      (pitch: number, velocity: number, at: number) => {
         playback.strike(pitch, velocity, ownedTrack);
         onPress?.(pitch);
         if (interactive) {
-          gatesRef.current.judgeStrike(pitch, playback.getPosition());
+          gatesRef.current.judgeStrike(
+            pitch,
+            judgedPosition(
+              playback.getPosition(),
+              at,
+              performance.now(),
+              playback.latency(),
+              offsetRef.current,
+            ),
+          );
         }
       },
       [playback, ownedTrack, interactive, onPress],
@@ -246,6 +259,10 @@ export function Player({
         speed={speed}
         showSpeed={mode !== "battle"}
         octave={interactive ? input.octave : null}
+        latencyOffset={latencyOffset}
+        onLatencyOffset={(next) => setLatencyOffset(clampLatency(next))}
+        measuredLatency={playback.latency()}
+        showLatency={interactive}
         inputLabel={
           input.midiReady ? "midi device connected" : "computer keyboard"
         }

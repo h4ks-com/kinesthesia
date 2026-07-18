@@ -2,6 +2,7 @@
 
 import { Settings2 } from "lucide-react";
 import { Popover } from "@/components/ui/popover";
+import { latencyRange } from "@/lib/audio/latency";
 import { defaultSpeed, speeds } from "@/lib/player-url";
 
 type SettingsMenuProps = {
@@ -11,6 +12,10 @@ type SettingsMenuProps = {
   octave: number | null;
   onOctave: (octave: number) => void;
   inputLabel: string;
+  latencyOffset: number;
+  onLatencyOffset: (value: number) => void;
+  measuredLatency: number;
+  showLatency: boolean;
 };
 
 export function SettingsMenu({
@@ -20,6 +25,10 @@ export function SettingsMenu({
   octave,
   onOctave,
   inputLabel,
+  latencyOffset,
+  onLatencyOffset,
+  measuredLatency,
+  showLatency,
 }: SettingsMenuProps) {
   const tweaked = speed !== defaultSpeed;
 
@@ -97,6 +106,38 @@ export function SettingsMenu({
             </p>
           </section>
         )}
+
+        {showLatency ? (
+          <section className="flex flex-col gap-1 border-line border-t pt-2">
+            <div className="flex items-baseline gap-2 px-2">
+              <h3 className="label">Timing</h3>
+              <span className="ml-auto font-mono text-[0.7rem] text-faint">
+                output {Math.round(measuredLatency * 1000)}ms
+              </span>
+            </div>
+            <div className="flex items-center gap-2 px-2 pb-1">
+              <input
+                type="range"
+                min={latencyRange.min}
+                max={latencyRange.max}
+                step={5}
+                value={latencyOffset}
+                onChange={(event) =>
+                  onLatencyOffset(Number(event.target.value))
+                }
+                aria-label="Timing offset in milliseconds"
+                className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-line"
+              />
+              <span className="w-12 shrink-0 text-right font-mono text-accent text-xs">
+                {latencyOffset > 0 ? "+" : ""}
+                {latencyOffset}ms
+              </span>
+            </div>
+            <p className="px-2 pb-1 font-mono text-[0.7rem] text-faint leading-relaxed">
+              Raise it if your playing scores late.
+            </p>
+          </section>
+        ) : null}
       </div>
     </Popover>
   );

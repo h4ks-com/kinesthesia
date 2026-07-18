@@ -16,6 +16,10 @@ type PlayerTransportProps = {
   showSpeed: boolean;
   octave: number | null;
   inputLabel: string;
+  latencyOffset: number;
+  onLatencyOffset: (value: number) => void;
+  measuredLatency: number;
+  showLatency: boolean;
   onToggle: () => void;
   onSeek: (position: number) => void;
   onSpeed: (speed: number) => void;
@@ -30,6 +34,10 @@ export function PlayerTransport({
   showSpeed,
   octave,
   inputLabel,
+  latencyOffset,
+  onLatencyOffset,
+  measuredLatency,
+  showLatency,
   onToggle,
   onSeek,
   onSpeed,
@@ -83,6 +91,10 @@ export function PlayerTransport({
           octave={octave}
           onOctave={onOctave}
           inputLabel={inputLabel}
+          latencyOffset={latencyOffset}
+          onLatencyOffset={onLatencyOffset}
+          measuredLatency={measuredLatency}
+          showLatency={showLatency}
         />
       </div>
     </footer>

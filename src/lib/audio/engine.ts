@@ -39,7 +39,7 @@ export class PlaybackEngine {
   // resumed inside a user gesture, so every entry point routes through here.
   private async wake(): Promise<Transport> {
     if (this.context === null) {
-      this.context = new AudioContext();
+      this.context = new AudioContext({ latencyHint: "interactive" });
       this.bank = new InstrumentBank(this.context);
       this.transport = new Transport(this.context);
       this.transport.seek(this.pendingPosition);
@@ -92,12 +92,30 @@ export class PlaybackEngine {
     this.resetCursor();
   }
 
-  async strike(pitch: number, velocity: number, track: number): Promise<void> {
-    await this.wake();
+  strike(pitch: number, velocity: number, track: number): void {
+    if (this.context === null || this.context.state !== "running") {
+      void this.wake().then(() => {
+        this.voiceFor(track)?.start({
+          note: pitch,
+          velocity: Math.round(velocity * 127),
+        });
+      });
+      return;
+    }
     this.voiceFor(track)?.start({
       note: pitch,
       velocity: Math.round(velocity * 127),
     });
+  }
+
+  /** What the browser adds between a scheduled note and the speaker. Judging
+   * subtracts it so a player who sounds on time also scores on time. */
+  get outputLatency(): number {
+    const context = this.context;
+    if (context === null) {
+      return 0;
+    }
+    return context.baseLatency + (context.outputLatency ?? 0);
   }
 
   dispose(): void {

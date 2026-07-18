@@ -19,13 +19,18 @@ Live at [kinesthesia.h4ks.com](https://kinesthesia.h4ks.com).
 Search on the home page, pick a song, then choose how you want it.
 
 - **Watch** plays the song to you, every track falling in its own colour.
-- **Play** hands you a track. The notes stop at the keys and wait until you hit
+- **Learn** hands you a track. The notes stop at the keys and wait until you hit
   the right ones, so the song moves at your pace. Use a real MIDI keyboard, or
   the computer keyboard: the bottom two rows are laid out like a piano, with the
   black keys sitting above the white ones, and the arrow keys shift octave.
-- **Battle** puts you against someone else on the same song. You hear only
-  yourself, and you watch their score climb next to yours. Open a room, send
-  them the code, and the game runs peer to peer.
+- **Battle** puts you against someone else on the same song. The music never
+  stops there, so a note you miss is simply missed. You hear only yourself and
+  watch their score climb next to yours. Open a room, send them the code, and the
+  game runs peer to peer.
+
+Watch and learn can be slowed down, and you can play the keys with a MIDI
+keyboard, the computer keyboard, or by tapping the on screen piano. On a narrow
+screen the keys stay big and the keyboard drags sideways.
 
 Everything about a session lives in the URL, so copying the address bar hands
 someone the exact same song, mode and track selection.

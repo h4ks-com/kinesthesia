@@ -1,12 +1,17 @@
 "use client";
 
-import { ExternalLink, Eye, Piano, Star, Swords } from "lucide-react";
+import { ExternalLink, Eye, GraduationCap, Star, Swords } from "lucide-react";
 import Link from "next/link";
-import { type PlayerMode, playerPath } from "@/lib/player-url";
+import { defaultSpeed, type PlayerMode, playerPath } from "@/lib/player-url";
 
 const modes = [
   { mode: "watch", label: "Watch", icon: Eye, tip: "Watch it play" },
-  { mode: "play", label: "Play", icon: Piano, tip: "Play it yourself" },
+  {
+    mode: "learn",
+    label: "Learn",
+    icon: GraduationCap,
+    tip: "Learn it yourself",
+  },
   { mode: "battle", label: "Battle", icon: Swords, tip: "Challenge someone" },
 ] as const satisfies readonly {
   mode: PlayerMode;
@@ -38,21 +43,23 @@ export function SongRow({
     <li className="group flex items-center justify-between gap-4 rounded-xl border border-transparent px-3 py-2.5 transition-colors hover:border-line hover:bg-panel">
       <div className="min-w-0">
         <p className="truncate font-medium">{name}</p>
-        <p className="mt-0.5 flex items-center gap-2 font-mono text-faint text-xs">
+        <p className="mt-0.5 truncate font-mono text-faint text-xs">
           {source !== null && sourceUrl !== null ? (
             <a
               href={sourceUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 transition-colors hover:text-accent"
+              className="inline-flex max-w-full items-center gap-1 align-bottom transition-colors hover:text-accent"
             >
-              {source}
-              <ExternalLink className="size-3" aria-hidden="true" />
+              <span className="truncate">{source}</span>
+              <ExternalLink className="size-3 shrink-0" aria-hidden="true" />
             </a>
           ) : (
             <span>{source}</span>
           )}
-          {plays === null ? null : <span>{plays.toLocaleString()} plays</span>}
+          {plays === null ? null : (
+            <span className="ml-2">{plays.toLocaleString()} plays</span>
+          )}
         </p>
       </div>
 
@@ -74,7 +81,13 @@ export function SongRow({
         {modes.map(({ mode, label, icon: Icon, tip }) => (
           <Link
             key={mode}
-            href={playerPath(mode, { url, name, source, tracks: null })}
+            href={playerPath(mode, {
+              url,
+              name,
+              source,
+              tracks: null,
+              speed: defaultSpeed,
+            })}
             data-tip={tip}
             data-tip-side="top"
             aria-label={`${label} ${name}`}

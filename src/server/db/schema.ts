@@ -15,7 +15,7 @@ export const scores = sqliteTable(
     playerName: text("player_name").notNull(),
     song: text("song").notNull(),
     url: text("url").notNull(),
-    mode: text("mode", { enum: ["play", "battle"] }).notNull(),
+    mode: text("mode", { enum: ["learn", "battle"] }).notNull(),
     points: integer("points").notNull(),
     accuracy: real("accuracy").notNull(),
     bestCombo: integer("best_combo").notNull(),

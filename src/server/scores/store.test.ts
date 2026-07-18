@@ -15,7 +15,7 @@ const run = {
   playerName: "Ada",
   song: "A Song",
   url: "https://example.test/a.mid",
-  mode: "play" as const,
+  mode: "learn" as const,
   points: 100,
   accuracy: 0.9,
   bestCombo: 10,

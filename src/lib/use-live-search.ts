@@ -5,11 +5,13 @@ import type { MidiSearchItem } from "@/server/midi/types";
 
 export type SearchState =
   | { status: "idle" }
+  | { status: "typing" }
   | { status: "searching"; results: readonly MidiSearchItem[] }
   | { status: "failed"; message: string }
   | { status: "done"; results: readonly MidiSearchItem[] };
 
 const settleDelay = 250;
+export const shortestQuery = 3;
 
 export function useLiveSearch(query: string): SearchState {
   const [state, setState] = useState<SearchState>({ status: "idle" });
@@ -18,6 +20,10 @@ export function useLiveSearch(query: string): SearchState {
     const trimmed = query.trim();
     if (trimmed === "") {
       setState({ status: "idle" });
+      return;
+    }
+    if (trimmed.length < shortestQuery) {
+      setState({ status: "typing" });
       return;
     }
 

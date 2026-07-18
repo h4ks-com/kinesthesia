@@ -14,6 +14,7 @@ export class PlaybackEngine {
   private cursor = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private pendingPosition = 0;
+  private pendingRate = 1;
 
   setSong(song: Song, autoTracks: ReadonlySet<number>): void {
     this.song = song;
@@ -42,6 +43,7 @@ export class PlaybackEngine {
       this.bank = new InstrumentBank(this.context);
       this.transport = new Transport(this.context);
       this.transport.seek(this.pendingPosition);
+      this.transport.setRate(this.pendingRate);
     }
     if (this.context.state !== "running") {
       await this.context.resume();
@@ -74,6 +76,13 @@ export class PlaybackEngine {
   pause(): void {
     this.transport?.pause();
     this.bank?.stopAll();
+  }
+
+  setRate(rate: number): void {
+    this.pendingRate = rate;
+    this.transport?.setRate(rate);
+    this.bank?.stopAll();
+    this.resetCursor();
   }
 
   seek(position: number): void {
@@ -157,10 +166,11 @@ export class PlaybackEngine {
     if (context === null || voice === null) {
       return false;
     }
+    const rate = this.transport?.rate ?? 1;
     voice.start({
       note: note.pitch,
-      time: context.currentTime + Math.max(0, note.start - position),
-      duration: Math.max(0.05, note.end - note.start),
+      time: context.currentTime + Math.max(0, note.start - position) / rate,
+      duration: Math.max(0.05, (note.end - note.start) / rate),
       velocity: Math.round(note.velocity * 127),
     });
     return true;

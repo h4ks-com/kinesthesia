@@ -9,6 +9,7 @@ import {
 
 const lookAhead = 3.5;
 const maxDevicePixelRatio = 1.5;
+const minWhiteKeyWidth = 26;
 
 const whiteKeys: number[] = [];
 for (let pitch = lowestPitch; pitch <= highestPitch; pitch += 1) {
@@ -49,6 +50,7 @@ export class PianoRollRenderer {
   private readonly context: CanvasRenderingContext2D;
   private readonly particles: Particle[] = [];
   private previouslyActive = new Set<number>();
+  private pan = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     const context = canvas.getContext("2d");
@@ -57,6 +59,48 @@ export class PianoRollRenderer {
     }
     this.canvas = canvas;
     this.context = context;
+  }
+
+  /** Keys never shrink below a touchable width, so a narrow screen shows a
+   * window onto the keyboard that the player drags sideways. */
+  get metrics(): { whiteWidth: number; total: number; maxPan: number } {
+    const width = this.canvas.clientWidth;
+    const whiteWidth = Math.max(minWhiteKeyWidth, width / whiteKeys.length);
+    const total = whiteWidth * whiteKeys.length;
+    return { whiteWidth, total, maxPan: Math.max(0, total - width) };
+  }
+
+  get panOffset(): number {
+    return this.pan;
+  }
+
+  setPan(value: number): void {
+    this.pan = Math.min(this.metrics.maxPan, Math.max(0, value));
+  }
+
+  pitchAt(x: number, y: number): number | null {
+    const height = this.canvas.clientHeight;
+    const keyboardHeight = Math.min(120, height * 0.22);
+    const keyboardTop = height - keyboardHeight;
+    if (y < keyboardTop) {
+      return null;
+    }
+    const { whiteWidth } = this.metrics;
+    const local = x + this.pan;
+    if (y < keyboardTop + keyboardHeight * 0.6) {
+      for (let pitch = lowestPitch; pitch <= highestPitch; pitch += 1) {
+        if (!isBlackKey(pitch)) {
+          continue;
+        }
+        const blackWidth = whiteWidth * 0.6;
+        const left = keyCenter(pitch, whiteWidth) - blackWidth / 2;
+        if (local >= left && local <= left + blackWidth) {
+          return pitch;
+        }
+      }
+    }
+    const index = Math.floor(local / whiteWidth);
+    return whiteKeys[index] ?? null;
   }
 
   resize(): void {
@@ -82,9 +126,13 @@ export class PianoRollRenderer {
 
     const keyboardHeight = Math.min(120, height * 0.22);
     const keyboardTop = height - keyboardHeight;
-    const whiteWidth = width / whiteKeys.length;
+    const { whiteWidth, total, maxPan } = this.metrics;
+    this.pan = Math.min(maxPan, this.pan);
 
-    this.paintBackground(width, height, keyboardTop, whiteWidth);
+    ctx.fillStyle = "#060709";
+    ctx.fillRect(0, 0, width, height);
+    ctx.translate(-this.pan, 0);
+    this.paintBackground(total, height, keyboardTop, whiteWidth);
 
     const active = new Map<number, NoteColor>();
     this.paintNotes(frame, keyboardTop, whiteWidth, active);
@@ -94,8 +142,9 @@ export class PianoRollRenderer {
 
     this.paintGlow(active, keyboardTop, whiteWidth);
     this.emitSparks(active, keyboardTop, whiteWidth);
-    this.paintKeyboard(active, keyboardTop, keyboardHeight, whiteWidth, width);
+    this.paintKeyboard(active, keyboardTop, keyboardHeight, whiteWidth, total);
     this.paintParticles();
+    ctx.translate(this.pan, 0);
   }
 
   private paintBackground(

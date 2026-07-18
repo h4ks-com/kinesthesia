@@ -1,4 +1,4 @@
-export const playerModes = ["watch", "play", "battle"] as const;
+export const playerModes = ["watch", "learn", "battle"] as const;
 
 export type PlayerMode = (typeof playerModes)[number];
 
@@ -7,7 +7,11 @@ export type PlayerParams = {
   readonly name: string;
   readonly source: string | null;
   readonly tracks: readonly number[] | null;
+  readonly speed: number;
 };
+
+export const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5] as const;
+export const defaultSpeed = 1;
 
 function isPlayableUrl(url: string): boolean {
   return /^https?:\/\//i.test(url);
@@ -26,6 +30,9 @@ export function buildPlayerUrl(
   }
   if (params.tracks !== null && params.tracks.length > 0) {
     target.searchParams.set("tracks", params.tracks.join(","));
+  }
+  if (params.speed !== defaultSpeed) {
+    target.searchParams.set("speed", String(params.speed));
   }
   return target.toString();
 }
@@ -54,10 +61,15 @@ export function parsePlayerParams(
           .map((value) => Number.parseInt(value, 10))
           .filter((value) => Number.isInteger(value) && value >= 0);
 
+  const speed = Number(searchParams.get("speed"));
+
   return {
     url,
     name: searchParams.get("name") ?? "",
     source: searchParams.get("source"),
     tracks,
+    speed: speeds.includes(speed as (typeof speeds)[number])
+      ? speed
+      : defaultSpeed,
   };
 }

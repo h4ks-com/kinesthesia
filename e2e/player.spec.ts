@@ -37,7 +37,7 @@ test("watch renders the song and the clock moves", async ({ page }) => {
   await expect(page.locator("canvas")).toBeVisible();
   await expect(page.getByText(songName)).toBeVisible();
 
-  await page.getByRole("button", { name: "Play" }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect
     .poll(async () => page.locator("footer span").first().innerText(), {
       timeout: 15_000,
@@ -45,14 +45,14 @@ test("watch renders the song and the clock moves", async ({ page }) => {
     .not.toBe("0:00 / 0:08");
 });
 
-test("play mode stops and waits for the player", async ({ page }) => {
+test("learn mode stops and waits for the player", async ({ page }) => {
   await serveFixture(page);
-  await page.goto(`/play?${playerQuery()}`);
+  await page.goto(`/learn?${playerQuery()}`);
 
   await expect(page.locator("canvas")).toBeVisible();
-  await page.getByRole("button", { name: "Play" }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
 
-  await expect(page.getByText("Waiting for your note")).toBeVisible({
+  await expect(page.getByText("waiting for you")).toBeVisible({
     timeout: 15_000,
   });
 });

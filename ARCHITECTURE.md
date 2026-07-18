@@ -9,7 +9,7 @@ and the MCP tools.
 ```
 src/app/
   page.tsx                    search home
-  watch|play|battle/page.tsx  read the URL, hand params to the player
+  watch|learn|battle/page.tsx  read the URL, hand params to the player
   api/[[...route]]/route.ts   mounts the Hono app at /api
 src/server/
   api.ts                      routes, OpenAPI spec, Scalar docs, MCP server
@@ -28,7 +28,7 @@ src/server/
 src/components/
   song-row.tsx                one song with its favourite and mode links
   player.tsx                  transport, gating, scoring, input wiring
-  piano-roll-view.tsx         canvas element and the animation frame loop
+  piano-roll-view.tsx         canvas, the frame loop, touch input and panning
   track-menu.tsx              show, hide and claim tracks
   battle.tsx                  room handshake, then renders the player
 src/lib/
@@ -56,10 +56,11 @@ backwards.
 
 ## Modes
 
-`watch` plays every track. `play` and `battle` hand the chosen tracks to the
-player: those tracks are muted, the transport pauses when it reaches a note the
-player owes, and it resumes once they press it. `battle` adds a peer connection
-that carries score updates.
+`watch` plays every track. `learn` and `battle` hand the chosen tracks to the
+player: those tracks are muted and the roll shows only them. `learn` pauses when
+it reaches a note the player owes and resumes once they press it, while `battle`
+plays straight through and simply counts the miss. `battle` adds a peer
+connection that carries score updates.
 
 ## Endpoints
 

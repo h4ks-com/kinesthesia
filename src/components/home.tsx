@@ -11,7 +11,7 @@ import {
   listRecent,
   toggleFavourite,
 } from "@/lib/storage/library";
-import { useLiveSearch } from "@/lib/use-live-search";
+import { shortestQuery, useLiveSearch } from "@/lib/use-live-search";
 import type { Viewer } from "@/server/auth";
 
 type HomeProps = {
@@ -53,6 +53,7 @@ export function Home({ viewer, authEnabled, signIn, signOut }: HomeProps) {
       : state.status === "done"
         ? `${state.results.length} results`
         : "";
+  const keepTyping = state.status === "typing";
 
   return (
     <>
@@ -114,6 +115,12 @@ export function Home({ viewer, authEnabled, signIn, signOut }: HomeProps) {
         <p aria-live="polite" role="status" className="sr-only">
           {announcement}
         </p>
+
+        {keepTyping ? (
+          <p className="text-faint text-sm">
+            Keep typing, at least {shortestQuery} characters.
+          </p>
+        ) : null}
 
         {state.status === "done" && state.results.length === 0 ? (
           <p className="text-muted">Nothing matched that. Try fewer words.</p>
@@ -185,6 +192,8 @@ export function Home({ viewer, authEnabled, signIn, signOut }: HomeProps) {
       <footer className="mx-auto flex w-full max-w-3xl items-center gap-4 px-5 pb-10 font-mono text-faint text-xs">
         <a
           href="/docs"
+          target="_blank"
+          rel="noreferrer"
           className="inline-flex items-center gap-1.5 transition-colors hover:text-accent"
         >
           <BookOpen className="size-3.5" aria-hidden="true" />

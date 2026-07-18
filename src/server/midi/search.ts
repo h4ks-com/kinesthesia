@@ -1,4 +1,4 @@
-import { buildPlayerUrl } from "@/lib/player-url";
+import { buildPlayerUrl, defaultSpeed } from "@/lib/player-url";
 import { config } from "@/server/config";
 import { findSource, midiSources } from "@/server/midi/registry";
 import type { MidiSearchItem, MidiSourceId } from "@/server/midi/types";
@@ -32,6 +32,7 @@ export async function searchMidi({
         name: result.name,
         source: result.source,
         tracks: null,
+        speed: defaultSpeed,
       }),
     }));
 }

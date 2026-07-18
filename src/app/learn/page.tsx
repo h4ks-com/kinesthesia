@@ -3,7 +3,7 @@ import { Player } from "@/components/player";
 import { parsePlayerParams } from "@/lib/player-url";
 import { type RouteSearchParams, toSearchParams } from "@/lib/search-params";
 
-export default async function PlayPage({
+export default async function LearnPage({
   searchParams,
 }: {
   searchParams: Promise<RouteSearchParams>;
@@ -12,5 +12,5 @@ export default async function PlayPage({
   if (params === null) {
     return <MissingSong />;
   }
-  return <Player mode="play" params={params} />;
+  return <Player mode="learn" params={params} />;
 }

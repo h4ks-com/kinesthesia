@@ -220,7 +220,7 @@ const submitScoreRoute = createRoute({
           schema: z.object({
             song: z.string().min(1),
             url: z.string().url(),
-            mode: z.enum(["play", "battle"]),
+            mode: z.enum(["learn", "battle"]),
             points: z.number().int().min(0),
             accuracy: z.number().min(0).max(1),
             bestCombo: z.number().int().min(0),

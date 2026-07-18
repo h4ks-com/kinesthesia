@@ -5,6 +5,7 @@ export class Transport {
   private offset = 0;
   private startedAt = 0;
   private running = false;
+  private speed = 1;
 
   constructor(context: AudioContext) {
     this.context = context;
@@ -14,11 +15,23 @@ export class Transport {
     if (!this.running) {
       return this.offset;
     }
-    return this.offset + (this.context.currentTime - this.startedAt);
+    return (
+      this.offset + (this.context.currentTime - this.startedAt) * this.speed
+    );
   }
 
   get playing(): boolean {
     return this.running;
+  }
+
+  get rate(): number {
+    return this.speed;
+  }
+
+  setRate(rate: number): void {
+    this.offset = this.position;
+    this.startedAt = this.context.currentTime;
+    this.speed = rate;
   }
 
   start(): void {

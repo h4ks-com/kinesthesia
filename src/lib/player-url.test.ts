@@ -11,6 +11,7 @@ const song: PlayerParams = {
   name: "Queen - Bohemian Rhapsody",
   source: "bitmidi",
   tracks: null,
+  speed: 1,
 };
 
 describe("buildPlayerUrl", () => {
@@ -26,7 +27,7 @@ describe("buildPlayerUrl", () => {
 
   it("omits tracks when none are selected", () => {
     const built = new URL(
-      buildPlayerUrl("https://kinesthesia.h4ks.com", "play", song),
+      buildPlayerUrl("https://kinesthesia.h4ks.com", "learn", song),
     );
     expect(built.searchParams.has("tracks")).toBe(false);
   });
@@ -44,7 +45,7 @@ describe("buildPlayerUrl", () => {
 
 describe("playerPath", () => {
   it("returns a same origin path", () => {
-    expect(playerPath("play", song)).toMatch(/^\/play\?/);
+    expect(playerPath("learn", song)).toMatch(/^\/learn\?/);
   });
 
   it("survives a song whose own url looks like the internal base", () => {

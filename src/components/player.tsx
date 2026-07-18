@@ -1,10 +1,20 @@
 "use client";
 
-import { Eye, Pause, Piano, Play, Swords, Volume2 } from "lucide-react";
+import {
+  Eye,
+  Gauge,
+  GraduationCap,
+  Pause,
+  Piano,
+  Play,
+  Swords,
+  Volume2,
+} from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PianoRollView } from "@/components/piano-roll-view";
 import { TrackMenu } from "@/components/track-menu";
+import { Popover } from "@/components/ui/popover";
 import { PlaybackEngine } from "@/lib/audio/engine";
 import {
   clampOctave,
@@ -17,14 +27,17 @@ import { connectMidiInputs, isWebMidiSupported } from "@/lib/input/web-midi";
 import { loadSong, type Song } from "@/lib/midi/song";
 import {
   buildPlayerUrl,
+  defaultSpeed,
   type PlayerMode,
   type PlayerParams,
   playerPath,
+  speeds,
 } from "@/lib/player-url";
 import {
   accuracy,
   applyJudgement,
   emptyScore,
+  goodWindow,
   judge,
   type Score,
   scorePoints,
@@ -76,7 +89,7 @@ function formatClock(seconds: number): string {
 
 const otherModes = [
   { mode: "watch", label: "Watch", icon: Eye },
-  { mode: "play", label: "Play", icon: Piano },
+  { mode: "learn", label: "Learn", icon: GraduationCap },
   { mode: "battle", label: "Battle", icon: Swords },
 ] as const satisfies readonly {
   mode: PlayerMode;
@@ -106,6 +119,7 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
   const [midiReady, setMidiReady] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [soundReady, setSoundReady] = useState(false);
+  const [speed, setSpeed] = useState(params.speed);
 
   const engineRef = useRef<PlaybackEngine | null>(null);
   const pressedRef = useRef<Set<number>>(new Set());
@@ -118,6 +132,7 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
   playingRef.current = playing;
 
   const interactive = mode !== "watch";
+  const waitsForYou = mode === "learn";
   const song = load.status === "ready" ? load.song : null;
 
   useEffect(() => {
@@ -157,6 +172,26 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
     setPlayerTracks(new Set([defaultPlayerTrack(song)]));
   }, [song, interactive, playerTracks.size]);
 
+  const focusedSong = useRef<Song | null>(null);
+  useEffect(() => {
+    if (song === null || !interactive || playerTracks.size === 0) {
+      return;
+    }
+    if (focusedSong.current === song) {
+      return;
+    }
+    focusedSong.current = song;
+    setHiddenTracks(
+      new Set(
+        song.tracks
+          .map((track) => track.index)
+          .filter((index) => !playerTracks.has(index)),
+      ),
+    );
+  }, [song, interactive, playerTracks]);
+
+  // Learning shows only the part you owe while the rest keeps playing, so
+  // hiding a track is a view choice there rather than a mute.
   const autoTracks = useMemo(() => {
     if (song === null) {
       return new Set<number>();
@@ -164,10 +199,8 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
     return new Set(
       song.tracks
         .map((track) => track.index)
-        .filter(
-          (index) =>
-            !hiddenTracks.has(index) &&
-            !(interactive && playerTracks.has(index)),
+        .filter((index) =>
+          interactive ? !playerTracks.has(index) : !hiddenTracks.has(index),
         ),
     );
   }, [song, hiddenTracks, playerTracks, interactive]);
@@ -193,6 +226,10 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
   }, [autoTracks]);
 
   useEffect(() => {
+    engineRef.current?.setRate(speed);
+  }, [speed]);
+
+  useEffect(() => {
     if (song === null || !interactive) {
       gatesRef.current = [];
       return;
@@ -209,10 +246,20 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setElapsed(engineRef.current?.position ?? 0);
+      const engine = engineRef.current;
+      if (engine === null) {
+        return;
+      }
+      const position = engine.position;
+      setElapsed(position);
+      if (song !== null && engine.playing && position >= song.duration) {
+        engine.pause();
+        setPlaying(false);
+        setWaiting(false);
+      }
     }, 100);
     return () => clearInterval(timer);
-  }, []);
+  }, [song]);
 
   const getPosition = useCallback(() => engineRef.current?.position ?? 0, []);
   const getPressed = useCallback(
@@ -276,6 +323,14 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
       engine.pause();
       setPlaying(false);
       return;
+    }
+    if (engine.position >= song.duration - 0.1) {
+      engine.seek(0);
+      setElapsed(0);
+      pressedRef.current.clear();
+      gateIndexRef.current = 0;
+      pendingRef.current = new Set(gatesRef.current[0]?.pitches ?? []);
+      setWaiting(false);
     }
     await engine.play();
     setSoundReady(true);
@@ -351,13 +406,29 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
       if (engine === null || gate === undefined || !engine.playing) {
         return;
       }
-      if (engine.position >= gate.start && pendingRef.current.size > 0) {
+      if (engine.position < gate.start || pendingRef.current.size === 0) {
+        return;
+      }
+      if (waitsForYou) {
         engine.pause();
         setWaiting(true);
+        return;
+      }
+      // The band never stops, so an unplayed note is simply missed.
+      if (engine.position > gate.start + goodWindow) {
+        const missed = pendingRef.current.size;
+        setScore((current) => {
+          let next = current;
+          for (let index = 0; index < missed; index += 1) {
+            next = applyJudgement(next, "miss");
+          }
+          return next;
+        });
+        openGate();
       }
     }, 16);
     return () => clearInterval(timer);
-  }, [interactive]);
+  }, [interactive, waitsForYou, openGate]);
 
   useEffect(() => {
     const onSpace = (event: KeyboardEvent) => {
@@ -394,6 +465,19 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
     gateIndexRef.current = index;
     pendingRef.current = new Set(gates[index]?.pitches ?? []);
     setWaiting(false);
+  }
+
+  function changeSpeed(next: number) {
+    setSpeed(next);
+    window.history.replaceState(
+      null,
+      "",
+      buildPlayerUrl(window.location.origin, mode, {
+        ...params,
+        tracks: [...playerTracks],
+        speed: next,
+      }),
+    );
   }
 
   function toggleTrack(index: number) {
@@ -511,10 +595,12 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
           hiddenTracks={hiddenTracks}
           getPosition={getPosition}
           getPressed={getPressed}
+          onStrike={(pitch) => strike(pitch, 0.8)}
+          onRelease={release}
         />
         {waiting ? (
           <p className="rise -translate-x-1/2 absolute top-6 left-1/2 rounded-full border border-accent/40 bg-panel/90 px-4 py-1.5 font-mono text-accent text-xs backdrop-blur">
-            waiting for your note
+            waiting for you
           </p>
         ) : null}
         {!soundReady ? (
@@ -548,6 +634,48 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
           {formatClock(elapsed)}
           <span className="text-faint"> / {formatClock(song.duration)}</span>
         </span>
+
+        {mode === "battle" ? null : (
+          <div className="shrink-0">
+            <Popover
+              label="Playback speed"
+              align="left"
+              trigger={(open) => (
+                <span
+                  data-tip="Slow it down to learn"
+                  data-tip-side="top"
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 font-mono text-xs transition-colors ${
+                    open || speed !== defaultSpeed
+                      ? "border-accent text-accent"
+                      : "border-line-strong text-muted hover:border-accent hover:text-accent"
+                  }`}
+                >
+                  <Gauge className="size-3.5" aria-hidden="true" />
+                  {speed}x
+                </span>
+              )}
+            >
+              <div className="w-28">
+                {speeds.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => changeSpeed(option)}
+                    aria-pressed={option === speed}
+                    className={`flex w-full items-center justify-between rounded-lg px-3 py-2 font-mono text-sm transition-colors hover:bg-raised ${
+                      option === speed ? "text-accent" : "text-muted"
+                    }`}
+                  >
+                    {option}x
+                    {option === defaultSpeed ? (
+                      <span className="label">normal</span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            </Popover>
+          </div>
+        )}
 
         <input
           type="range"

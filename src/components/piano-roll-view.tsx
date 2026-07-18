@@ -18,6 +18,7 @@ type PianoRollViewProps = {
   song: Song;
   hiddenTracks: ReadonlySet<number>;
   keyWidth: number;
+  focusPitch: number | null;
   getPosition: () => number;
   getPressed: () => ReadonlySet<number>;
   getOwed: () => ReadonlySet<number>;
@@ -30,6 +31,7 @@ export function PianoRollView({
   song,
   hiddenTracks,
   keyWidth,
+  focusPitch,
   getPosition,
   getPressed,
   getOwed,
@@ -77,6 +79,12 @@ export function PianoRollView({
   useEffect(() => {
     rendererRef.current?.setKeyWidth(keyWidth);
   }, [keyWidth]);
+
+  useEffect(() => {
+    if (focusPitch !== null) {
+      rendererRef.current?.centreOn(focusPitch);
+    }
+  }, [focusPitch]);
 
   /** Another finger may be holding the same key, and the pressed set is keyed
    * by pitch, so the note ends only once the last of them lifts. */

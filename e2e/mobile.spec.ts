@@ -1,6 +1,7 @@
 import { devices, expect, test } from "@playwright/test";
 import {
-  keyIsLit,
+  brightNotePixels,
+  isPureWhite,
   keyRowFromBottom,
   playerQuery,
   serveFixture,
@@ -100,14 +101,26 @@ test("sliding along the keyboard plays every key it crosses", async ({
 
   await page.mouse.move((box?.x ?? 0) + first, (box?.y ?? 0) + keyRow);
   await page.mouse.down();
-  await expect.poll(async () => keyIsLit(page, first)).toBe(true);
+  await expect.poll(async () => isPureWhite(page, first)).toBe(true);
 
   await page.mouse.move((box?.x ?? 0) + second, (box?.y ?? 0) + keyRow, {
     steps: 8,
   });
-  await expect.poll(async () => keyIsLit(page, second)).toBe(true);
-  await expect.poll(async () => keyIsLit(page, first)).toBe(false);
+  await expect.poll(async () => isPureWhite(page, second)).toBe(true);
+  await expect.poll(async () => isPureWhite(page, first)).toBe(false);
 
   await page.mouse.up();
-  await expect.poll(async () => keyIsLit(page, second)).toBe(false);
+  await expect.poll(async () => isPureWhite(page, second)).toBe(false);
+});
+
+test("the roll opens on the part being played, not the lowest keys", async ({
+  page,
+}) => {
+  await serveFixture(page);
+  await page.goto(`/learn?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  // A phone shows a slice of the keyboard, so notes off to the right would
+  // leave the player staring at an empty roll.
+  await expect.poll(async () => brightNotePixels(page)).toBeGreaterThan(1000);
 });

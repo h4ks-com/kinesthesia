@@ -44,6 +44,7 @@ export function OpponentView({
           song={song}
           hiddenTracks={hiddenTracks}
           keyWidth={defaultKeyWidth}
+          focusPitch={null}
           getPosition={getPosition}
           getPressed={pressed}
           getOwed={nothingOwed}

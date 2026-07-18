@@ -166,6 +166,20 @@ export function Player({
     onToggle: useCallback(() => void playback.toggle(), [playback]),
   });
 
+  /** Opening on the lowest keys hides the part on a phone, where only a slice
+   * of the keyboard fits, so the roll starts where the notes are. */
+  const focusPitch = useMemo(() => {
+    if (song === null) {
+      return null;
+    }
+    const source = owed.length > 0 ? owed : song.notes;
+    const pitches = source
+      .filter((note) => interactive || !hiddenTracks.has(note.track))
+      .map((note) => note.pitch)
+      .sort((left, right) => left - right);
+    return pitches[Math.floor(pitches.length / 2)] ?? null;
+  }, [song, owed, interactive, hiddenTracks]);
+
   const yoursSet = useMemo(
     () => (simplified && interactive ? owedIds : null),
     [simplified, interactive, owedIds],
@@ -308,6 +322,7 @@ export function Player({
           song={song}
           hiddenTracks={hiddenTracks}
           keyWidth={keyWidth}
+          focusPitch={focusPitch}
           getPosition={playback.getPosition}
           getPressed={input.pressed}
           getOwed={gates.owed}

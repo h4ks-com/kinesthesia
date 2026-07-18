@@ -98,6 +98,13 @@ export class PianoRollRenderer {
     this.setPan(centre * next.total - this.canvas.clientWidth / 2);
   }
 
+  /** Brings a pitch into view, since a narrow screen shows a window onto the
+   * keyboard and the part being played is rarely the part it opens on. */
+  centreOn(pitch: number): void {
+    const { whiteWidth } = this.metrics;
+    this.setPan(keyCenter(pitch, whiteWidth) - this.canvas.clientWidth / 2);
+  }
+
   pitchAt(x: number, y: number): number | null {
     return pitchAtPoint(x, y, {
       width: this.canvas.clientWidth,

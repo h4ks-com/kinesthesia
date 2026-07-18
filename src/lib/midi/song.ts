@@ -30,6 +30,9 @@ export type SongNote = {
 export type SongTrack = {
   readonly index: number;
   readonly name: string;
+  readonly instrument: string;
+  readonly program: number;
+  readonly percussion: boolean;
   readonly noteCount: number;
 };
 
@@ -81,6 +84,9 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
     tracks.push({
       index,
       name: trackLabel(track.name, track.instrument.name, tracks.length + 1),
+      instrument: track.instrument.name,
+      program: track.instrument.number,
+      percussion: track.instrument.percussion,
       noteCount: track.notes.length,
     });
     for (const note of track.notes) {

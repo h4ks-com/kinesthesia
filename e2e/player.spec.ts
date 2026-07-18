@@ -24,7 +24,6 @@ test("search lists results and links into the player", async ({ page }) => {
 
   await page.goto("/");
   await page.getByLabel("Search for a song").fill("test");
-  await page.getByRole("button", { name: "Search" }).click();
 
   await expect(page.getByText("A Test Song")).toBeVisible();
   await expect(page.getByText("4,321 plays")).toBeVisible();

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Hand, Layers } from "lucide-react";
+import { Popover } from "@/components/ui/popover";
 import { trackColor } from "@/lib/midi/palette";
 import type { SongTrack } from "@/lib/midi/song";
 
@@ -21,67 +22,77 @@ export function TrackMenu({
   onToggleVisible,
   onToggleMine,
 }: TrackMenuProps) {
-  const [open, setOpen] = useState(false);
-
   if (tracks.length <= 1) {
     return null;
   }
 
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm"
-      >
-        Tracks
-      </button>
-      {open ? (
-        <div className="absolute right-0 top-[calc(100%+6px)] z-10 max-h-[60vh] w-64 overflow-auto rounded-xl border border-zinc-700 bg-zinc-950 p-2 shadow-xl">
-          {tracks.map((track) => {
-            const visible = !hidden.has(track.index);
-            const color = trackColor(track.index);
-            return (
-              <div
-                key={track.index}
-                className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-zinc-900"
+    <Popover
+      label="Tracks"
+      trigger={(open) => (
+        <span
+          data-tip="Show or hide tracks"
+          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 font-medium text-sm transition-colors ${
+            open
+              ? "border-accent text-accent"
+              : "border-line-strong text-text hover:border-accent hover:text-accent"
+          }`}
+        >
+          <Layers className="size-4" aria-hidden="true" />
+          Tracks
+          <span className="font-mono text-faint text-xs">
+            {tracks.length - hidden.size}/{tracks.length}
+          </span>
+        </span>
+      )}
+    >
+      <div className="w-72">
+        {tracks.map((track) => {
+          const visible = !hidden.has(track.index);
+          const claimed = mine.has(track.index);
+          const color = trackColor(track.index);
+          return (
+            <div key={track.index} className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => onToggleVisible(track.index)}
+                aria-pressed={visible}
+                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-raised"
+                style={{ opacity: visible ? 1 : 0.4 }}
               >
+                <span
+                  className="size-2.5 shrink-0 rounded-full"
+                  style={{
+                    background: visible ? color.glow : "transparent",
+                    boxShadow: visible ? `0 0 10px ${color.glow}` : "none",
+                    border: visible ? "none" : `1.5px solid ${color.glow}`,
+                  }}
+                />
+                <span className="truncate text-sm">{track.name}</span>
+                <span className="ml-auto shrink-0 font-mono text-faint text-xs">
+                  {track.noteCount}
+                </span>
+              </button>
+              {interactive ? (
                 <button
                   type="button"
-                  onClick={() => onToggleVisible(track.index)}
-                  className="flex flex-1 items-center gap-2 text-left text-sm"
-                  style={{ opacity: visible ? 1 : 0.4 }}
+                  onClick={() => onToggleMine(track.index)}
+                  aria-pressed={claimed}
+                  aria-label={`Play ${track.name} yourself`}
+                  data-tip="Play this one"
+                  className={`shrink-0 rounded-lg p-2 transition-colors ${
+                    claimed
+                      ? "bg-accent text-void"
+                      : "text-faint hover:bg-raised hover:text-accent"
+                  }`}
                 >
-                  <span
-                    className="size-3 shrink-0 rounded-full"
-                    style={{
-                      background: visible ? color.glow : "transparent",
-                      boxShadow: visible ? `0 0 9px ${color.glow}` : "none",
-                      border: visible ? "none" : `2px solid ${color.glow}`,
-                    }}
-                  />
-                  <span className="truncate">{track.name}</span>
+                  <Hand className="size-4" aria-hidden="true" />
                 </button>
-                {interactive ? (
-                  <button
-                    type="button"
-                    onClick={() => onToggleMine(track.index)}
-                    className="rounded-md border border-zinc-700 px-2 py-0.5 text-xs"
-                    style={{
-                      background: mine.has(track.index)
-                        ? color.glow
-                        : "transparent",
-                      color: mine.has(track.index) ? "#05060a" : "inherit",
-                    }}
-                  >
-                    mine
-                  </button>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-      ) : null}
-    </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </Popover>
   );
 }

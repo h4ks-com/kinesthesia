@@ -1,10 +1,12 @@
 import { handleSignIn } from "@logto/next/server-actions";
 import { type NextRequest, NextResponse } from "next/server";
-import { authConfig } from "@/server/config";
+import { authConfig, config } from "@/server/config";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  // request.url carries the container hostname behind the proxy, not the site.
+  const home = new URL("/", config.appBaseUrl);
   if (authConfig === null) {
-    return NextResponse.redirect(new URL("/", request.url));
+    return NextResponse.redirect(home);
   }
   await handleSignIn(
     {
@@ -17,5 +19,5 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     },
     request.nextUrl.searchParams,
   );
-  return NextResponse.redirect(new URL("/", request.url));
+  return NextResponse.redirect(home);
 }

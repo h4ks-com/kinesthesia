@@ -7,7 +7,7 @@ import { type BattleRoom, createRoom, findRoom } from "@/server/battle/rooms";
 import type { Score } from "@/server/db/schema";
 import { midiSourceIds, midiSources } from "@/server/midi/registry";
 import { searchMidi } from "@/server/midi/search";
-import { saveScore, topScores } from "@/server/scores/store";
+import { saveScore, statsFor, topScores } from "@/server/scores/store";
 
 const searchInputShape = {
   q: z.string().min(1).describe("Song or file name to look for"),
@@ -241,6 +241,46 @@ const submitScoreRoute = createRoute({
       },
     },
   },
+});
+
+const statsRoute = createRoute({
+  method: "get",
+  path: "/scores/me",
+  summary: "Your totals",
+  description: "Aggregate stats for the signed in player.",
+  responses: {
+    200: {
+      description: "Totals across every run you recorded",
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              player: z.string(),
+              runs: z.number(),
+              points: z.number(),
+              bestCombo: z.number(),
+              accuracy: z.number(),
+            })
+            .openapi("PlayerStats"),
+        },
+      },
+    },
+    401: {
+      description: "Nobody is signed in",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+  },
+});
+
+api.openapi(statsRoute, async (c) => {
+  const viewer = await currentViewer();
+  if (viewer === null) {
+    return c.json({ error: "Sign in to see your totals" }, 401);
+  }
+  const stats = await statsFor(viewer.id);
+  return c.json({ player: viewer.name, ...stats }, 200);
 });
 
 api.openapi(leaderboardRoute, async (c) => {

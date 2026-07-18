@@ -1,7 +1,9 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { BookOpen, Code2, Loader2, Search, X } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { SongRow } from "@/components/song-row";
+import { TopBar } from "@/components/top-bar";
 import {
   entryKey,
   type LibraryEntry,
@@ -9,8 +11,8 @@ import {
   listRecent,
   toggleFavourite,
 } from "@/lib/storage/library";
+import { useLiveSearch } from "@/lib/use-live-search";
 import type { Viewer } from "@/server/auth";
-import type { MidiSearchItem } from "@/server/midi/types";
 
 type HomeProps = {
   viewer: Viewer | null;
@@ -19,56 +21,22 @@ type HomeProps = {
   signOut: () => Promise<void>;
 };
 
-type SearchState =
-  | { status: "idle" }
-  | { status: "searching" }
-  | { status: "failed"; message: string }
-  | { status: "done"; results: readonly MidiSearchItem[] };
-
-async function fetchResults(query: string): Promise<readonly MidiSearchItem[]> {
-  const response = await fetch(
-    `/api/midi/search?q=${encodeURIComponent(query)}&limit=20`,
-  );
-  if (!response.ok) {
-    throw new Error(`Search failed with status ${response.status}`);
-  }
-  const body: { results: readonly MidiSearchItem[] } = await response.json();
-  return body.results;
-}
-
 export function Home({ viewer, authEnabled, signIn, signOut }: HomeProps) {
   const [query, setQuery] = useState("");
-  const [state, setState] = useState<SearchState>({ status: "idle" });
   const [recent, setRecent] = useState<readonly LibraryEntry[]>([]);
-  const [favourites, setFavourites] = useState<readonly LibraryEntry[]>([]);
+  const [favorites, setFavorites] = useState<readonly LibraryEntry[]>([]);
+  const state = useLiveSearch(query);
 
   const refreshLibrary = useCallback(() => {
     void listRecent().then(setRecent);
-    void listFavourites().then(setFavourites);
+    void listFavourites().then(setFavorites);
   }, []);
 
   useEffect(refreshLibrary, [refreshLibrary]);
 
-  const favouriteKeys = new Set(favourites.map((entry) => entry.key));
+  const favoriteKeys = new Set(favorites.map((entry) => entry.key));
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmed = query.trim();
-    if (trimmed === "") {
-      return;
-    }
-    setState({ status: "searching" });
-    try {
-      setState({ status: "done", results: await fetchResults(trimmed) });
-    } catch (error) {
-      setState({
-        status: "failed",
-        message: error instanceof Error ? error.message : "Search failed",
-      });
-    }
-  }
-
-  async function onToggleFavourite(entry: {
+  async function onToggleFavorite(entry: {
     url: string;
     name: string;
     source: string | null;
@@ -77,130 +45,165 @@ export function Home({ viewer, authEnabled, signIn, signOut }: HomeProps) {
     refreshLibrary();
   }
 
+  const searching = state.status === "searching";
+  const showLibrary = query.trim() === "";
+
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-6 py-16">
-      <header className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-2">
-          <h1 className="font-semibold text-4xl tracking-tight">Kinesthesia</h1>
-          <p className="text-zinc-500">
-            Find a song, then watch it play, learn it at your own pace, or take
-            someone on.
+    <>
+      <TopBar
+        viewer={viewer}
+        authEnabled={authEnabled}
+        signIn={signIn}
+        signOut={signOut}
+      />
+
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-5 py-14">
+        <div className="flex flex-col gap-3">
+          <h1 className="font-semibold text-4xl tracking-tight sm:text-5xl">
+            Play anything.
+          </h1>
+          <p className="max-w-lg text-muted">
+            Search a song, watch the notes fall, then take the keys yourself or
+            race someone for them.
           </p>
         </div>
-        {authEnabled ? (
-          <form action={viewer === null ? signIn : signOut}>
-            <button
-              type="submit"
-              className="shrink-0 rounded-lg border border-zinc-300 px-4 py-2 font-medium text-sm dark:border-zinc-700"
-            >
-              {viewer === null ? "Sign in" : `Sign out ${viewer.name}`}
-            </button>
-          </form>
+
+        <div className="relative">
+          <Search
+            className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-4 size-4 text-faint"
+            aria-hidden="true"
+          />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search for a song"
+            aria-label="Search for a song"
+            autoComplete="off"
+            className="w-full rounded-xl border border-line bg-panel py-3.5 pr-11 pl-11 text-text outline-none transition-colors placeholder:text-faint focus:border-accent"
+          />
+          <div className="-translate-y-1/2 absolute top-1/2 right-3 flex items-center">
+            {searching ? (
+              <Loader2
+                className="size-4 animate-spin text-accent"
+                aria-label="Searching"
+              />
+            ) : query !== "" ? (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Clear search"
+                data-tip="Clear"
+                className="rounded-md p-1 text-faint transition-colors hover:text-text"
+              >
+                <X className="size-4" aria-hidden="true" />
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {state.status === "failed" ? (
+          <p className="text-danger text-sm">{state.message}</p>
         ) : null}
-      </header>
 
-      <form onSubmit={onSubmit} className="flex gap-2">
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search for a song"
-          aria-label="Search for a song"
-          className="flex-1 rounded-lg border border-zinc-300 bg-transparent px-4 py-2.5 outline-none focus:border-zinc-500 dark:border-zinc-700"
-        />
-        <button
-          type="submit"
-          className="rounded-lg bg-zinc-900 px-5 py-2.5 font-medium text-white dark:bg-white dark:text-zinc-900"
+        {state.status === "done" && state.results.length === 0 ? (
+          <p className="text-muted">Nothing matched that. Try fewer words.</p>
+        ) : null}
+
+        {state.status === "done" && state.results.length > 0 ? (
+          <Section title={`${state.results.length} results`}>
+            {state.results.map((result) => (
+              <SongRow
+                key={`${result.source}-${result.id}`}
+                name={result.name}
+                url={result.downloadUrl}
+                source={result.source}
+                sourceUrl={result.sourceUrl}
+                plays={result.plays}
+                favorite={favoriteKeys.has(
+                  entryKey(result.source, result.downloadUrl),
+                )}
+                onToggleFavorite={() =>
+                  void onToggleFavorite({
+                    url: result.downloadUrl,
+                    name: result.name,
+                    source: result.source,
+                  })
+                }
+              />
+            ))}
+          </Section>
+        ) : null}
+
+        {showLibrary && favorites.length > 0 ? (
+          <Section title="Favorites">
+            {favorites.map((entry) => (
+              <SongRow
+                key={entry.key}
+                name={entry.name}
+                url={entry.url}
+                source={entry.source}
+                sourceUrl={null}
+                plays={null}
+                favorite
+                onToggleFavorite={() => void onToggleFavorite(entry)}
+              />
+            ))}
+          </Section>
+        ) : null}
+
+        {showLibrary && recent.length > 0 ? (
+          <Section title="Recently played">
+            {recent.map((entry) => (
+              <SongRow
+                key={entry.key}
+                name={entry.name}
+                url={entry.url}
+                source={entry.source}
+                sourceUrl={null}
+                plays={null}
+                favorite={favoriteKeys.has(entry.key)}
+                onToggleFavorite={() => void onToggleFavorite(entry)}
+              />
+            ))}
+          </Section>
+        ) : null}
+      </main>
+
+      <footer className="mx-auto flex w-full max-w-3xl items-center gap-4 px-5 pb-10 font-mono text-faint text-xs">
+        <a
+          href="/docs"
+          className="inline-flex items-center gap-1.5 transition-colors hover:text-accent"
         >
-          Search
-        </button>
-      </form>
-
-      {state.status === "searching" ? (
-        <p className="text-zinc-500">Searching</p>
-      ) : null}
-
-      {state.status === "failed" ? (
-        <p className="text-red-600 dark:text-red-400">{state.message}</p>
-      ) : null}
-
-      {state.status === "done" && state.results.length === 0 ? (
-        <p className="text-zinc-500">Nothing found for that one.</p>
-      ) : null}
-
-      {state.status === "done" && state.results.length > 0 ? (
-        <Section title="Results">
-          {state.results.map((result) => (
-            <SongRow
-              key={`${result.source}-${result.id}`}
-              name={result.name}
-              url={result.downloadUrl}
-              source={result.source}
-              detail={`${result.source} · ${result.plays.toLocaleString()} plays`}
-              favourite={favouriteKeys.has(
-                entryKey(result.source, result.downloadUrl),
-              )}
-              onToggleFavourite={() =>
-                void onToggleFavourite({
-                  url: result.downloadUrl,
-                  name: result.name,
-                  source: result.source,
-                })
-              }
-            />
-          ))}
-        </Section>
-      ) : null}
-
-      {favourites.length > 0 ? (
-        <Section title="Favourites">
-          {favourites.map((entry) => (
-            <SongRow
-              key={entry.key}
-              name={entry.name}
-              url={entry.url}
-              source={entry.source}
-              detail={entry.source}
-              favourite
-              onToggleFavourite={() => void onToggleFavourite(entry)}
-            />
-          ))}
-        </Section>
-      ) : null}
-
-      {recent.length > 0 ? (
-        <Section title="Recently played">
-          {recent.map((entry) => (
-            <SongRow
-              key={entry.key}
-              name={entry.name}
-              url={entry.url}
-              source={entry.source}
-              detail={entry.source}
-              favourite={favouriteKeys.has(entry.key)}
-              onToggleFavourite={() => void onToggleFavourite(entry)}
-            />
-          ))}
-        </Section>
-      ) : null}
-    </main>
+          <BookOpen className="size-3.5" aria-hidden="true" />
+          api docs
+        </a>
+        <a
+          href="https://github.com/h4ks-com/kinesthesia"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 transition-colors hover:text-accent"
+        >
+          <Code2 className="size-3.5" aria-hidden="true" />
+          source
+        </a>
+        <a
+          href="https://bitmidi.com"
+          target="_blank"
+          rel="noreferrer"
+          className="ml-auto transition-colors hover:text-accent"
+        >
+          midi from bitmidi
+        </a>
+      </footer>
+    </>
   );
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="font-medium text-sm text-zinc-500 uppercase tracking-wide">
-        {title}
-      </h2>
-      <ul className="flex flex-col divide-y divide-zinc-200 dark:divide-zinc-800">
-        {children}
-      </ul>
+    <section className="flex flex-col gap-1">
+      <h2 className="label px-3 pb-1">{title}</h2>
+      <ul className="flex flex-col">{children}</ul>
     </section>
   );
 }

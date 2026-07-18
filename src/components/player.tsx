@@ -1,5 +1,6 @@
 "use client";
 
+import { Eye, Pause, Piano, Play, Swords, Volume2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PianoRollView } from "@/components/piano-roll-view";
@@ -36,10 +37,7 @@ type LoadState =
   | { status: "failed"; message: string }
   | { status: "ready"; song: Song };
 
-type Gate = {
-  readonly start: number;
-  readonly pitches: readonly number[];
-};
+type Gate = { readonly start: number; readonly pitches: readonly number[] };
 
 function buildGates(song: Song, playerTracks: ReadonlySet<number>): Gate[] {
   const notes = song.notes.filter((note) => playerTracks.has(note.track));
@@ -70,6 +68,21 @@ function defaultPlayerTrack(song: Song): number {
   return best;
 }
 
+function formatClock(seconds: number): string {
+  const whole = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+}
+
+const otherModes = [
+  { mode: "watch", label: "Watch", icon: Eye },
+  { mode: "play", label: "Play", icon: Piano },
+  { mode: "battle", label: "Battle", icon: Swords },
+] as const satisfies readonly {
+  mode: PlayerMode;
+  label: string;
+  icon: typeof Eye;
+}[];
+
 type PlayerProps = {
   mode: PlayerMode;
   params: PlayerParams;
@@ -91,6 +104,7 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
   const [octave, setOctave] = useState(defaultOctave);
   const [midiReady, setMidiReady] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [soundReady, setSoundReady] = useState(false);
 
   const engineRef = useRef<PlaybackEngine | null>(null);
   const pressedRef = useRef<Set<number>>(new Set());
@@ -146,12 +160,14 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
     if (song === null) {
       return new Set<number>();
     }
-    const all = song.tracks.map((track) => track.index);
     return new Set(
-      all.filter(
-        (index) =>
-          !hiddenTracks.has(index) && !(interactive && playerTracks.has(index)),
-      ),
+      song.tracks
+        .map((track) => track.index)
+        .filter(
+          (index) =>
+            !hiddenTracks.has(index) &&
+            !(interactive && playerTracks.has(index)),
+        ),
     );
   }, [song, hiddenTracks, playerTracks, interactive]);
 
@@ -165,7 +181,6 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
     const engine = new PlaybackEngine();
     engineRef.current = engine;
     engine.setSong(song, autoTracksRef.current);
-    void engine.ready();
     return () => {
       engine.dispose();
       engineRef.current = null;
@@ -222,7 +237,8 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
       if (engine === null) {
         return;
       }
-      engine.strike(pitch, velocity);
+      const owned = [...playerTracks][0] ?? 0;
+      void engine.strike(pitch, velocity, owned);
       pressedRef.current.add(pitch);
       if (!interactive) {
         return;
@@ -243,12 +259,28 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
         openGate();
       }
     },
-    [interactive, openGate],
+    [interactive, openGate, playerTracks],
   );
 
   const release = useCallback((pitch: number) => {
     pressedRef.current.delete(pitch);
   }, []);
+
+  const toggle = useCallback(async () => {
+    const engine = engineRef.current;
+    if (engine === null || song === null) {
+      return;
+    }
+    if (engine.playing) {
+      engine.pause();
+      setPlaying(false);
+      return;
+    }
+    await engine.play();
+    setSoundReady(true);
+    setPlaying(true);
+    void engine.warmInstruments(song);
+  }, [song]);
 
   useEffect(() => {
     if (!interactive) {
@@ -326,19 +358,16 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
     return () => clearInterval(timer);
   }, [interactive]);
 
-  async function toggle() {
-    const engine = engineRef.current;
-    if (engine === null) {
-      return;
-    }
-    if (engine.playing) {
-      engine.pause();
-      setPlaying(false);
-      return;
-    }
-    await engine.play();
-    setPlaying(true);
-  }
+  useEffect(() => {
+    const onSpace = (event: KeyboardEvent) => {
+      if (event.code === "Space") {
+        event.preventDefault();
+        void toggle();
+      }
+    };
+    window.addEventListener("keydown", onSpace);
+    return () => window.removeEventListener("keydown", onSpace);
+  }, [toggle]);
 
   function scrub(position: number) {
     const engine = engineRef.current;
@@ -357,17 +386,6 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
     pendingRef.current = new Set(gates[index]?.pitches ?? []);
     setWaiting(false);
   }
-
-  useEffect(() => {
-    const onSpace = (event: KeyboardEvent) => {
-      if (event.code === "Space") {
-        event.preventDefault();
-        void toggle();
-      }
-    };
-    window.addEventListener("keydown", onSpace);
-    return () => window.removeEventListener("keydown", onSpace);
-  });
 
   function toggleTrack(index: number) {
     setHiddenTracks((current) => {
@@ -411,33 +429,46 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
     return null;
   }
 
-  const otherModes: PlayerMode[] =
-    mode === "battle"
-      ? []
-      : (["watch", "play", "battle"] as const).filter((m) => m !== mode);
+  const switchable = otherModes.filter((entry) =>
+    mode === "battle" ? false : entry.mode !== mode,
+  );
 
   return (
-    <div className="flex min-h-dvh flex-col bg-[#05060a] text-zinc-100">
-      <header className="flex flex-wrap items-center gap-3 border-zinc-800 border-b px-5 py-3">
-        <Link href="/" className="font-semibold text-sm hover:underline">
-          Kinesthesia
+    <div className="flex h-dvh flex-col overflow-hidden bg-void">
+      <header className="relative z-50 flex h-14 shrink-0 items-center gap-3 border-line border-b bg-panel/90 px-4 backdrop-blur">
+        <Link
+          href="/"
+          data-tip="Back to search"
+          aria-label="Back to search"
+          className="flex items-center gap-2 rounded-lg px-1.5 py-1 font-semibold tracking-tight transition-colors hover:text-accent"
+        >
+          <Piano className="size-[18px] text-accent" aria-hidden="true" />
+          <span className="hidden sm:inline">Kinesthesia</span>
         </Link>
-        <span className="truncate font-medium">{params.name}</span>
-        <span className="text-xs text-zinc-500 uppercase">{mode}</span>
 
-        <div className="ml-auto flex items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-muted text-sm">
+          {params.name}
+        </span>
+
+        <span className="label hidden shrink-0 md:inline">{mode}</span>
+
+        <div className="flex shrink-0 items-center gap-2">
           {interactive ? (
-            <span className="text-sm text-zinc-400">
-              {scorePoints(score)} pts · {Math.round(accuracy(score) * 100)}% ·{" "}
-              {score.combo}x
+            <span className="hidden items-center gap-2 rounded-lg border border-line px-2.5 py-1.5 font-mono text-xs sm:flex">
+              <span className="text-accent">{scorePoints(score)}</span>
+              <span className="text-faint">
+                {Math.round(accuracy(score) * 100)}% · {score.combo}x
+              </span>
             </span>
           ) : null}
+
           {opponent != null ? (
-            <span className="rounded-md bg-zinc-800 px-2 py-1 text-sm">
-              {opponent.name}: {opponent.points} pts ·{" "}
-              {Math.round(opponent.accuracy * 100)}%
+            <span className="flex items-center gap-2 rounded-lg border border-line-strong bg-raised px-2.5 py-1.5 font-mono text-xs">
+              <span className="max-w-24 truncate">{opponent.name}</span>
+              <span className="text-accent">{opponent.points}</span>
             </span>
           ) : null}
+
           <TrackMenu
             tracks={song.tracks}
             hidden={hiddenTracks}
@@ -446,16 +477,20 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
             onToggleVisible={toggleTrack}
             onToggleMine={togglePlayerTrack}
           />
-          {otherModes.map((target) => (
+
+          {switchable.map(({ mode: target, label, icon: Icon }) => (
             <Link
               key={target}
               href={buildPlayerUrl("http://x", target, {
                 ...params,
                 tracks: [...playerTracks],
               }).replace("http://x", "")}
-              className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm capitalize"
+              data-tip={`Switch to ${label.toLowerCase()}`}
+              aria-label={`Switch to ${label}`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong px-3 py-2 font-medium text-sm transition-colors hover:border-accent hover:text-accent"
             >
-              {target}
+              <Icon className="size-4" aria-hidden="true" />
+              <span className="hidden lg:inline">{label}</span>
             </Link>
           ))}
         </div>
@@ -469,23 +504,42 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
           getPressed={getPressed}
         />
         {waiting ? (
-          <p className="-translate-x-1/2 absolute top-6 left-1/2 rounded-full bg-zinc-900/80 px-4 py-1.5 text-sm">
-            Waiting for your note
+          <p className="rise -translate-x-1/2 absolute top-6 left-1/2 rounded-full border border-accent/40 bg-panel/90 px-4 py-1.5 font-mono text-accent text-xs backdrop-blur">
+            waiting for your note
+          </p>
+        ) : null}
+        {!soundReady ? (
+          <p className="-translate-x-1/2 absolute bottom-6 left-1/2 flex items-center gap-2 rounded-full border border-line-strong bg-panel/90 px-4 py-1.5 text-muted text-xs backdrop-blur">
+            <Volume2 className="size-3.5" aria-hidden="true" />
+            press play to start the sound
           </p>
         ) : null}
       </div>
 
-      <footer className="flex items-center gap-4 border-zinc-800 border-t px-5 py-3">
+      <footer className="flex h-16 shrink-0 items-center gap-4 border-line border-t bg-panel px-4">
         <button
           type="button"
           onClick={() => void toggle()}
-          className="rounded-lg bg-emerald-400 px-4 py-2 font-semibold text-black text-sm"
+          data-tip={playing ? "Pause (space)" : "Play (space)"}
+          data-tip-side="top"
+          aria-label={playing ? "Pause" : "Play"}
+          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-accent text-void shadow-[0_0_24px_-6px_var(--accent)] transition-transform hover:scale-105 active:scale-95"
         >
-          {playing ? "Pause" : "Play"}
+          {playing ? (
+            <Pause className="size-5 fill-current" aria-hidden="true" />
+          ) : (
+            <Play
+              className="size-5 translate-x-px fill-current"
+              aria-hidden="true"
+            />
+          )}
         </button>
-        <span className="w-24 shrink-0 text-sm text-zinc-400 tabular-nums">
-          {formatClock(elapsed)} / {formatClock(song.duration)}
+
+        <span className="shrink-0 font-mono text-muted text-xs tabular-nums">
+          {formatClock(elapsed)}
+          <span className="text-faint"> / {formatClock(song.duration)}</span>
         </span>
+
         <input
           type="range"
           min={0}
@@ -494,32 +548,27 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
           value={Math.min(elapsed, song.duration)}
           onChange={(event) => scrub(Number(event.target.value))}
           aria-label="Song position"
-          className="flex-1 accent-emerald-400"
+          className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-line"
         />
+
         {interactive ? (
-          <span className="shrink-0 text-sm text-zinc-400">
-            Octave {octave} ·{" "}
-            {midiReady ? "MIDI device connected" : "Computer keyboard"}
+          <span className="hidden shrink-0 items-center gap-2 font-mono text-faint text-xs md:flex">
+            <span data-tip="Arrow keys shift octave" data-tip-side="top">
+              oct {octave}
+            </span>
+            <span className={midiReady ? "text-accent" : ""}>
+              {midiReady ? "midi" : "keyboard"}
+            </span>
           </span>
-        ) : (
-          <span className="shrink-0 text-sm text-zinc-500">
-            Space to play or pause
-          </span>
-        )}
+        ) : null}
       </footer>
     </div>
   );
 }
 
-function formatClock(seconds: number): string {
-  const whole = Math.max(0, Math.floor(seconds));
-  const minutes = Math.floor(whole / 60);
-  return `${minutes}:${String(whole % 60).padStart(2, "0")}`;
-}
-
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-[#05060a] text-zinc-300">
+    <div className="flex min-h-dvh items-center justify-center bg-void text-muted">
       {children}
     </div>
   );

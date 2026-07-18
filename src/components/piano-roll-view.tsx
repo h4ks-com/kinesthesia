@@ -27,9 +27,7 @@ export function PianoRollView({
       return;
     }
     const renderer = new PianoRollRenderer(canvas);
-    let frame = 0;
-
-    const loop = () => {
+    let frame = requestAnimationFrame(function loop() {
       renderer.draw({
         song,
         position: getPosition(),
@@ -37,11 +35,22 @@ export function PianoRollView({
         pressed: getPressed(),
       });
       frame = requestAnimationFrame(loop);
-    };
-    frame = requestAnimationFrame(loop);
+    });
 
-    return () => cancelAnimationFrame(frame);
+    const observer = new ResizeObserver(() => renderer.resize());
+    observer.observe(canvas);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, [song, getPosition, getPressed]);
 
-  return <canvas ref={canvasRef} className="block h-full w-full" />;
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 block size-full"
+      aria-label={`Piano roll for ${song.name}`}
+    />
+  );
 }

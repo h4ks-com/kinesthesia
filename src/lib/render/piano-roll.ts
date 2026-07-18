@@ -59,13 +59,10 @@ export class PianoRollRenderer {
     this.context = context;
   }
 
-  draw(frame: Frame): void {
-    const ctx = this.context;
+  resize(): void {
     const ratio = Math.min(window.devicePixelRatio, maxDevicePixelRatio);
-    const width = this.canvas.clientWidth;
-    const height = this.canvas.clientHeight;
-    const pixelWidth = Math.round(width * ratio);
-    const pixelHeight = Math.round(height * ratio);
+    const pixelWidth = Math.round(this.canvas.clientWidth * ratio);
+    const pixelHeight = Math.round(this.canvas.clientHeight * ratio);
     if (
       this.canvas.width !== pixelWidth ||
       this.canvas.height !== pixelHeight
@@ -73,6 +70,14 @@ export class PianoRollRenderer {
       this.canvas.width = pixelWidth;
       this.canvas.height = pixelHeight;
     }
+  }
+
+  draw(frame: Frame): void {
+    const ctx = this.context;
+    const ratio = Math.min(window.devicePixelRatio, maxDevicePixelRatio);
+    const width = this.canvas.clientWidth;
+    const height = this.canvas.clientHeight;
+    this.resize();
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
 
     const keyboardHeight = Math.min(120, height * 0.22);

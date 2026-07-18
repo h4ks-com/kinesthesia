@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <title>Kinesthesia</title>
+  <rect width="32" height="32" rx="7" fill="#0b0d11"/>
+  <rect x="6" y="4" width="4" height="10" rx="1.6" fill="#4c9eff" opacity=".45"/>
+  <rect x="18" y="7" width="4" height="7" rx="1.6" fill="#4c9eff" opacity=".8"/>
+  <g fill="#e8ecf3">
+    <rect x="5" y="17" width="4.4" height="11" rx="1.4"/>
+    <rect x="10.4" y="17" width="4.4" height="11" rx="1.4"/>
+    <rect x="21.6" y="17" width="4.4" height="11" rx="1.4"/>
+  </g>
+  <rect x="16" y="17" width="4.4" height="11" rx="1.4" fill="#4c9eff"/>
+  <g fill="#0b0d11">
+    <rect x="8.2" y="17" width="2.6" height="6.6" rx="1"/>
+    <rect x="13.6" y="17" width="2.6" height="6.6" rx="1"/>
+    <rect x="20" y="17" width="2.6" height="6.6" rx="1"/>
+  </g>
+</svg>

@@ -1,4 +1,4 @@
-import { SplendidGrandPiano } from "smplr";
+import { InstrumentBank } from "@/lib/audio/instruments";
 import { Transport } from "@/lib/audio/transport";
 import type { Song, SongNote } from "@/lib/midi/song";
 
@@ -6,23 +6,14 @@ const lookAhead = 0.2;
 const tickInterval = 25;
 
 export class PlaybackEngine {
-  readonly context: AudioContext;
-  readonly transport: Transport;
-  private readonly piano: SplendidGrandPiano;
+  private context: AudioContext | null = null;
+  private bank: InstrumentBank | null = null;
+  private transport: Transport | null = null;
   private song: Song | null = null;
   private autoTracks: ReadonlySet<number> = new Set();
   private cursor = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
-
-  constructor() {
-    this.context = new AudioContext();
-    this.piano = new SplendidGrandPiano(this.context);
-    this.transport = new Transport(this.context);
-  }
-
-  async ready(): Promise<void> {
-    await this.piano.load;
-  }
+  private pendingPosition = 0;
 
   setSong(song: Song, autoTracks: ReadonlySet<number>): void {
     this.song = song;
@@ -36,39 +27,72 @@ export class PlaybackEngine {
   }
 
   get position(): number {
-    return this.transport.position;
+    return this.transport?.position ?? this.pendingPosition;
   }
 
   get playing(): boolean {
-    return this.transport.playing;
+    return this.transport?.playing ?? false;
+  }
+
+  get ready(): boolean {
+    return this.context !== null;
+  }
+
+  // Browsers only allow an AudioContext to make sound if it was created or
+  // resumed inside a user gesture, so every entry point routes through here.
+  private async wake(): Promise<Transport> {
+    if (this.context === null) {
+      this.context = new AudioContext();
+      this.bank = new InstrumentBank(this.context);
+      this.transport = new Transport(this.context);
+      this.transport.seek(this.pendingPosition);
+    }
+    if (this.context.state !== "running") {
+      await this.context.resume();
+    }
+    const transport = this.transport;
+    if (transport === null) {
+      throw new Error("The transport was not created");
+    }
+    return transport;
+  }
+
+  async warmInstruments(song: Song): Promise<void> {
+    await this.wake();
+    await this.bank?.warm(
+      song.tracks.map((track) => ({
+        program: track.program,
+        percussion: track.percussion,
+      })),
+    );
   }
 
   async play(): Promise<void> {
-    if (this.context.state === "suspended") {
-      await this.context.resume();
-    }
-    this.transport.start();
+    const transport = await this.wake();
+    transport.start();
     if (this.timer === null) {
       this.timer = setInterval(() => this.pump(), tickInterval);
     }
   }
 
   pause(): void {
-    this.transport.pause();
-    this.piano.stop();
+    this.transport?.pause();
+    this.bank?.stopAll();
   }
 
   seek(position: number): void {
-    this.transport.seek(position);
-    this.piano.stop();
+    this.pendingPosition = Math.max(0, position);
+    this.transport?.seek(this.pendingPosition);
+    this.bank?.stopAll();
     this.resetCursor();
   }
 
-  strike(pitch: number, velocity: number): void {
-    if (this.context.state === "suspended") {
-      void this.context.resume();
-    }
-    this.piano.start({ note: pitch, velocity: Math.round(velocity * 127) });
+  async strike(pitch: number, velocity: number, track: number): Promise<void> {
+    await this.wake();
+    this.voiceFor(track)?.start({
+      note: pitch,
+      velocity: Math.round(velocity * 127),
+    });
   }
 
   dispose(): void {
@@ -76,13 +100,27 @@ export class PlaybackEngine {
       clearInterval(this.timer);
       this.timer = null;
     }
-    this.piano.stop();
-    void this.context.close();
+    this.bank?.stopAll();
+    void this.context?.close();
+    this.context = null;
+    this.bank = null;
+    this.transport = null;
+  }
+
+  private voiceFor(track: number) {
+    const definition = this.song?.tracks.find((entry) => entry.index === track);
+    if (definition === undefined || this.bank === null) {
+      return null;
+    }
+    return this.bank.voiceFor({
+      program: definition.program,
+      percussion: definition.percussion,
+    });
   }
 
   private resetCursor(): void {
     const notes = this.song?.notes ?? [];
-    const position = this.transport.position;
+    const position = this.position;
     let index = 0;
     while (index < notes.length && (notes[index]?.start ?? 0) < position) {
       index += 1;
@@ -91,11 +129,12 @@ export class PlaybackEngine {
   }
 
   private pump(): void {
-    if (this.song === null || !this.transport.playing) {
+    const transport = this.transport;
+    if (this.song === null || transport === null || !transport.playing) {
       return;
     }
     const notes = this.song.notes;
-    const position = this.transport.position;
+    const position = transport.position;
     const horizon = position + lookAhead;
 
     while (this.cursor < notes.length) {
@@ -111,10 +150,13 @@ export class PlaybackEngine {
   }
 
   private schedule(note: SongNote, position: number): void {
-    const when = this.context.currentTime + Math.max(0, note.start - position);
-    this.piano.start({
+    const context = this.context;
+    if (context === null) {
+      return;
+    }
+    this.voiceFor(note.track)?.start({
       note: note.pitch,
-      time: when,
+      time: context.currentTime + Math.max(0, note.start - position),
       duration: Math.max(0.05, note.end - note.start),
       velocity: Math.round(note.velocity * 127),
     });

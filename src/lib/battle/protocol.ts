@@ -1,7 +1,15 @@
 import type { Score } from "@/lib/scoring/judge";
 
 export type BattleMessage =
-  | { readonly kind: "hello"; readonly name: string }
+  | {
+      readonly kind: "hello";
+      readonly name: string;
+      /** What the sender owes, so their roll can be drawn the way they see it
+       * rather than as the whole part. */
+      readonly simplified?: boolean;
+      readonly melodyRate?: number;
+      readonly tracks?: readonly number[];
+    }
   | {
       readonly kind: "score";
       readonly score: Score;

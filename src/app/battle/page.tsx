@@ -19,6 +19,7 @@ export default async function BattlePage({
     <Battle
       params={params}
       playerName={query.get("player") ?? "Player"}
+      joinCode={query.get("join")}
       ice={iceServers(
         config.turnUrl,
         config.turnUsername,

@@ -1,9 +1,8 @@
 "use client";
 
-import { Check, Copy } from "lucide-react";
-import Link from "next/link";
 import type { DataConnection } from "peerjs";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { BattleInvite } from "@/components/battle-invite";
 import { OpponentView } from "@/components/opponent-view";
 import { Player } from "@/components/player";
 import type { IceServer } from "@/lib/battle/ice";
@@ -13,14 +12,19 @@ import {
   noOpponent,
   type Opponent,
 } from "@/lib/battle/protocol";
-import { clampMelodyRate } from "@/lib/midi/melody";
+import {
+  clampMelodyRate,
+  defaultMelodyRate,
+  type MelodyRate,
+} from "@/lib/midi/melody";
 import { useSong } from "@/lib/midi/use-song";
-import type { PlayerParams } from "@/lib/player-url";
+import { type PlayerParams, parsePlayerParams } from "@/lib/player-url";
 import { accuracy, type Score, scorePoints } from "@/lib/scoring/judge";
 
 type Connection =
-  | { status: "idle" }
-  | { status: "hosting"; code: string }
+  | { status: "setup" }
+  | { status: "opening" }
+  | { status: "waiting"; link: string }
   | { status: "joining" }
   | { status: "failed"; message: string }
   | { status: "connected" };
@@ -29,14 +33,41 @@ type BattleProps = {
   params: PlayerParams;
   playerName: string;
   ice: readonly IceServer[];
+  joinCode: string | null;
 };
 
-export function Battle({ params, playerName, ice }: BattleProps) {
-  const [connection, setConnection] = useState<Connection>({ status: "idle" });
+type OpponentPart = {
+  readonly simplified: boolean;
+  readonly melodyRate: MelodyRate;
+  readonly tracks: readonly number[];
+};
+
+type RoomReply = {
+  peerId: string;
+  url: string;
+  name: string;
+  source: string | null;
+  tracks: number[];
+  simplified: boolean;
+  melodyRate: number;
+};
+
+/** The player keeps the URL in step with the settings, so the address bar is
+ * what a room is opened with and what an invite link carries. */
+function settingsFromUrl(fallback: PlayerParams): PlayerParams {
+  return (
+    parsePlayerParams(new URLSearchParams(window.location.search)) ?? fallback
+  );
+}
+
+export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
+  const [connection, setConnection] = useState<Connection>(
+    joinCode === null ? { status: "setup" } : { status: "joining" },
+  );
   const [opponent, setOpponent] = useState<Opponent | null>(null);
-  const [joinCode, setJoinCode] = useState("");
   const [agreed, setAgreed] = useState<PlayerParams | null>(null);
   const [copied, setCopied] = useState(false);
+  const [theirPart, setTheirPart] = useState<OpponentPart | null>(null);
   const opponentKeys = useRef<Set<number>>(new Set());
   const match = agreed ?? params;
   const song = useSong(match);
@@ -47,7 +78,14 @@ export function Battle({ params, playerName, ice }: BattleProps) {
       linkRef.current = link;
       link.on("open", () => {
         setConnection({ status: "connected" });
-        link.send({ kind: "hello", name: playerName } satisfies BattleMessage);
+        const mine = settingsFromUrl(params);
+        link.send({
+          kind: "hello",
+          name: playerName,
+          simplified: mine.simplified,
+          melodyRate: mine.melodyRate,
+          tracks: mine.tracks ?? [],
+        } satisfies BattleMessage);
       });
       link.on("data", (raw) => {
         if (!isBattleMessage(raw)) {
@@ -55,6 +93,11 @@ export function Battle({ params, playerName, ice }: BattleProps) {
         }
         if (raw.kind === "hello") {
           setOpponent({ ...noOpponent, name: raw.name });
+          setTheirPart({
+            simplified: raw.simplified ?? false,
+            melodyRate: clampMelodyRate(raw.melodyRate ?? defaultMelodyRate),
+            tracks: raw.tracks ?? [],
+          });
         }
         if (raw.kind === "score") {
           setOpponent((current) => ({
@@ -86,11 +129,12 @@ export function Battle({ params, playerName, ice }: BattleProps) {
         setConnection({ status: "failed", message: "The connection dropped" }),
       );
     },
-    [playerName],
+    [playerName, params],
   );
 
-  async function host() {
-    setConnection({ status: "joining" });
+  async function invite() {
+    setConnection({ status: "opening" });
+    const settings = settingsFromUrl(params);
     const { Peer } = await import("peerjs");
     const peer = new Peer({ config: { iceServers: [...ice] } });
     peer.on("error", (error) =>
@@ -102,12 +146,12 @@ export function Battle({ params, playerName, ice }: BattleProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           peerId,
-          url: params.url,
-          name: params.name,
-          source: params.source,
-          tracks: params.tracks ?? [],
-          simplified: params.simplified,
-          melodyRate: params.melodyRate,
+          url: settings.url,
+          name: settings.name,
+          source: settings.source,
+          tracks: settings.tracks ?? [],
+          simplified: settings.simplified,
+          melodyRate: settings.melodyRate,
         }),
       });
       if (!response.ok) {
@@ -115,52 +159,54 @@ export function Battle({ params, playerName, ice }: BattleProps) {
         return;
       }
       const room: { code: string } = await response.json();
-      setConnection({ status: "hosting", code: room.code });
-      void copyCode(room.code);
+      const invitation = new URL(window.location.href);
+      invitation.searchParams.set("join", room.code);
+      const link = invitation.toString();
+      setConnection({ status: "waiting", link });
+      void copy(link);
     });
     peer.on("connection", attach);
   }
 
-  async function join() {
-    const code = joinCode.trim().toUpperCase();
-    if (code.length !== 5) {
-      return;
-    }
-    setConnection({ status: "joining" });
-    const response = await fetch(`/api/battle/rooms/${code}`);
-    if (!response.ok) {
-      setConnection({ status: "failed", message: "That room is not open" });
-      return;
-    }
-    const room: {
-      peerId: string;
-      url: string;
-      name: string;
-      source: string | null;
-      tracks: number[];
-      simplified: boolean;
-      melodyRate: number;
-    } = await response.json();
-    setAgreed({
-      ...params,
-      url: room.url,
-      name: room.name,
-      source: room.source,
-      tracks: room.tracks,
-      simplified: room.simplified,
-      melodyRate: clampMelodyRate(room.melodyRate),
-    });
-    const { Peer } = await import("peerjs");
-    const peer = new Peer({ config: { iceServers: [...ice] } });
-    peer.on("error", (error) =>
-      setConnection({ status: "failed", message: error.message }),
-    );
-    peer.on("open", () => attach(peer.connect(room.peerId)));
-  }
+  const joinRoom = useCallback(
+    async (code: string) => {
+      const response = await fetch(`/api/battle/rooms/${code}`);
+      if (!response.ok) {
+        setConnection({
+          status: "failed",
+          message: "That invite has expired",
+        });
+        return;
+      }
+      const room: RoomReply = await response.json();
+      setAgreed({
+        ...params,
+        url: room.url,
+        name: room.name,
+        source: room.source,
+        tracks: room.tracks,
+        simplified: room.simplified,
+        melodyRate: clampMelodyRate(room.melodyRate),
+      });
+      const { Peer } = await import("peerjs");
+      const peer = new Peer({ config: { iceServers: [...ice] } });
+      peer.on("error", (error) =>
+        setConnection({ status: "failed", message: error.message }),
+      );
+      peer.on("open", () => attach(peer.connect(room.peerId)));
+    },
+    [attach, ice, params],
+  );
 
-  async function copyCode(code: string) {
+  useEffect(() => {
+    if (joinCode !== null) {
+      void joinRoom(joinCode);
+    }
+  }, [joinCode, joinRoom]);
+
+  async function copy(text: string) {
     try {
-      await navigator.clipboard.writeText(code);
+      await navigator.clipboard.writeText(text);
       setCopied(true);
     } catch {
       setCopied(false);
@@ -192,106 +238,52 @@ export function Battle({ params, playerName, ice }: BattleProps) {
 
   useEffect(() => () => linkRef.current?.close(), []);
 
-  if (connection.status === "connected" || connection.status === "failed") {
-    if (song.status === "ready") {
-      return (
-        <div className="flex h-dvh flex-col lg:flex-row">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <Player
-              mode="battle"
-              params={match}
-              onScore={onScore}
-              onPress={onPress}
-              onRelease={onRelease}
-              opponent={null}
-            />
-          </div>
-          <OpponentView
-            song={song.song}
-            hiddenTracks={new Set()}
-            opponent={opponent ?? noOpponent}
-            pressed={opponentPressed}
-            connected={connection.status === "connected"}
-          />
-        </div>
-      );
-    }
-  }
+  const live = connection.status === "connected";
+  // Once the room carries the settings, changing them here would hand the
+  // other player a different part from the one they accepted.
+  const settled =
+    connection.status !== "setup" && connection.status !== "failed";
 
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-[#05060a] px-6 text-zinc-100">
-      <div className="flex flex-col items-center gap-1">
-        <h1 className="font-semibold text-2xl">Battle</h1>
-        <p className="text-zinc-400">{match.name}</p>
+    <div className="flex h-dvh flex-col lg:flex-row">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        <Player
+          mode="battle"
+          params={match}
+          onScore={onScore}
+          onPress={onPress}
+          onRelease={onRelease}
+          opponent={null}
+          locked={settled}
+        />
+        {live ? null : (
+          <BattleInvite
+            state={connection.status === "failed" ? "setup" : connection.status}
+            link={connection.status === "waiting" ? connection.link : null}
+            copied={copied}
+            onInvite={() => void invite()}
+            onCopy={() =>
+              connection.status === "waiting" && void copy(connection.link)
+            }
+          />
+        )}
+        {connection.status === "failed" ? (
+          <p className="-translate-x-1/2 absolute top-16 left-1/2 z-40 rounded-full border border-danger/40 bg-panel/95 px-3 py-1.5 text-danger text-xs backdrop-blur">
+            {connection.message}
+          </p>
+        ) : null}
       </div>
 
-      {connection.status === "hosting" ? (
-        <div className="flex flex-col items-center gap-2">
-          <p className="text-zinc-400 text-sm">
-            Give this code to your opponent
-          </p>
-          <button
-            type="button"
-            onClick={() => void copyCode(connection.code)}
-            data-tip={copied ? "Copied" : "Copy the code"}
-            aria-label={`Copy room code ${connection.code}`}
-            className="flex items-center gap-3 rounded-xl border border-line-strong px-5 py-3 font-mono text-4xl tracking-[0.3em] transition-colors hover:border-accent hover:text-accent"
-          >
-            {connection.code}
-            {copied ? (
-              <Check className="size-5 text-accent" aria-hidden="true" />
-            ) : (
-              <Copy className="size-5 text-faint" aria-hidden="true" />
-            )}
-          </button>
-          <p className="text-muted text-sm">
-            {copied ? "Copied, send it over" : "Waiting for them to join"}
-          </p>
-        </div>
+      {live && song.status === "ready" ? (
+        <OpponentView
+          song={song.song}
+          hiddenTracks={new Set()}
+          opponent={opponent ?? noOpponent}
+          part={theirPart}
+          pressed={opponentPressed}
+          connected={live}
+        />
       ) : null}
-
-      {connection.status === "joining" ? (
-        <p className="text-zinc-400">Connecting</p>
-      ) : null}
-
-      {connection.status === "failed" ? (
-        <p className="text-red-400">{connection.message}</p>
-      ) : null}
-
-      {connection.status === "idle" || connection.status === "failed" ? (
-        <div className="flex w-full max-w-sm flex-col gap-4">
-          <button
-            type="button"
-            onClick={() => void host()}
-            className="rounded-lg bg-emerald-400 px-4 py-2.5 font-semibold text-black"
-          >
-            Open a room
-          </button>
-          <div className="flex gap-2">
-            <input
-              value={joinCode}
-              onChange={(event) =>
-                setJoinCode(event.target.value.toUpperCase())
-              }
-              placeholder="Room code"
-              aria-label="Room code"
-              maxLength={5}
-              className="flex-1 rounded-lg border border-zinc-700 bg-transparent px-4 py-2.5 font-mono uppercase tracking-widest outline-none focus:border-zinc-500"
-            />
-            <button
-              type="button"
-              onClick={() => void join()}
-              className="rounded-lg border border-zinc-700 px-4 py-2.5 font-medium"
-            >
-              Join
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      <Link href="/" className="text-sm text-zinc-500 hover:underline">
-        Back to search
-      </Link>
-    </main>
+    </div>
   );
 }

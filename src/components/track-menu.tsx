@@ -10,6 +10,7 @@ type TrackMenuProps = {
   hidden: ReadonlySet<number>;
   mine: ReadonlySet<number>;
   interactive: boolean;
+  canClaim: boolean;
   onToggleVisible: (index: number) => void;
   onToggleMine: (index: number) => void;
   onSolo: (index: number) => void;
@@ -20,6 +21,7 @@ export function TrackMenu({
   hidden,
   mine,
   interactive,
+  canClaim,
   onToggleVisible,
   onToggleMine,
   onSolo,
@@ -95,7 +97,7 @@ export function TrackMenu({
               >
                 <Radio className="size-4" aria-hidden="true" />
               </button>
-              {interactive ? (
+              {interactive && canClaim ? (
                 <button
                   type="button"
                   onClick={() => onToggleMine(track.index)}

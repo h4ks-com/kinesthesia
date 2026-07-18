@@ -140,6 +140,8 @@ test("the note speed slider follows the simplify toggle", async ({ page }) => {
   const rate = page.getByLabel("Maximum notes per second");
   await expect(rate).toBeVisible();
   await rate.fill("3");
+  // The URL catches up when the drag settles, not on every step.
+  await rate.dispatchEvent("pointerup");
   await expect(page).toHaveURL(/rate=3/);
 });
 

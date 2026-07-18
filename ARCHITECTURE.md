@@ -34,7 +34,8 @@ src/components/
   settings-menu.tsx           speed and octave in one place
   piano-roll-view.tsx         canvas, the frame loop, touch input and panning
   track-menu.tsx              show, hide, solo and claim tracks
-  battle.tsx                  room handshake, then the split view
+  battle.tsx                  set up, invite, then the split view
+  battle-invite.tsx           the invite banner over the roll
   opponent-view.tsx           the other player's roll, silent by design
 src/lib/
   player-url.ts               builds and parses player URLs
@@ -83,9 +84,16 @@ battle derive it separately and have to agree. `learn` pauses when
 it reaches a note the player owes and resumes once they press it, while `battle`
 plays straight through and simply counts the miss.
 
-`battle` shows both players side by side, stacked on a narrow screen. Each side
-hears only itself; the opponent's roll, keys and score are drawn from the
-messages arriving over the peer connection.
+`battle` opens on the song itself: the host picks the part and difficulty and
+plays it as much as they like, then confirms with an invite. That opens a room,
+freezes the settings, and hands back a link. Opening that link joins straight
+away and adopts the host's settings, so both sides play the same part without
+anyone typing a code.
+
+Once connected it shows both players side by side, stacked on a narrow screen.
+Each side hears only itself; the opponent's roll, keys and score are drawn from
+the messages arriving over the peer connection, and their `hello` carries the
+part they are playing so their roll is drawn the way they see it.
 
 ## Endpoints
 

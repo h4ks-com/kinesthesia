@@ -30,6 +30,7 @@ type PlayerHeaderProps = {
   interactive: boolean;
   simplified: boolean;
   onSimplified: (simplified: boolean) => void;
+  editable: boolean;
   score: Score;
   opponent: { name: string; points: number; accuracy: number } | null;
   onToggleVisible: (index: number) => void;
@@ -46,6 +47,7 @@ export function PlayerHeader({
   interactive,
   simplified,
   onSimplified,
+  editable,
   score,
   opponent,
   onToggleVisible,
@@ -93,12 +95,13 @@ export function PlayerHeader({
         hidden={hiddenTracks}
         mine={playerTracks}
         interactive={interactive}
+        canClaim={editable}
         onToggleVisible={onToggleVisible}
         onToggleMine={onToggleMine}
         onSolo={onSolo}
       />
 
-      {interactive && mode !== "battle" ? (
+      {interactive && editable ? (
         <button
           type="button"
           onClick={() => onSimplified(!simplified)}

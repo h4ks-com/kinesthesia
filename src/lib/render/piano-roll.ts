@@ -253,8 +253,13 @@ export class PianoRollRenderer {
         ctx.fillStyle = pitchColor(note.pitch);
         ctx.fill();
         ctx.font = `${label.length > 1 ? "700 9px" : "700 11px"} system-ui, sans-serif`;
-        ctx.fillStyle = "rgba(8,10,16,0.92)";
+        // White reads on every pitch colour, and the shadow carries it over the
+        // pale yellows where white alone would wash out.
+        ctx.shadowColor = "rgba(8,10,16,0.85)";
+        ctx.shadowBlur = 3;
+        ctx.fillStyle = "#ffffff";
         ctx.fillText(label, centerX, centerY);
+        ctx.shadowBlur = 0;
       }
     }
   }

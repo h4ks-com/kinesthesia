@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { PianoRollView } from "@/components/piano-roll-view";
 import type { Opponent } from "@/lib/battle/protocol";
+import { type MelodyRate, reduceToMelody } from "@/lib/midi/melody";
 import type { Song } from "@/lib/midi/song";
 import { defaultKeyWidth } from "@/lib/render/keyboard";
 
@@ -10,6 +11,13 @@ type OpponentViewProps = {
   song: Song;
   hiddenTracks: ReadonlySet<number>;
   opponent: Opponent;
+  /** What they told us they are playing, so their roll shows the part they
+   * see rather than notes they never owed. */
+  part: {
+    readonly simplified: boolean;
+    readonly melodyRate: MelodyRate;
+    readonly tracks: readonly number[];
+  } | null;
   pressed: () => ReadonlySet<number>;
   connected: boolean;
 };
@@ -17,16 +25,27 @@ type OpponentViewProps = {
 /** The opponent's roll is driven entirely by what arrives over the wire, and it
  * is silent by design: you watch their hands, you do not hear them. */
 const nothingOwed = (): ReadonlySet<number> => new Set();
-const everyNote = (): null => null;
 
 export function OpponentView({
   song,
   hiddenTracks,
   opponent,
+  part,
   pressed,
   connected,
 }: OpponentViewProps) {
   const getPosition = useCallback(() => opponent.position, [opponent.position]);
+  const theirs = useMemo(() => {
+    if (part === null || !part.simplified) {
+      return null;
+    }
+    const line = reduceToMelody(song, {
+      tracks: new Set(part.tracks),
+      maxNotesPerSecond: part.melodyRate,
+    });
+    return new Set(line.map((note) => note.id));
+  }, [song, part]);
+  const getTheirs = useCallback(() => theirs, [theirs]);
 
   return (
     <section className="relative flex min-h-0 min-w-0 flex-1 flex-col border-line max-lg:border-t lg:border-l">
@@ -48,7 +67,7 @@ export function OpponentView({
           getPosition={getPosition}
           getPressed={pressed}
           getOwed={nothingOwed}
-          getYours={everyNote}
+          getYours={getTheirs}
         />
         {connected ? null : (
           <p className="-translate-x-1/2 absolute top-4 left-1/2 rounded-full border border-line-strong bg-panel/90 px-3 py-1 text-muted text-xs backdrop-blur">

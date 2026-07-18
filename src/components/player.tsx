@@ -34,6 +34,9 @@ type PlayerProps = {
   onPress?: (pitch: number) => void;
   onRelease?: (pitch: number) => void;
   opponent?: { name: string; points: number; accuracy: number } | null;
+  /** A live match freezes the settings, since both sides derive their part
+   * from them and have to keep agreeing once the scoring starts. */
+  locked?: boolean;
 };
 
 export function Player({
@@ -43,6 +46,7 @@ export function Player({
   onPress,
   onRelease,
   opponent = null,
+  locked = false,
 }: PlayerProps) {
   const load = useSong(params);
   const song = load.status === "ready" ? load.song : null;
@@ -235,10 +239,15 @@ export function Player({
     updateUrl({ simplified: next });
   }
 
+  // Dragging a slider fires on every step, and a URL write per step both costs
+  // a full reduction and trips Safari's replaceState limit, so the address bar
+  // only catches up once the drag settles.
   function changeMelodyRate(next: number) {
-    const rate = clampMelodyRate(next);
-    setMelodyRate(rate);
-    updateUrl({ melodyRate: rate });
+    setMelodyRate(clampMelodyRate(next));
+  }
+
+  function commitMelodyRate(next: number) {
+    updateUrl({ melodyRate: clampMelodyRate(next) });
   }
 
   function changeSpeed(next: Speed) {
@@ -310,6 +319,7 @@ export function Player({
         interactive={interactive}
         simplified={simplified}
         onSimplified={changeSimplified}
+        editable={!locked}
         score={gates.score}
         opponent={opponent}
         onToggleVisible={toggleTrack}
@@ -348,12 +358,13 @@ export function Player({
         elapsed={playback.elapsed}
         duration={song.duration}
         speed={speed}
-        showSpeed={mode !== "battle"}
+        showSpeed={!locked}
         keyWidth={keyWidth}
         onKeyWidth={(next) => setKeyWidth(clampKeyWidth(next))}
         melodyRate={melodyRate}
         onMelodyRate={changeMelodyRate}
-        showMelodyRate={interactive && simplified && mode !== "battle"}
+        onMelodyRateCommit={commitMelodyRate}
+        showMelodyRate={interactive && simplified && !locked}
         octave={interactive ? input.octave : null}
         latencyOffset={latencyOffset}
         onLatencyOffset={(next) => setLatencyOffset(clampLatency(next))}

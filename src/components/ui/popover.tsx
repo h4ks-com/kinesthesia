@@ -7,6 +7,9 @@ type PopoverProps = {
   children: ReactNode;
   align?: "left" | "right";
   side?: "top" | "bottom";
+  /** Keeps the panel clear of what it would otherwise cover on a phone, where
+   * it is pinned to the screen rather than to the trigger. */
+  clearance?: "footer" | "keyboard";
   label: string;
 };
 
@@ -15,6 +18,7 @@ export function Popover({
   children,
   align = "right",
   side = "bottom",
+  clearance = "footer",
   label,
 }: PopoverProps) {
   const [open, setOpen] = useState(false);
@@ -67,7 +71,11 @@ export function Popover({
           } ${
             side === "top" ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]"
           } max-sm:fixed max-sm:inset-x-3 max-sm:right-auto max-sm:left-3 max-sm:w-auto ${
-            side === "top" ? "max-sm:bottom-20" : "max-sm:top-16"
+            side === "bottom"
+              ? "max-sm:top-16"
+              : clearance === "keyboard"
+                ? "max-sm:bottom-52"
+                : "max-sm:bottom-20"
           }`}
         >
           {children}

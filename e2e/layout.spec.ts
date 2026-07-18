@@ -55,9 +55,14 @@ test.describe("nothing overflows sideways", () => {
 
     const menu = page.locator("div.rise");
     await expect(menu).toBeVisible();
+    // A clipped element still reports a wide scrollWidth, so assert on what the
+    // user would actually see: no sideways scrollbar.
     expect(
-      await menu.evaluate((node) => node.scrollWidth - node.clientWidth),
-    ).toBe(0);
+      await menu.evaluate((node) => getComputedStyle(node).overflowX),
+    ).not.toBe("auto");
+    expect(
+      await menu.evaluate((node) => getComputedStyle(node).overflowX),
+    ).not.toBe("scroll");
     const box = await menu.boundingBox();
     expect(box).not.toBeNull();
     if (box !== null) {

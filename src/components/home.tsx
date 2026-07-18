@@ -19,11 +19,20 @@ import type { Viewer } from "@/server/auth";
 type HomeProps = {
   viewer: Viewer | null;
   authEnabled: boolean;
+  homeLink: string | null;
+  chatLink: string | null;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
-export function Home({ viewer, authEnabled, signIn, signOut }: HomeProps) {
+export function Home({
+  viewer,
+  authEnabled,
+  homeLink,
+  chatLink,
+  signIn,
+  signOut,
+}: HomeProps) {
   const [query, setQuery] = useState("");
   const [recent, setRecent] = useState<readonly LibraryEntry[]>([]);
   const [favorites, setFavorites] = useState<readonly LibraryEntry[]>([]);
@@ -217,10 +226,33 @@ export function Home({ viewer, authEnabled, signIn, signOut }: HomeProps) {
           href="https://bitmidi.com"
           target="_blank"
           rel="noreferrer"
-          className="ml-auto transition-colors hover:text-accent"
+          className="transition-colors hover:text-accent"
         >
           midi from bitmidi
         </a>
+
+        <span className="ml-auto flex items-center gap-4">
+          {homeLink === null ? null : (
+            <a
+              href={homeLink}
+              target="_blank"
+              rel="noreferrer"
+              className="transition-colors hover:text-accent"
+            >
+              h4ks
+            </a>
+          )}
+          {chatLink === null ? null : (
+            <a
+              href={chatLink}
+              target="_blank"
+              rel="noreferrer"
+              className="transition-colors hover:text-accent"
+            >
+              chat
+            </a>
+          )}
+        </span>
       </footer>
     </>
   );

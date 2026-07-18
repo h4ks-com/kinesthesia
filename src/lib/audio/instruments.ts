@@ -1,9 +1,10 @@
 import { DrumMachine, Soundfont } from "smplr";
 import { defaultProgram, soundfontFor } from "@/lib/audio/general-midi";
+import { pickDrumSample } from "@/lib/audio/percussion";
 
 export type Voice = {
   start(options: {
-    note: number;
+    note: number | string;
     time?: number;
     duration?: number;
     velocity?: number;
@@ -68,8 +69,9 @@ export class InstrumentBank {
       : new Soundfont(this.context, { instrument: key });
     try {
       await voice.load;
-      this.voices.set(key, voice);
-      return voice;
+      const ready = percussion ? asDrumKit(voice) : voice;
+      this.voices.set(key, ready);
+      return ready;
     } catch {
       return this.loadFallback(key);
     }
@@ -86,4 +88,39 @@ export class InstrumentBank {
       return null;
     }
   }
+}
+
+type DrumKit = {
+  getGroupNames(): string[];
+  getSampleNamesForGroup(group: string): string[];
+};
+
+/** Drum kits are addressed by sample name, so incoming General MIDI note
+ * numbers are translated before they reach the kit. */
+function asDrumKit(voice: Voice): Voice {
+  const kit = voice as Voice & Partial<DrumKit>;
+  if (
+    typeof kit.getGroupNames !== "function" ||
+    typeof kit.getSampleNamesForGroup !== "function"
+  ) {
+    return voice;
+  }
+  const samplesFor = kit.getSampleNamesForGroup.bind(kit);
+  const groups = kit.getGroupNames();
+  return {
+    start(options) {
+      if (typeof options.note !== "number") {
+        kit.start(options);
+        return;
+      }
+      const sample = pickDrumSample(options.note, groups, samplesFor);
+      if (sample === null) {
+        return;
+      }
+      kit.start({ ...options, note: sample });
+    },
+    stop() {
+      kit.stop();
+    },
+  };
 }

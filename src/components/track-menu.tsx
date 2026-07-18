@@ -1,6 +1,6 @@
 "use client";
 
-import { Hand, Layers } from "lucide-react";
+import { Hand, Layers, Radio } from "lucide-react";
 import { Popover } from "@/components/ui/popover";
 import { trackColor } from "@/lib/midi/palette";
 import type { SongTrack } from "@/lib/midi/song";
@@ -12,6 +12,7 @@ type TrackMenuProps = {
   interactive: boolean;
   onToggleVisible: (index: number) => void;
   onToggleMine: (index: number) => void;
+  onSolo: (index: number) => void;
 };
 
 export function TrackMenu({
@@ -21,6 +22,7 @@ export function TrackMenu({
   interactive,
   onToggleVisible,
   onToggleMine,
+  onSolo,
 }: TrackMenuProps) {
   if (tracks.length <= 1) {
     return null;
@@ -72,6 +74,15 @@ export function TrackMenu({
                 <span className="ml-auto shrink-0 font-mono text-faint text-xs">
                   {track.noteCount}
                 </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onSolo(track.index)}
+                aria-label={`Show only ${track.name}`}
+                data-tip="Solo"
+                className="shrink-0 rounded-lg p-2 text-faint transition-colors hover:bg-raised hover:text-accent"
+              >
+                <Radio className="size-4" aria-hidden="true" />
               </button>
               {interactive ? (
                 <button

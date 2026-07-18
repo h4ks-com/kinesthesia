@@ -480,6 +480,13 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
     );
   }
 
+  function soloTrack(index: number) {
+    const others = song?.tracks
+      .map((track) => track.index)
+      .filter((other) => other !== index);
+    setHiddenTracks(new Set(others ?? []));
+  }
+
   function toggleTrack(index: number) {
     setHiddenTracks((current) => {
       const next = new Set(current);
@@ -569,6 +576,7 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
             interactive={interactive}
             onToggleVisible={toggleTrack}
             onToggleMine={togglePlayerTrack}
+            onSolo={soloTrack}
           />
 
           {switchable.map(({ mode: target, label, icon: Icon }) => (
@@ -640,6 +648,7 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
             <Popover
               label="Playback speed"
               align="left"
+              side="top"
               trigger={(open) => (
                 <span
                   data-tip="Slow it down to learn"

@@ -54,7 +54,9 @@ Every setting lives in `.env`, and `.env.example` documents all of them.
 
 You never have to sign in to play. Recent songs and favourites are kept in your
 browser. If you fill in the Logto values a sign in button appears, and finished
-runs are recorded to a leaderboard that anyone can read.
+runs go to a leaderboard anyone can read. Point the Logto redirect URI at
+`APP_BASE_URL` + `/callback`, and generate `LOGTO_COOKIE_SECRET` yourself since
+it encrypts this app's own session cookie rather than coming from Logto.
 
 ## API
 

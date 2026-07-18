@@ -25,6 +25,7 @@ import { clampKeyWidth, defaultKeyWidth } from "@/lib/render/keyboard";
 import { busiestTrack } from "@/lib/scoring/gates";
 import type { Score } from "@/lib/scoring/judge";
 import { useGates } from "@/lib/scoring/use-gates";
+import { useRunRecord } from "@/lib/scoring/use-run-record";
 
 type PlayerProps = {
   mode: PlayerMode;
@@ -172,6 +173,18 @@ export function Player({
   const yoursRef = useRef(yoursSet);
   yoursRef.current = yoursSet;
   const yours = useCallback(() => yoursRef.current, []);
+
+  useRunRecord({
+    mode,
+    params,
+    score: gates.score,
+    elapsed: playback.elapsed,
+    duration: song?.duration ?? 0,
+    active: interactive,
+    speed,
+    simplified,
+    melodyRate,
+  });
 
   const positionRef = useRef(playback.getPosition);
   positionRef.current = playback.getPosition;

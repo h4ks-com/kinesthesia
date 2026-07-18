@@ -19,6 +19,13 @@ export const scores = sqliteTable(
     points: integer("points").notNull(),
     accuracy: real("accuracy").notNull(),
     bestCombo: integer("best_combo").notNull(),
+    /** What the run was worth: the same song scores differently at half speed
+     * or reduced to one note, so a leaderboard needs the settings beside it. */
+    speed: real("speed").notNull().default(1),
+    simplified: integer("simplified", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    melodyRate: integer("melody_rate"),
     playedAt: integer("played_at").notNull().default(sql`(unixepoch() * 1000)`),
   },
   (table) => [

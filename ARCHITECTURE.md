@@ -56,6 +56,7 @@ src/lib/
   scoring/judge.ts            hit windows, combo and accuracy
   scoring/gates.ts            chords the player owes, as one unit each
   scoring/use-gates.ts        waiting, judging and missing
+  scoring/use-run-record.ts   sends a finished run to the leaderboard
   input/use-note-input.ts     keyboard, MIDI and octave in one listener
   battle/protocol.ts          messages exchanged between peers
   battle/ice.ts               STUN, plus a TURN relay when configured
@@ -123,6 +124,10 @@ path is not optional.
 Signing in is optional. With no Logto values set, `authConfig` is null, the
 header renders no button and the app is fully anonymous with recents and
 favourites kept in the browser.
+
+A finished run is recorded with the settings that made it easier or harder, so
+a leaderboard can say what a score was worth: speed, whether the part was
+simplified, and the note rate it was reduced to.
 
 Scores live in SQLite through Drizzle over the libSQL driver. The driver matters:
 `bun:sqlite` exists only under Bun and `node:sqlite` only under Node, while this

@@ -234,6 +234,15 @@ const submitScoreRoute = createRoute({
             points: z.number().int().min(0),
             accuracy: z.number().min(0).max(1),
             bestCombo: z.number().int().min(0),
+            speed: z.number().positive().max(4).default(1),
+            simplified: z.boolean().default(false),
+            melodyRate: z
+              .number()
+              .int()
+              .min(1)
+              .max(12)
+              .nullable()
+              .default(null),
           }),
         },
       },

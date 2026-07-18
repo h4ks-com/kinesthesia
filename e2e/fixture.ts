@@ -108,6 +108,30 @@ export async function pixelAt(
   );
 }
 
+/** Every track colour keeps at least one channel below 250, so pure white marks
+ * a key the player is holding rather than one the song is sounding. */
+export async function isPureWhite(page: Page, x: number): Promise<boolean> {
+  const canvas = await page.locator("canvas").boundingBox();
+  const pixel = await pixelAt(
+    page,
+    x,
+    (canvas?.height ?? 0) - keyRowFromBottom,
+  );
+  return pixel.every((channel) => channel >= 250);
+}
+
+/** The centre of the first white key the song is sounding, which is the key the
+ * player owes while the gate waits. */
+export async function litKeyCentre(page: Page): Promise<number | null> {
+  const centres = await whiteKeyCentres(page);
+  for (const centre of centres) {
+    if (await keyIsLit(page, centre)) {
+      return centre;
+    }
+  }
+  return null;
+}
+
 /** A struck key is repainted in its track colour, which is pale but tinted, so
  * only the distance from the resting key tells the two apart. */
 export async function keyIsLit(page: Page, x: number): Promise<boolean> {

@@ -20,6 +20,7 @@ type PianoRollViewProps = {
   keyWidth: number;
   getPosition: () => number;
   getPressed: () => ReadonlySet<number>;
+  getOwed: () => ReadonlySet<number>;
   onStrike?: (pitch: number) => void;
   onRelease?: (pitch: number) => void;
 };
@@ -30,6 +31,7 @@ export function PianoRollView({
   keyWidth,
   getPosition,
   getPressed,
+  getOwed,
   onStrike,
   onRelease,
 }: PianoRollViewProps) {
@@ -54,6 +56,7 @@ export function PianoRollView({
         position: getPosition(),
         hiddenTracks: hiddenRef.current,
         pressed: getPressed(),
+        owed: getOwed(),
       });
       frame = requestAnimationFrame(loop);
     });
@@ -66,7 +69,7 @@ export function PianoRollView({
       observer.disconnect();
       rendererRef.current = null;
     };
-  }, [song, getPosition, getPressed]);
+  }, [song, getPosition, getPressed, getOwed]);
 
   useEffect(() => {
     rendererRef.current?.setKeyWidth(keyWidth);

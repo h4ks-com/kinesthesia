@@ -14,6 +14,7 @@ import {
 export type Gates = {
   score: Score;
   waiting: boolean;
+  owed: () => ReadonlySet<number>;
   judgeStrike: (pitch: number, position: number) => void;
   moveTo: (position: number) => void;
   reset: () => void;
@@ -124,6 +125,7 @@ export function useGates({
   return {
     score,
     waiting,
+    owed: useCallback(() => pendingRef.current as ReadonlySet<number>, []),
     judgeStrike,
     moveTo: useCallback(
       (position: number) => openAt(gateIndexAt(gatesRef.current, position)),

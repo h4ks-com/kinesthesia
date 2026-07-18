@@ -23,6 +23,17 @@ import {
 const lookAhead = 3.5;
 const maxDevicePixelRatio = 1.5;
 
+type SparkKind = "note" | "strike" | "bloom";
+
+const sparkBursts: Record<
+  SparkKind,
+  { count: number; speed: number; radius: number; white: number }
+> = {
+  note: { count: 14, speed: 1, radius: 1, white: 0.35 },
+  strike: { count: 18, speed: 1.15, radius: 1.1, white: 0.55 },
+  bloom: { count: 30, speed: 1.5, radius: 1.35, white: 0.85 },
+};
+
 type Particle = {
   x: number;
   y: number;
@@ -38,6 +49,9 @@ export type Frame = {
   readonly position: number;
   readonly hiddenTracks: ReadonlySet<number>;
   readonly pressed: ReadonlySet<number>;
+  /** The pitches the player still owes at the current gate, so a strike that
+   * lands on one can be celebrated differently from a wrong one. */
+  readonly owed: ReadonlySet<number>;
 };
 
 export class PianoRollRenderer {
@@ -45,6 +59,7 @@ export class PianoRollRenderer {
   private readonly context: CanvasRenderingContext2D;
   private readonly particles: Particle[] = [];
   private previouslyActive = new Set<number>();
+  private previouslyPressed = new Set<number>();
   private pan = 0;
   private keyWidth: number;
 
@@ -128,8 +143,15 @@ export class PianoRollRenderer {
     }
 
     this.paintGlow(active, keyboardTop, whiteWidth);
-    this.emitSparks(active, keyboardTop, whiteWidth);
-    this.paintKeyboard(active, keyboardTop, keyboardHeight, whiteWidth, total);
+    this.emitSparks(frame, active, keyboardTop, whiteWidth);
+    this.paintKeyboard(
+      frame,
+      active,
+      keyboardTop,
+      keyboardHeight,
+      whiteWidth,
+      total,
+    );
     this.paintParticles();
     ctx.translate(this.pan, 0);
   }
@@ -249,40 +271,72 @@ export class PianoRollRenderer {
     ctx.restore();
   }
 
+  /** A key the song already lit gives nothing back when the player hits it, so
+   * a strike sparks on its own account rather than only on a note starting. */
   private emitSparks(
+    frame: Frame,
     active: ReadonlyMap<number, NoteColor>,
     keyboardTop: number,
     whiteWidth: number,
   ): void {
-    for (const [pitch, color] of active) {
-      if (this.previouslyActive.has(pitch)) {
+    const sparked = new Set<number>();
+    for (const pitch of frame.pressed) {
+      if (this.previouslyPressed.has(pitch)) {
         continue;
       }
-      const centerX = keyCenter(pitch, whiteWidth);
-      const count = 14 + Math.floor(Math.random() * 8);
-      for (let index = 0; index < count; index += 1) {
-        const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.15;
-        const speed = Math.random() * 4 + 1;
-        this.particles.push({
-          x: centerX + (Math.random() - 0.5) * 7,
-          y: keyboardTop,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed,
-          life: 1,
-          radius: Math.random() * 2.2 + 0.7,
-          color:
-            Math.random() < 0.35
-              ? "#ffffff"
-              : Math.random() < 0.5
-                ? color.core
-                : color.glow,
-        });
+      sparked.add(pitch);
+      this.spawnSparks(
+        keyCenter(pitch, whiteWidth),
+        keyboardTop,
+        active.get(pitch) ?? trackColor(0),
+        frame.owed.has(pitch) ? "bloom" : "strike",
+      );
+    }
+    for (const [pitch, color] of active) {
+      if (this.previouslyActive.has(pitch) || sparked.has(pitch)) {
+        continue;
       }
+      this.spawnSparks(
+        keyCenter(pitch, whiteWidth),
+        keyboardTop,
+        color,
+        "note",
+      );
     }
     this.previouslyActive = new Set(active.keys());
+    this.previouslyPressed = new Set(frame.pressed);
+  }
+
+  private spawnSparks(
+    centerX: number,
+    keyboardTop: number,
+    color: NoteColor,
+    kind: SparkKind,
+  ): void {
+    const burst = sparkBursts[kind];
+    const count = burst.count + Math.floor(Math.random() * 8);
+    for (let index = 0; index < count; index += 1) {
+      const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.15;
+      const speed = Math.random() * 4 * burst.speed + 1;
+      this.particles.push({
+        x: centerX + (Math.random() - 0.5) * 7,
+        y: keyboardTop,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 1,
+        radius: Math.random() * 2.2 * burst.radius + 0.7,
+        color:
+          Math.random() < burst.white
+            ? "#ffffff"
+            : Math.random() < 0.5
+              ? color.core
+              : color.glow,
+      });
+    }
   }
 
   private paintKeyboard(
+    frame: Frame,
     active: ReadonlyMap<number, NoteColor>,
     keyboardTop: number,
     keyboardHeight: number,
@@ -293,15 +347,7 @@ export class PianoRollRenderer {
 
     for (const pitch of whiteKeys) {
       const x = whiteKeyLeft(pitch, whiteWidth);
-      const color = active.get(pitch);
-      if (color === undefined) {
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "#dfe4ec";
-      } else {
-        ctx.shadowColor = color.glow;
-        ctx.shadowBlur = 20;
-        ctx.fillStyle = color.core;
-      }
+      this.setKeyPaint(frame, active, pitch, "#dfe4ec", 20);
       ctx.fillRect(x + 0.5, keyboardTop, whiteWidth - 1, keyboardHeight);
     }
 
@@ -312,21 +358,41 @@ export class PianoRollRenderer {
       }
       const blackWidth = blackKeyWidth(whiteWidth);
       const x = blackKeyLeft(pitch, whiteWidth);
-      const color = active.get(pitch);
-      if (color === undefined) {
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "#0b0e15";
-      } else {
-        ctx.shadowColor = color.glow;
-        ctx.shadowBlur = 16;
-        ctx.fillStyle = color.core;
-      }
+      this.setKeyPaint(frame, active, pitch, "#0b0e15", 16);
       ctx.fillRect(x, keyboardTop, blackWidth, keyboardHeight * 0.6);
     }
 
     ctx.shadowBlur = 0;
     ctx.fillStyle = "#161c26";
     ctx.fillRect(0, keyboardTop - 2, width, 2);
+  }
+
+  /** A pressed key goes white so the player can tell their own hit from a note
+   * the song is already playing, and blooms when the hit is one they owe. */
+  private setKeyPaint(
+    frame: Frame,
+    active: ReadonlyMap<number, NoteColor>,
+    pitch: number,
+    restingColor: string,
+    blur: number,
+  ): void {
+    const ctx = this.context;
+    const color = active.get(pitch);
+    if (color === undefined) {
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = restingColor;
+      return;
+    }
+    if (!frame.pressed.has(pitch)) {
+      ctx.shadowColor = color.glow;
+      ctx.shadowBlur = blur;
+      ctx.fillStyle = color.core;
+      return;
+    }
+    const right = frame.owed.has(pitch);
+    ctx.shadowColor = right ? "#ffffff" : color.glow;
+    ctx.shadowBlur = right ? blur * 2 : blur * 1.4;
+    ctx.fillStyle = "#ffffff";
   }
 
   private paintParticles(): void {

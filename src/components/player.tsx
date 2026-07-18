@@ -240,6 +240,7 @@ export function Player({
           keyWidth={keyWidth}
           getPosition={playback.getPosition}
           getPressed={input.pressed}
+          getOwed={gates.owed}
           onStrike={(pitch) => input.press(pitch, 0.8)}
           onRelease={input.release}
         />

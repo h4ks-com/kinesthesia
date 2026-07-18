@@ -1,5 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { playerQuery, serveFixture, songName } from "./fixture";
+import {
+  isPureWhite,
+  keyRowFromBottom,
+  litKeyCentre,
+  playerQuery,
+  serveFixture,
+  songName,
+} from "./fixture";
 
 test("search lists results and links into the player", async ({ page }) => {
   await page.route("**/api/midi/search**", (route) =>
@@ -55,6 +62,35 @@ test("learn mode stops and waits for the player", async ({ page }) => {
   await expect(page.getByText("waiting for you")).toBeVisible({
     timeout: 15_000,
   });
+});
+
+test("striking a key the song already lit still shows the hit", async ({
+  page,
+}) => {
+  await serveFixture(page);
+  await page.goto(`/learn?${playerQuery()}`);
+  const canvas = page.locator("canvas");
+  await expect(canvas).toBeVisible();
+
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await expect(page.getByText("waiting for you")).toBeVisible({
+    timeout: 15_000,
+  });
+
+  const box = await canvas.boundingBox();
+  const keyRow = (box?.height ?? 0) - keyRowFromBottom;
+  const lit = await litKeyCentre(page);
+  expect(lit).not.toBeNull();
+
+  const x = lit ?? 0;
+  expect(await isPureWhite(page, x)).toBe(false);
+
+  await page.mouse.move((box?.x ?? 0) + x, (box?.y ?? 0) + keyRow);
+  await page.mouse.down();
+  await expect.poll(async () => isPureWhite(page, x)).toBe(true);
+
+  await page.mouse.up();
+  await expect.poll(async () => isPureWhite(page, x)).toBe(false);
 });
 
 test("a link without a song explains itself", async ({ page }) => {

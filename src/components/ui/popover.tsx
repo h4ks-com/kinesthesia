@@ -47,17 +47,15 @@ export function Popover({
     <div ref={shell} className="relative">
       <button
         type="button"
-        aria-haspopup="menu"
         aria-expanded={open}
         aria-label={label}
         onClick={() => setOpen((current) => !current)}
-        className="contents"
+        className="inline-flex rounded-lg"
       >
         {trigger(open)}
       </button>
       {open ? (
         <div
-          role="menu"
           className={`rise absolute top-[calc(100%+8px)] z-50 max-h-[70vh] overflow-auto rounded-xl border border-line-strong bg-panel p-1.5 shadow-[0_20px_60px_-12px_rgba(0,0,0,0.9)] ${
             align === "right" ? "right-0" : "left-0"
           }`}

@@ -5,7 +5,7 @@ import type { MidiSearchItem } from "@/server/midi/types";
 
 export type SearchState =
   | { status: "idle" }
-  | { status: "searching" }
+  | { status: "searching"; results: readonly MidiSearchItem[] }
   | { status: "failed"; message: string }
   | { status: "done"; results: readonly MidiSearchItem[] };
 
@@ -23,7 +23,10 @@ export function useLiveSearch(query: string): SearchState {
 
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      setState({ status: "searching" });
+      setState((current) => ({
+        status: "searching",
+        results: "results" in current ? current.results : [],
+      }));
       fetch(`/api/midi/search?q=${encodeURIComponent(trimmed)}&limit=20`, {
         signal: controller.signal,
       })

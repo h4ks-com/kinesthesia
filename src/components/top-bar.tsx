@@ -6,14 +6,9 @@ import { type ReactNode, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/ui/popover";
 import type { Viewer } from "@/server/auth";
+import type { PlayerStats } from "@/server/scores/store";
 
-export type PlayerStats = {
-  player: string;
-  runs: number;
-  points: number;
-  bestCombo: number;
-  accuracy: number;
-};
+type Stats = PlayerStats & { player: string };
 
 type TopBarProps = {
   viewer: Viewer | null;
@@ -30,7 +25,7 @@ export function TopBar({
   signOut,
   children,
 }: TopBarProps) {
-  const [stats, setStats] = useState<PlayerStats | null>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
 
   useEffect(() => {
     if (viewer === null) {
@@ -40,7 +35,7 @@ export function TopBar({
     let live = true;
     fetch("/api/scores/me")
       .then((response) => (response.ok ? response.json() : null))
-      .then((data: PlayerStats | null) => {
+      .then((data: Stats | null) => {
         if (live) {
           setStats(data);
         }

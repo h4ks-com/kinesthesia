@@ -23,7 +23,7 @@ function keyFor({ program, percussion }: VoiceRequest): string {
 export class InstrumentBank {
   private readonly context: AudioContext;
   private readonly voices = new Map<string, Voice>();
-  private readonly loading = new Map<string, Promise<Voice>>();
+  private readonly loading = new Map<string, Promise<Voice | null>>();
 
   constructor(context: AudioContext) {
     this.context = context;
@@ -62,7 +62,7 @@ export class InstrumentBank {
     }
   }
 
-  private async load(key: string, percussion: boolean): Promise<Voice> {
+  private async load(key: string, percussion: boolean): Promise<Voice | null> {
     const voice = percussion
       ? new DrumMachine(this.context, { instrument: "TR-808" })
       : new Soundfont(this.context, { instrument: key });
@@ -71,10 +71,19 @@ export class InstrumentBank {
       this.voices.set(key, voice);
       return voice;
     } catch {
+      return this.loadFallback(key);
+    }
+  }
+
+  private async loadFallback(key: string): Promise<Voice | null> {
+    try {
       const piano = new Soundfont(this.context, { instrument: defaultProgram });
       await piano.load;
       this.voices.set(key, piano);
       return piano;
+    } catch {
+      this.loading.delete(key);
+      return null;
     }
   }
 }

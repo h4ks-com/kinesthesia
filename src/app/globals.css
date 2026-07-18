@@ -8,7 +8,7 @@
   --line-strong: #2a313d;
   --text: #e8ecf3;
   --muted: #8b95a7;
-  --faint: #5b6577;
+  --faint: #7d8798;
   --accent: #4c9eff;
   --accent-soft: #1b3550;
   --accent-glow: #7bb8ff;
@@ -92,9 +92,22 @@ body {
   scale: 1;
 }
 
-[data-tip-side="bottom"]::after {
+[data-tip-side="top"]::after {
   top: auto;
   bottom: calc(100% + 8px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* biome-ignore-start lint/complexity/noImportantStyles: this override has to beat every animation declared elsewhere */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* biome-ignore-end lint/complexity/noImportantStyles: end of the reduced motion override */
 }
 
 @keyframes rise {
@@ -124,4 +137,16 @@ body {
 
 input[type="range"] {
   accent-color: var(--accent);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }

@@ -30,6 +30,12 @@ export function buildPlayerUrl(
   return target.toString();
 }
 
+const localBase = "http://player.local";
+
+export function playerPath(mode: PlayerMode, params: PlayerParams): string {
+  return buildPlayerUrl(localBase, mode, params).slice(localBase.length);
+}
+
 /** Returns null when the url is absent or not http(s), which keeps a crafted
  * `javascript:` link from ever reaching an audio loader or an anchor. */
 export function parsePlayerParams(

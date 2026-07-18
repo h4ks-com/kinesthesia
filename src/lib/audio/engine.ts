@@ -1,4 +1,4 @@
-import { InstrumentBank } from "@/lib/audio/instruments";
+import { InstrumentBank, type Voice } from "@/lib/audio/instruments";
 import { Transport } from "@/lib/audio/transport";
 import type { Song, SongNote } from "@/lib/midi/song";
 
@@ -32,10 +32,6 @@ export class PlaybackEngine {
 
   get playing(): boolean {
     return this.transport?.playing ?? false;
-  }
-
-  get ready(): boolean {
-    return this.context !== null;
   }
 
   // Browsers only allow an AudioContext to make sound if it was created or
@@ -107,7 +103,7 @@ export class PlaybackEngine {
     this.transport = null;
   }
 
-  private voiceFor(track: number) {
+  private voiceFor(track: number): Voice | null {
     const definition = this.song?.tracks.find((entry) => entry.index === track);
     if (definition === undefined || this.bank === null) {
       return null;
@@ -142,23 +138,31 @@ export class PlaybackEngine {
       if (note === undefined || note.start > horizon) {
         break;
       }
-      this.cursor += 1;
-      if (this.autoTracks.has(note.track)) {
-        this.schedule(note, position);
+      if (!this.autoTracks.has(note.track)) {
+        this.cursor += 1;
+        continue;
       }
+      // Holding the cursor while an instrument is still downloading keeps a
+      // cold song from silently losing its opening notes.
+      if (!this.schedule(note, position) && note.start >= position) {
+        break;
+      }
+      this.cursor += 1;
     }
   }
 
-  private schedule(note: SongNote, position: number): void {
+  private schedule(note: SongNote, position: number): boolean {
     const context = this.context;
-    if (context === null) {
-      return;
+    const voice = this.voiceFor(note.track);
+    if (context === null || voice === null) {
+      return false;
     }
-    this.voiceFor(note.track)?.start({
+    voice.start({
       note: note.pitch,
       time: context.currentTime + Math.max(0, note.start - position),
       duration: Math.max(0.05, note.end - note.start),
       velocity: Math.round(note.velocity * 127),
     });
+    return true;
   }
 }

@@ -2,7 +2,7 @@
 
 import { ExternalLink, Eye, Piano, Star, Swords } from "lucide-react";
 import Link from "next/link";
-import { buildPlayerUrl, type PlayerMode } from "@/lib/player-url";
+import { type PlayerMode, playerPath } from "@/lib/player-url";
 
 const modes = [
   { mode: "watch", label: "Watch", icon: Eye, tip: "Watch it play" },
@@ -74,12 +74,7 @@ export function SongRow({
         {modes.map(({ mode, label, icon: Icon, tip }) => (
           <Link
             key={mode}
-            href={buildPlayerUrl("http://x", mode, {
-              url,
-              name,
-              source,
-              tracks: null,
-            }).replace("http://x", "")}
+            href={playerPath(mode, { url, name, source, tracks: null })}
             data-tip={tip}
             data-tip-side="top"
             aria-label={`${label} ${name}`}

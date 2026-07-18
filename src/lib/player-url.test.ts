@@ -3,6 +3,7 @@ import {
   buildPlayerUrl,
   type PlayerParams,
   parsePlayerParams,
+  playerPath,
 } from "@/lib/player-url";
 
 const song: PlayerParams = {
@@ -38,6 +39,21 @@ describe("buildPlayerUrl", () => {
       }),
     );
     expect(built.searchParams.get("tracks")).toBe("0,3,7");
+  });
+});
+
+describe("playerPath", () => {
+  it("returns a same origin path", () => {
+    expect(playerPath("play", song)).toMatch(/^\/play\?/);
+  });
+
+  it("survives a song whose own url looks like the internal base", () => {
+    const hostile = { ...song, name: "http://player.local weirdness" };
+    const path = playerPath("watch", hostile);
+    expect(path.startsWith("/watch?")).toBe(true);
+    expect(
+      parsePlayerParams(new URL(path, "https://x.test").searchParams),
+    ).toEqual(hostile);
   });
 });
 

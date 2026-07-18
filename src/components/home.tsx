@@ -46,7 +46,13 @@ export function Home({ viewer, authEnabled, signIn, signOut }: HomeProps) {
   }
 
   const searching = state.status === "searching";
-  const showLibrary = query.trim() === "";
+  const shown = "results" in state ? state.results : [];
+  const announcement =
+    state.status === "searching"
+      ? "Searching"
+      : state.status === "done"
+        ? `${state.results.length} results`
+        : "";
 
   return (
     <>
@@ -105,13 +111,20 @@ export function Home({ viewer, authEnabled, signIn, signOut }: HomeProps) {
           <p className="text-danger text-sm">{state.message}</p>
         ) : null}
 
+        <p aria-live="polite" role="status" className="sr-only">
+          {announcement}
+        </p>
+
         {state.status === "done" && state.results.length === 0 ? (
           <p className="text-muted">Nothing matched that. Try fewer words.</p>
         ) : null}
 
-        {state.status === "done" && state.results.length > 0 ? (
-          <Section title={`${state.results.length} results`}>
-            {state.results.map((result) => (
+        {shown.length > 0 ? (
+          <Section
+            title={`${shown.length} results`}
+            dim={state.status === "searching"}
+          >
+            {shown.map((result) => (
               <SongRow
                 key={`${result.source}-${result.id}`}
                 name={result.name}
@@ -134,7 +147,7 @@ export function Home({ viewer, authEnabled, signIn, signOut }: HomeProps) {
           </Section>
         ) : null}
 
-        {showLibrary && favorites.length > 0 ? (
+        {state.status === "idle" && favorites.length > 0 ? (
           <Section title="Favorites">
             {favorites.map((entry) => (
               <SongRow
@@ -151,7 +164,7 @@ export function Home({ viewer, authEnabled, signIn, signOut }: HomeProps) {
           </Section>
         ) : null}
 
-        {showLibrary && recent.length > 0 ? (
+        {state.status === "idle" && recent.length > 0 ? (
           <Section title="Recently played">
             {recent.map((entry) => (
               <SongRow
@@ -199,9 +212,19 @@ export function Home({ viewer, authEnabled, signIn, signOut }: HomeProps) {
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  children,
+  dim = false,
+}: {
+  title: string;
+  children: ReactNode;
+  dim?: boolean;
+}) {
   return (
-    <section className="flex flex-col gap-1">
+    <section
+      className={`flex flex-col gap-1 transition-opacity ${dim ? "opacity-50" : ""}`}
+    >
       <h2 className="label px-3 pb-1">{title}</h2>
       <ul className="flex flex-col">{children}</ul>
     </section>

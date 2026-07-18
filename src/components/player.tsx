@@ -19,6 +19,7 @@ import {
   buildPlayerUrl,
   type PlayerMode,
   type PlayerParams,
+  playerPath,
 } from "@/lib/player-url";
 import {
   accuracy,
@@ -360,10 +361,18 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
 
   useEffect(() => {
     const onSpace = (event: KeyboardEvent) => {
-      if (event.code === "Space") {
-        event.preventDefault();
-        void toggle();
+      if (event.code !== "Space") {
+        return;
       }
+      // Space belongs to whatever control has focus before it means play.
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest("button, a, input, select, textarea")
+      ) {
+        return;
+      }
+      event.preventDefault();
+      void toggle();
     };
     window.addEventListener("keydown", onSpace);
     return () => window.removeEventListener("keydown", onSpace);
@@ -481,10 +490,10 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
           {switchable.map(({ mode: target, label, icon: Icon }) => (
             <Link
               key={target}
-              href={buildPlayerUrl("http://x", target, {
+              href={playerPath(target, {
                 ...params,
                 tracks: [...playerTracks],
-              }).replace("http://x", "")}
+              })}
               data-tip={`Switch to ${label.toLowerCase()}`}
               aria-label={`Switch to ${label}`}
               className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong px-3 py-2 font-medium text-sm transition-colors hover:border-accent hover:text-accent"

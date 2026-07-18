@@ -481,10 +481,15 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
   }
 
   function soloTrack(index: number) {
-    const others = song?.tracks
-      .map((track) => track.index)
-      .filter((other) => other !== index);
-    setHiddenTracks(new Set(others ?? []));
+    const all = song?.tracks.map((track) => track.index) ?? [];
+    setHiddenTracks((current) => {
+      const alreadySolo =
+        all.filter((other) => !current.has(other)).length === 1 &&
+        !current.has(index);
+      return alreadySolo
+        ? new Set()
+        : new Set(all.filter((other) => other !== index));
+    });
   }
 
   function toggleTrack(index: number) {

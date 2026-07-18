@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, Copy } from "lucide-react";
 import Link from "next/link";
 import type { DataConnection } from "peerjs";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -28,6 +29,7 @@ export function Battle({ params, playerName }: BattleProps) {
   const [connection, setConnection] = useState<Connection>({ status: "idle" });
   const [opponent, setOpponent] = useState<Opponent | null>(null);
   const [joinCode, setJoinCode] = useState("");
+  const [copied, setCopied] = useState(false);
   const linkRef = useRef<DataConnection | null>(null);
 
   const attach = useCallback(
@@ -101,6 +103,7 @@ export function Battle({ params, playerName }: BattleProps) {
       }
       const room: { code: string } = await response.json();
       setConnection({ status: "hosting", code: room.code });
+      void copyCode(room.code);
     });
     peer.on("connection", attach);
   }
@@ -123,6 +126,15 @@ export function Battle({ params, playerName }: BattleProps) {
       setConnection({ status: "failed", message: error.message }),
     );
     peer.on("open", () => attach(peer.connect(room.peerId)));
+  }
+
+  async function copyCode(code: string) {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
   }
 
   const onScore = useCallback((score: Score) => {
@@ -167,10 +179,23 @@ export function Battle({ params, playerName }: BattleProps) {
           <p className="text-zinc-400 text-sm">
             Give this code to your opponent
           </p>
-          <p className="font-mono text-4xl tracking-[0.3em]">
+          <button
+            type="button"
+            onClick={() => void copyCode(connection.code)}
+            data-tip={copied ? "Copied" : "Copy the code"}
+            aria-label={`Copy room code ${connection.code}`}
+            className="flex items-center gap-3 rounded-xl border border-line-strong px-5 py-3 font-mono text-4xl tracking-[0.3em] transition-colors hover:border-accent hover:text-accent"
+          >
             {connection.code}
+            {copied ? (
+              <Check className="size-5 text-accent" aria-hidden="true" />
+            ) : (
+              <Copy className="size-5 text-faint" aria-hidden="true" />
+            )}
+          </button>
+          <p className="text-muted text-sm">
+            {copied ? "Copied, send it over" : "Waiting for them to join"}
           </p>
-          <p className="text-sm text-zinc-500">Waiting for them to join</p>
         </div>
       ) : null}
 

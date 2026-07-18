@@ -36,6 +36,9 @@ html,
 body {
   background: var(--void);
   color: var(--text);
+  /* Tooltips are absolutely positioned and can reach past the last control in
+     a row; clip keeps that from turning into a sideways page scroll. */
+  overflow-x: clip;
 }
 
 body {

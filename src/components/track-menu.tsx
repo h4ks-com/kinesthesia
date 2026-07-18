@@ -28,6 +28,9 @@ export function TrackMenu({
     return null;
   }
 
+  const visible = tracks.filter((track) => !hidden.has(track.index));
+  const soloed = visible.length === 1 ? (visible[0]?.index ?? null) : null;
+
   return (
     <Popover
       label="Tracks"
@@ -48,18 +51,21 @@ export function TrackMenu({
         </span>
       )}
     >
-      <div className="w-72">
+      <div className="w-[19rem] max-sm:w-auto">
         {tracks.map((track) => {
           const visible = !hidden.has(track.index);
           const claimed = mine.has(track.index);
           const color = trackColor(track.index);
           return (
-            <div key={track.index} className="flex items-center gap-1">
+            <div
+              key={track.index}
+              className="flex min-w-0 items-center gap-0.5"
+            >
               <button
                 type="button"
                 onClick={() => onToggleVisible(track.index)}
                 aria-pressed={visible}
-                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-raised"
+                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-raised"
                 style={{ opacity: visible ? 1 : 0.4 }}
               >
                 <span
@@ -70,17 +76,22 @@ export function TrackMenu({
                     border: visible ? "none" : `1.5px solid ${color.glow}`,
                   }}
                 />
-                <span className="truncate text-sm">{track.name}</span>
-                <span className="ml-auto shrink-0 font-mono text-faint text-xs">
+                <span className="min-w-0 truncate text-sm">{track.name}</span>
+                <span className="ml-auto shrink-0 font-mono text-faint text-[0.7rem]">
                   {track.noteCount}
                 </span>
               </button>
               <button
                 type="button"
                 onClick={() => onSolo(track.index)}
+                aria-pressed={soloed === track.index}
                 aria-label={`Show only ${track.name}`}
-                data-tip="Solo"
-                className="shrink-0 rounded-lg p-2 text-faint transition-colors hover:bg-raised hover:text-accent"
+                data-tip={soloed === track.index ? "Show all" : "Solo"}
+                className={`shrink-0 rounded-lg p-1.5 transition-colors ${
+                  soloed === track.index
+                    ? "text-accent"
+                    : "text-faint hover:bg-raised hover:text-accent"
+                }`}
               >
                 <Radio className="size-4" aria-hidden="true" />
               </button>
@@ -91,7 +102,7 @@ export function TrackMenu({
                   aria-pressed={claimed}
                   aria-label={`Play ${track.name} yourself`}
                   data-tip="Play this one"
-                  className={`shrink-0 rounded-lg p-2 transition-colors ${
+                  className={`shrink-0 rounded-lg p-1.5 transition-colors ${
                     claimed
                       ? "bg-accent text-void"
                       : "text-faint hover:bg-raised hover:text-accent"

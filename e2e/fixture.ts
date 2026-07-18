@@ -40,3 +40,86 @@ export async function serveFixture(page: Page): Promise<void> {
 export function playerQuery(): string {
   return `url=${encodeURIComponent(songUrl)}&name=${encodeURIComponent(songName)}&source=bitmidi`;
 }
+
+export const keyRowFromBottom = 6;
+const idleKeyColor = [223, 228, 236] as const;
+
+/** Finds the middle of each pale run along one row of the keyboard, which is
+ * one run per visible white key, so both the count and the positions come from
+ * what was actually painted rather than from assumed geometry. */
+export async function whiteKeyCentres(page: Page): Promise<number[]> {
+  return page.evaluate((fromBottom) => {
+    const canvas = document.querySelector("canvas");
+    if (canvas === null) {
+      return [];
+    }
+    const context = canvas.getContext("2d");
+    if (context === null) {
+      return [];
+    }
+    const ratio = canvas.width / canvas.clientWidth;
+    const row = Math.round((canvas.clientHeight - fromBottom) * ratio);
+    const { data } = context.getImageData(0, row, canvas.width, 1);
+    const centres: number[] = [];
+    let start: number | null = null;
+    for (let pixel = 0; pixel <= canvas.width; pixel += 1) {
+      const index = pixel * 4;
+      const pale =
+        pixel < canvas.width &&
+        (data[index] ?? 0) > 150 &&
+        (data[index + 2] ?? 0) > 150;
+      if (pale && start === null) {
+        start = pixel;
+      }
+      if (!pale && start !== null) {
+        centres.push((start + pixel) / 2 / ratio);
+        start = null;
+      }
+    }
+    return centres;
+  }, keyRowFromBottom);
+}
+
+export async function pixelAt(
+  page: Page,
+  x: number,
+  y: number,
+): Promise<number[]> {
+  return page.evaluate(
+    ([localX, localY]) => {
+      const canvas = document.querySelector("canvas");
+      if (canvas === null) {
+        return [0, 0, 0];
+      }
+      const context = canvas.getContext("2d");
+      if (context === null) {
+        return [0, 0, 0];
+      }
+      const ratio = canvas.width / canvas.clientWidth;
+      const { data } = context.getImageData(
+        Math.round((localX ?? 0) * ratio),
+        Math.round((localY ?? 0) * ratio),
+        1,
+        1,
+      );
+      return [data[0] ?? 0, data[1] ?? 0, data[2] ?? 0];
+    },
+    [x, y],
+  );
+}
+
+/** A struck key is repainted in its track colour, which is pale but tinted, so
+ * only the distance from the resting key tells the two apart. */
+export async function keyIsLit(page: Page, x: number): Promise<boolean> {
+  const canvas = await page.locator("canvas").boundingBox();
+  const pixel = await pixelAt(
+    page,
+    x,
+    (canvas?.height ?? 0) - keyRowFromBottom,
+  );
+  const distance = idleKeyColor.reduce(
+    (total, channel, index) => total + Math.abs((pixel[index] ?? 0) - channel),
+    0,
+  );
+  return distance > 25;
+}

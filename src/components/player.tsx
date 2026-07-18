@@ -14,7 +14,9 @@ import {
   buildPlayerUrl,
   type PlayerMode,
   type PlayerParams,
+  type Speed,
 } from "@/lib/player-url";
+import { clampKeyWidth, defaultKeyWidth } from "@/lib/render/keyboard";
 import { busiestTrack } from "@/lib/scoring/gates";
 import type { Score } from "@/lib/scoring/judge";
 import { useGates } from "@/lib/scoring/use-gates";
@@ -49,6 +51,7 @@ export function Player({
   );
   const [speed, setSpeed] = useState(params.speed);
   const [latencyOffset, setLatencyOffset] = useState(0);
+  const [keyWidth, setKeyWidth] = useState(defaultKeyWidth);
 
   useEffect(() => {
     if (song === null || !interactive || playerTracks.size > 0) {
@@ -150,7 +153,7 @@ export function Player({
     gates.moveTo(position);
   }
 
-  function updateUrl(next: { tracks?: readonly number[]; speed?: number }) {
+  function updateUrl(next: { tracks?: readonly number[]; speed?: Speed }) {
     window.history.replaceState(
       null,
       "",
@@ -162,7 +165,7 @@ export function Player({
     );
   }
 
-  function changeSpeed(next: number) {
+  function changeSpeed(next: Speed) {
     setSpeed(next);
     updateUrl({ speed: next });
   }
@@ -234,6 +237,7 @@ export function Player({
         <PianoRollView
           song={song}
           hiddenTracks={hiddenTracks}
+          keyWidth={keyWidth}
           getPosition={playback.getPosition}
           getPressed={input.pressed}
           onStrike={(pitch) => input.press(pitch, 0.8)}
@@ -258,14 +262,14 @@ export function Player({
         duration={song.duration}
         speed={speed}
         showSpeed={mode !== "battle"}
+        keyWidth={keyWidth}
+        onKeyWidth={(next) => setKeyWidth(clampKeyWidth(next))}
         octave={interactive ? input.octave : null}
         latencyOffset={latencyOffset}
         onLatencyOffset={(next) => setLatencyOffset(clampLatency(next))}
         measuredLatency={playback.latency()}
         showLatency={interactive}
-        inputLabel={
-          input.midiReady ? "midi device connected" : "computer keyboard"
-        }
+        inputStatus={input.status}
         onToggle={() => void playback.toggle()}
         onSeek={seek}
         onSpeed={changeSpeed}

@@ -8,9 +8,16 @@ import {
 import type { Song } from "@/lib/midi/song";
 import { PianoRollRenderer } from "@/lib/render/piano-roll";
 
+/** Each pointer keeps its own gesture, so one finger panning the roll and
+ * another walking the keys never read each other's start position. */
+type Gesture =
+  | { readonly kind: "keys"; pitch: number | null }
+  | { readonly kind: "pan"; readonly x: number; readonly pan: number };
+
 type PianoRollViewProps = {
   song: Song;
   hiddenTracks: ReadonlySet<number>;
+  keyWidth: number;
   getPosition: () => number;
   getPressed: () => ReadonlySet<number>;
   onStrike?: (pitch: number) => void;
@@ -20,6 +27,7 @@ type PianoRollViewProps = {
 export function PianoRollView({
   song,
   hiddenTracks,
+  keyWidth,
   getPosition,
   getPressed,
   onStrike,
@@ -29,15 +37,16 @@ export function PianoRollView({
   const rendererRef = useRef<PianoRollRenderer | null>(null);
   const hiddenRef = useRef(hiddenTracks);
   hiddenRef.current = hiddenTracks;
-  const held = useRef(new Map<number, number>());
-  const drag = useRef<{ x: number; pan: number; moved: boolean } | null>(null);
+  const keyWidthRef = useRef(keyWidth);
+  keyWidthRef.current = keyWidth;
+  const gestures = useRef(new Map<number, Gesture>());
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas === null) {
       return;
     }
-    const renderer = new PianoRollRenderer(canvas);
+    const renderer = new PianoRollRenderer(canvas, keyWidthRef.current);
     rendererRef.current = renderer;
     let frame = requestAnimationFrame(function loop() {
       renderer.draw({
@@ -59,9 +68,35 @@ export function PianoRollView({
     };
   }, [song, getPosition, getPressed]);
 
-  function localPoint(event: ReactPointerEvent<HTMLCanvasElement>) {
+  useEffect(() => {
+    rendererRef.current?.setKeyWidth(keyWidth);
+  }, [keyWidth]);
+
+  /** Another finger may be holding the same key, and the pressed set is keyed
+   * by pitch, so the note ends only once the last of them lifts. */
+  function releasePitch(pointerId: number, pitch: number | null) {
+    if (pitch === null) {
+      return;
+    }
+    for (const [other, gesture] of gestures.current) {
+      if (
+        other !== pointerId &&
+        gesture.kind === "keys" &&
+        gesture.pitch === pitch
+      ) {
+        return;
+      }
+    }
+    onRelease?.(pitch);
+  }
+
+  function pitchUnder(event: ReactPointerEvent<HTMLCanvasElement>) {
+    const renderer = rendererRef.current;
+    if (renderer === null) {
+      return null;
+    }
     const box = event.currentTarget.getBoundingClientRect();
-    return { x: event.clientX - box.left, y: event.clientY - box.top };
+    return renderer.pitchAt(event.clientX - box.left, event.clientY - box.top);
   }
 
   function onPointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
@@ -70,33 +105,49 @@ export function PianoRollView({
       return;
     }
     event.currentTarget.setPointerCapture(event.pointerId);
-    const { x, y } = localPoint(event);
-    const pitch = renderer.pitchAt(x, y);
+    const pitch = pitchUnder(event);
     if (pitch !== null && onStrike !== undefined) {
-      held.current.set(event.pointerId, pitch);
+      gestures.current.set(event.pointerId, { kind: "keys", pitch });
       onStrike(pitch);
       return;
     }
-    drag.current = { x: event.clientX, pan: renderer.panOffset, moved: false };
+    gestures.current.set(event.pointerId, {
+      kind: "pan",
+      x: event.clientX,
+      pan: renderer.panOffset,
+    });
   }
 
+  /** A finger that started on the keys plays every key it crosses and never
+   * pans, even while it is off the keyboard between two of them. */
   function onPointerMove(event: ReactPointerEvent<HTMLCanvasElement>) {
     const renderer = rendererRef.current;
-    const start = drag.current;
-    if (renderer === null || start === null) {
+    const gesture = gestures.current.get(event.pointerId);
+    if (renderer === null || gesture === undefined) {
       return;
     }
-    renderer.setPan(start.pan - (event.clientX - start.x));
-    start.moved = true;
+    if (gesture.kind === "pan") {
+      renderer.setPan(gesture.pan - (event.clientX - gesture.x));
+      return;
+    }
+    const pitch = pitchUnder(event);
+    if (pitch === gesture.pitch) {
+      return;
+    }
+    const previous = gesture.pitch;
+    gesture.pitch = pitch;
+    releasePitch(event.pointerId, previous);
+    if (pitch !== null) {
+      onStrike?.(pitch);
+    }
   }
 
   function endPointer(event: ReactPointerEvent<HTMLCanvasElement>) {
-    const pitch = held.current.get(event.pointerId);
-    if (pitch !== undefined) {
-      held.current.delete(event.pointerId);
-      onRelease?.(pitch);
+    const gesture = gestures.current.get(event.pointerId);
+    gestures.current.delete(event.pointerId);
+    if (gesture?.kind === "keys") {
+      releasePitch(event.pointerId, gesture.pitch);
     }
-    drag.current = null;
   }
 
   return (

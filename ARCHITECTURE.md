@@ -48,6 +48,7 @@ src/lib/
   audio/percussion.ts         drum note number to kit sample
   audio/use-playback-engine.ts  engine lifecycle, transport and speed
   midi/use-song.ts            loads and remembers a song
+  render/keyboard.ts          key geometry, sizing and the pitch under a point
   render/piano-roll.ts        draws notes, keyboard, glow and sparks
   input/keyboard-map.ts       computer keyboard to pitch
   input/web-midi.ts           MIDI devices, including hot plug

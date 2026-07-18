@@ -62,5 +62,7 @@ a module.
 ## Conventions
 
 - Commit messages are one short lowercase line saying what the change does.
-- All player state lives in the URL, so copying a URL reproduces the exact view.
+- Shareable song state lives in the URL, so copying a URL reproduces the exact
+  view. Per device calibration stays local: timing offset and key width belong
+  to the hands and screen in front of you, not to the link.
 - Never commit secrets. `.env.example` documents every variable.

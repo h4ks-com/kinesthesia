@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { PianoRollView } from "@/components/piano-roll-view";
 import type { Opponent } from "@/lib/battle/protocol";
 import type { Song } from "@/lib/midi/song";
+import { defaultKeyWidth } from "@/lib/render/keyboard";
 
 type OpponentViewProps = {
   song: Song;
@@ -39,6 +40,7 @@ export function OpponentView({
         <PianoRollView
           song={song}
           hiddenTracks={hiddenTracks}
+          keyWidth={defaultKeyWidth}
           getPosition={getPosition}
           getPressed={pressed}
         />

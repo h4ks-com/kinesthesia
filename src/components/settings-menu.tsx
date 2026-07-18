@@ -1,17 +1,23 @@
 "use client";
 
 import { Settings2 } from "lucide-react";
+import type { ReactNode } from "react";
+import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/ui/popover";
 import { latencyAdvice, latencyRange } from "@/lib/audio/latency";
-import { defaultSpeed, speeds } from "@/lib/player-url";
+import type { InputStatus } from "@/lib/input/use-note-input";
+import { defaultSpeed, type Speed, speeds } from "@/lib/player-url";
+import { keyWidthRange } from "@/lib/render/keyboard";
 
 type SettingsMenuProps = {
-  speed: number;
-  onSpeed: (speed: number) => void;
+  speed: Speed;
+  onSpeed: (speed: Speed) => void;
   showSpeed: boolean;
+  keyWidth: number;
+  onKeyWidth: (width: number) => void;
   octave: number | null;
   onOctave: (octave: number) => void;
-  inputLabel: string;
+  inputStatus: InputStatus;
   latencyOffset: number;
   onLatencyOffset: (value: number) => void;
   measuredLatency: number;
@@ -22,9 +28,11 @@ export function SettingsMenu({
   speed,
   onSpeed,
   showSpeed,
+  keyWidth,
+  onKeyWidth,
   octave,
   onOctave,
-  inputLabel,
+  inputStatus,
   latencyOffset,
   onLatencyOffset,
   measuredLatency,
@@ -32,6 +40,7 @@ export function SettingsMenu({
 }: SettingsMenuProps) {
   const tweaked = speed !== defaultSpeed;
   const advice = latencyAdvice(measuredLatency);
+  const speedIndex = speeds.indexOf(speed);
 
   return (
     <Popover
@@ -54,64 +63,60 @@ export function SettingsMenu({
         </span>
       )}
     >
-      <div className="w-56 p-1">
+      <div className="flex w-56 flex-col gap-2 p-1 max-sm:w-full">
         {showSpeed ? (
-          <section className="flex flex-col gap-1 pb-2">
-            <h3 className="label px-2 pt-1">Speed</h3>
-            <div className="grid grid-cols-3 gap-1 px-1">
-              {speeds.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => onSpeed(option)}
-                  aria-pressed={option === speed}
-                  className={`rounded-lg py-1.5 font-mono text-xs transition-colors ${
-                    option === speed
-                      ? "bg-accent text-void"
-                      : "text-muted hover:bg-raised hover:text-text"
-                  }`}
-                >
-                  {option}x
-                </button>
-              ))}
-            </div>
-          </section>
+          <Section title="Speed">
+            <SliderRow
+              ariaLabel="Playback speed"
+              min={0}
+              max={speeds.length - 1}
+              step={1}
+              value={speedIndex}
+              valueText={`${speed}x`}
+              onChange={(index) => onSpeed(speeds[index] ?? defaultSpeed)}
+            />
+          </Section>
         ) : null}
 
+        <Section title="Key size">
+          <SliderRow
+            ariaLabel="Piano key width"
+            min={keyWidthRange.min}
+            max={keyWidthRange.max}
+            step={2}
+            value={keyWidth}
+            valueText={`${keyWidth}px`}
+            onChange={onKeyWidth}
+          />
+          <Note>Widen the keys to tap them, then drag the roll sideways.</Note>
+        </Section>
+
         {octave === null ? null : (
-          <section className="flex flex-col gap-1 border-line border-t pt-2">
-            <h3 className="label px-2">Octave</h3>
+          <Section title="Octave">
             <div className="flex items-center gap-1 px-1">
-              <button
-                type="button"
+              <OctaveButton
+                label="Lower octave"
                 onClick={() => onOctave(octave - 1)}
-                aria-label="Lower octave"
-                className="flex-1 rounded-lg py-1.5 font-mono text-muted text-xs transition-colors hover:bg-raised hover:text-text"
               >
                 lower
-              </button>
+              </OctaveButton>
               <span className="w-8 text-center font-mono text-accent text-xs">
                 {octave}
               </span>
-              <button
-                type="button"
+              <OctaveButton
+                label="Higher octave"
                 onClick={() => onOctave(octave + 1)}
-                aria-label="Higher octave"
-                className="flex-1 rounded-lg py-1.5 font-mono text-muted text-xs transition-colors hover:bg-raised hover:text-text"
               >
                 higher
-              </button>
+              </OctaveButton>
             </div>
-            <p className="px-2 pt-1 font-mono text-[0.7rem] text-faint">
-              {inputLabel}
-            </p>
-          </section>
+          </Section>
         )}
 
         {showLatency ? (
-          <section className="flex flex-col gap-1 border-line border-t pt-2">
-            <div className="flex items-baseline gap-2 px-2">
-              <h3 className="label">Timing</h3>
+          <Section
+            title="Timing"
+            badge={
               <span
                 className={`ml-auto font-mono text-[0.7rem] ${
                   advice === null ? "text-faint" : "text-danger"
@@ -119,31 +124,126 @@ export function SettingsMenu({
               >
                 output {Math.round(measuredLatency * 1000)}ms
               </span>
-            </div>
-            <div className="flex items-center gap-2 px-2 pb-1">
-              <input
-                type="range"
-                min={latencyRange.min}
-                max={latencyRange.max}
-                step={5}
-                value={latencyOffset}
-                onChange={(event) =>
-                  onLatencyOffset(Number(event.target.value))
-                }
-                aria-label="Timing offset in milliseconds"
-                className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-line"
-              />
-              <span className="w-12 shrink-0 text-right font-mono text-accent text-xs">
-                {latencyOffset > 0 ? "+" : ""}
-                {latencyOffset}ms
-              </span>
-            </div>
-            <p className="px-2 pb-1 font-mono text-[0.7rem] text-faint leading-relaxed">
-              {advice ?? "Raise it if your playing scores late."}
-            </p>
-          </section>
+            }
+          >
+            <SliderRow
+              ariaLabel="Timing offset in milliseconds"
+              min={latencyRange.min}
+              max={latencyRange.max}
+              step={5}
+              value={latencyOffset}
+              valueText={`${latencyOffset > 0 ? "+" : ""}${latencyOffset}ms`}
+              onChange={onLatencyOffset}
+            />
+            <Note>{advice ?? "Raise it if your playing scores late."}</Note>
+          </Section>
         ) : null}
+
+        <Section title="Input">
+          <p className="flex items-center gap-2 px-2 pb-1 font-mono text-[0.7rem] text-faint">
+            <span
+              aria-hidden="true"
+              className={`size-2 shrink-0 rounded-full ${
+                inputStatus === "midi"
+                  ? "bg-good shadow-[0_0_8px_var(--good)]"
+                  : "bg-warn shadow-[0_0_8px_var(--warn)]"
+              }`}
+            />
+            {inputStatus === "midi"
+              ? "midi device connected"
+              : "computer keyboard"}
+          </p>
+        </Section>
       </div>
     </Popover>
+  );
+}
+
+function Section({
+  title,
+  badge,
+  children,
+}: {
+  title: string;
+  badge?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-1 border-line border-t pt-2 first:border-t-0 first:pt-0">
+      <div className="flex items-baseline gap-2 px-2">
+        <h3 className="label">{title}</h3>
+        {badge}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function SliderRow({
+  ariaLabel,
+  min,
+  max,
+  step,
+  value,
+  valueText,
+  onChange,
+}: {
+  ariaLabel: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  valueText: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 px-2">
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        aria-label={ariaLabel}
+        aria-valuetext={valueText}
+        className="min-w-0 flex-1"
+      />
+      <span
+        aria-hidden="true"
+        className="w-12 shrink-0 text-right font-mono text-accent text-xs tabular-nums"
+      >
+        {valueText}
+      </span>
+    </div>
+  );
+}
+
+function OctaveButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Button
+      tone="ghost"
+      onClick={onClick}
+      aria-label={label}
+      className="flex-1 py-1.5 font-mono text-xs pointer-coarse:min-h-11"
+    >
+      {children}
+    </Button>
+  );
+}
+
+function Note({ children }: { children: ReactNode }) {
+  return (
+    <p className="px-2 pb-1 font-mono text-[0.7rem] text-faint leading-relaxed">
+      {children}
+    </p>
   );
 }

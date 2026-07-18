@@ -13,6 +13,8 @@
   --accent-soft: #1b3550;
   --accent-glow: #7bb8ff;
   --danger: #ff6b6b;
+  --good: #4ade80;
+  --warn: #fbbf24;
 }
 
 @theme inline {
@@ -28,6 +30,8 @@
   --color-accent-soft: var(--accent-soft);
   --color-accent-glow: var(--accent-glow);
   --color-danger: var(--danger);
+  --color-good: var(--good);
+  --color-warn: var(--warn);
   --font-sans: var(--font-archivo);
   --font-mono: var(--font-mono-data);
 }
@@ -149,8 +153,67 @@ body {
   outline-offset: 2px;
 }
 
+/* A fingertip needs far more than the visible 4px track, so the input keeps a
+ * tall transparent box and only the painted track stays thin. */
 input[type="range"] {
-  accent-color: var(--accent);
+  appearance: none;
+  height: 24px;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--muted);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--muted);
+}
+
+input[type="range"]::-moz-range-progress {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--accent);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 9999px;
+  background: var(--accent);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--accent);
+}
+
+/* `pointer` reports only the primary input, so a touch laptop reporting a
+ * trackpad would keep the small thumb its screen still needs. */
+@media (any-pointer: coarse) {
+  input[type="range"] {
+    height: 34px;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    width: 22px;
+    height: 22px;
+    margin-top: -9px;
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+  }
 }
 
 .sr-only {

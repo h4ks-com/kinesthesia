@@ -10,10 +10,12 @@ import {
 } from "@/lib/input/keyboard-map";
 import { connectMidiInputs, isWebMidiSupported } from "@/lib/input/web-midi";
 
+export type InputStatus = "midi" | "keyboard";
+
 export type NoteInput = {
   octave: number;
   setOctave: (octave: number) => void;
-  midiReady: boolean;
+  status: InputStatus;
   pressed: () => ReadonlySet<number>;
   press: (pitch: number, velocity: number, at?: number) => void;
   release: (pitch: number) => void;
@@ -40,7 +42,7 @@ export function useNoteInput({
   onToggle,
 }: Options): NoteInput {
   const [octave, setOctave] = useState(defaultOctave);
-  const [midiReady, setMidiReady] = useState(false);
+  const [status, setStatus] = useState<InputStatus>("keyboard");
   const pressedRef = useRef<Set<number>>(new Set());
   const octaveRef = useRef(octave);
   octaveRef.current = octave;
@@ -122,16 +124,16 @@ export function useNoteInput({
     })
       .then((cleanup) => {
         disconnect = cleanup;
-        setMidiReady(true);
+        setStatus("midi");
       })
-      .catch(() => setMidiReady(false));
+      .catch(() => setStatus("keyboard"));
     return () => disconnect?.();
   }, [active, press, release]);
 
   return {
     octave,
     setOctave: useCallback((next: number) => setOctave(clampOctave(next)), []),
-    midiReady,
+    status,
     pressed: useCallback(() => pressedRef.current as ReadonlySet<number>, []),
     press,
     release,

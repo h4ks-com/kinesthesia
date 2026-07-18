@@ -19,6 +19,7 @@ export function Popover({
 }: PopoverProps) {
   const [open, setOpen] = useState(false);
   const shell = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -35,6 +36,7 @@ export function Popover({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpen(false);
+        triggerRef.current?.focus();
       }
     };
     document.addEventListener("pointerdown", onPointerDown);
@@ -48,8 +50,10 @@ export function Popover({
   return (
     <div ref={shell} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         aria-expanded={open}
+        aria-haspopup="dialog"
         aria-label={label}
         onClick={() => setOpen((current) => !current)}
         className="inline-flex rounded-lg"

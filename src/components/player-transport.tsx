@@ -2,6 +2,8 @@
 
 import { Pause, Play } from "lucide-react";
 import { SettingsMenu } from "@/components/settings-menu";
+import type { InputStatus } from "@/lib/input/use-note-input";
+import type { Speed } from "@/lib/player-url";
 
 function formatClock(seconds: number): string {
   const whole = Math.max(0, Math.floor(seconds));
@@ -12,17 +14,19 @@ type PlayerTransportProps = {
   playing: boolean;
   elapsed: number;
   duration: number;
-  speed: number;
+  speed: Speed;
   showSpeed: boolean;
+  keyWidth: number;
+  onKeyWidth: (width: number) => void;
   octave: number | null;
-  inputLabel: string;
+  inputStatus: InputStatus;
   latencyOffset: number;
   onLatencyOffset: (value: number) => void;
   measuredLatency: number;
   showLatency: boolean;
   onToggle: () => void;
   onSeek: (position: number) => void;
-  onSpeed: (speed: number) => void;
+  onSpeed: (speed: Speed) => void;
   onOctave: (octave: number) => void;
 };
 
@@ -32,8 +36,10 @@ export function PlayerTransport({
   duration,
   speed,
   showSpeed,
+  keyWidth,
+  onKeyWidth,
   octave,
-  inputLabel,
+  inputStatus,
   latencyOffset,
   onLatencyOffset,
   measuredLatency,
@@ -76,11 +82,12 @@ export function PlayerTransport({
         type="range"
         min={0}
         max={Math.max(1, duration)}
-        step={0.1}
+        step={1}
         value={Math.min(elapsed, duration)}
         onChange={(event) => onSeek(Number(event.target.value))}
         aria-label="Song position"
-        className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-line"
+        aria-valuetext={formatClock(elapsed)}
+        className="min-w-0 flex-1"
       />
 
       <div className="shrink-0">
@@ -88,9 +95,11 @@ export function PlayerTransport({
           speed={speed}
           onSpeed={onSpeed}
           showSpeed={showSpeed}
+          keyWidth={keyWidth}
+          onKeyWidth={onKeyWidth}
           octave={octave}
           onOctave={onOctave}
-          inputLabel={inputLabel}
+          inputStatus={inputStatus}
           latencyOffset={latencyOffset}
           onLatencyOffset={onLatencyOffset}
           measuredLatency={measuredLatency}

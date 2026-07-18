@@ -2,16 +2,22 @@ export const playerModes = ["watch", "learn", "battle"] as const;
 
 export type PlayerMode = (typeof playerModes)[number];
 
+export const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5] as const;
+export const defaultSpeed = 1;
+
+export type Speed = (typeof speeds)[number];
+
 export type PlayerParams = {
   readonly url: string;
   readonly name: string;
   readonly source: string | null;
   readonly tracks: readonly number[] | null;
-  readonly speed: number;
+  readonly speed: Speed;
 };
 
-export const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5] as const;
-export const defaultSpeed = 1;
+function isSpeed(value: number): value is Speed {
+  return speeds.some((option) => option === value);
+}
 
 function isPlayableUrl(url: string): boolean {
   return /^https?:\/\//i.test(url);
@@ -68,8 +74,6 @@ export function parsePlayerParams(
     name: searchParams.get("name") ?? "",
     source: searchParams.get("source"),
     tracks,
-    speed: speeds.includes(speed as (typeof speeds)[number])
-      ? speed
-      : defaultSpeed,
+    speed: isSpeed(speed) ? speed : defaultSpeed,
   };
 }

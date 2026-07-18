@@ -11,6 +11,7 @@ export type Playback = {
   toggle: () => Promise<void>;
   seek: (position: number) => void;
   strike: (pitch: number, velocity: number, track: number) => void;
+  release: (pitch: number, track: number) => void;
   latency: () => number;
   getPosition: () => number;
   isPlaying: () => boolean;
@@ -113,6 +114,10 @@ export function usePlaybackEngine({
     [],
   );
 
+  const release = useCallback((pitch: number, track: number) => {
+    engineRef.current?.release(pitch, track);
+  }, []);
+
   return {
     playing,
     elapsed,
@@ -120,6 +125,7 @@ export function usePlaybackEngine({
     toggle,
     seek,
     strike,
+    release,
     latency: useCallback(() => engineRef.current?.outputLatency ?? 0, []),
     getPosition: useCallback(() => engineRef.current?.position ?? 0, []),
     isPlaying: useCallback(() => engineRef.current?.playing ?? false, []),

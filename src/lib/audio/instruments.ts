@@ -9,7 +9,9 @@ export type Voice = {
     duration?: number;
     velocity?: number;
   }): void;
-  stop(): void;
+  /** With a note, releases just that pitch through the instrument's envelope;
+   * with none, stops the whole voice. */
+  stop(note?: number | string): void;
 };
 
 export type VoiceRequest = {
@@ -119,8 +121,12 @@ function asDrumKit(voice: Voice): Voice {
       }
       kit.start({ ...options, note: sample });
     },
-    stop() {
-      kit.stop();
+    // Drum hits are one-shots, so a key release lets them ring out; only a full
+    // stop silences the kit.
+    stop(note) {
+      if (note === undefined) {
+        kit.stop();
+      }
     },
   };
 }

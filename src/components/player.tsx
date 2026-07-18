@@ -313,7 +313,13 @@ export function Player({
       },
       [playback, ownedTrack, interactive, onPress],
     ),
-    onRelease,
+    onRelease: useCallback(
+      (pitch: number) => {
+        playback.release(pitch, ownedTrack);
+        onRelease?.(pitch);
+      },
+      [playback, ownedTrack, onRelease],
+    ),
     onToggle: useCallback(() => void playback.toggle(), [playback]),
   });
 

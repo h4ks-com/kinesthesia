@@ -112,6 +112,12 @@ export class PlaybackEngine {
     });
   }
 
+  /** A live key ends when it is lifted, the same as a scheduled note ends at
+   * its written length, so a tap no longer rings for the sample's full run. */
+  release(pitch: number, track: number): void {
+    this.voiceFor(track)?.stop(pitch);
+  }
+
   /** What the browser adds between a scheduled note and the speaker. Judging
    * subtracts it so a player who sounds on time also scores on time. */
   get outputLatency(): number {

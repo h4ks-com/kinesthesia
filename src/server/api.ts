@@ -2,6 +2,7 @@ import { StreamableHTTPTransport } from "@hono/mcp";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Scalar } from "@scalar/hono-api-reference";
+import { type BattleRoom, createRoom, findRoom } from "@/server/battle/rooms";
 import { midiSourceIds, midiSources } from "@/server/midi/registry";
 import { searchMidi } from "@/server/midi/search";
 
@@ -76,6 +77,81 @@ api.openapi(searchRoute, async (c) => {
 api.openapi(sourcesRoute, (c) =>
   c.json({ sources: midiSources.map(({ id, label }) => ({ id, label })) }, 200),
 );
+
+const roomSchema = z
+  .object({
+    code: z.string(),
+    peerId: z.string(),
+    url: z.string(),
+    name: z.string(),
+    source: z.string().nullable(),
+    tracks: z.array(z.number().int()),
+  })
+  .openapi("BattleRoom");
+
+const createRoomRoute = createRoute({
+  method: "post",
+  path: "/battle/rooms",
+  summary: "Open a battle room",
+  description:
+    "Registers the host peer so a second player can find it by code. Gameplay then runs peer to peer.",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            peerId: z.string().min(1),
+            url: z.string().url(),
+            name: z.string(),
+            source: z.string().nullable().default(null),
+            tracks: z.array(z.number().int()).default([]),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The room that was opened",
+      content: { "application/json": { schema: roomSchema } },
+    },
+  },
+});
+
+const joinRoomRoute = createRoute({
+  method: "get",
+  path: "/battle/rooms/{code}",
+  summary: "Look up a battle room",
+  request: { params: z.object({ code: z.string().length(5) }) },
+  responses: {
+    200: {
+      description: "The room behind that code",
+      content: { "application/json": { schema: roomSchema } },
+    },
+    404: {
+      description: "No such room",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+  },
+});
+
+function roomResponse(room: BattleRoom) {
+  return { ...room, tracks: [...room.tracks] };
+}
+
+api.openapi(createRoomRoute, (c) =>
+  c.json(roomResponse(createRoom(c.req.valid("json"))), 200),
+);
+
+api.openapi(joinRoomRoute, (c) => {
+  const room = findRoom(c.req.valid("param").code);
+  if (room === null) {
+    return c.json({ error: "That room is not open" }, 404);
+  }
+  return c.json(roomResponse(room), 200);
+});
 
 api.doc31("/openapi.json", {
   openapi: "3.1.0",

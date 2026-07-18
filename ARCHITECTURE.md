@@ -92,6 +92,13 @@ GET  /api/docs                Scalar reference
 ALL  /api/mcp                 MCP over streamable HTTP
 ```
 
+`/api/mcp` builds a fresh `McpServer` per request and uses a stateless
+transport, so a client calls a tool in one POST. An MCP `Protocol` binds to a
+single transport for its lifetime, so sharing one server across requests makes
+every request after the first fail with `Already connected to a transport`.
+The server's `instructions` are the context an LLM client gets about what
+kinesthesia is, alongside each tool's own description.
+
 ## Adding a MIDI source
 
 Implement `MidiSource` in `src/server/midi/`, then add it to `registry.ts`.

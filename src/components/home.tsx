@@ -2,10 +2,12 @@
 
 import { BookOpen, Code2, Loader2, Search, X } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { LibrarySection } from "@/components/library-section";
 import { SongRow } from "@/components/song-row";
 import { TopBar } from "@/components/top-bar";
 import {
   entryKey,
+  filterLibrary,
   type LibraryEntry,
   listFavourites,
   listRecent,
@@ -54,6 +56,9 @@ export function Home({ viewer, authEnabled, signIn, signOut }: HomeProps) {
         ? `${state.results.length} results`
         : "";
   const keepTyping = state.status === "typing";
+  const trimmed = query.trim();
+  const matchedFavorites = filterLibrary(favorites, trimmed);
+  const matchedRecent = filterLibrary(recent, trimmed);
 
   return (
     <>
@@ -128,7 +133,7 @@ export function Home({ viewer, authEnabled, signIn, signOut }: HomeProps) {
 
         {shown.length > 0 ? (
           <Section
-            title={`${shown.length} results`}
+            title={trimmed === "" ? "Results" : "From bitmidi"}
             dim={state.status === "searching"}
           >
             {shown.map((result) => (
@@ -154,9 +159,9 @@ export function Home({ viewer, authEnabled, signIn, signOut }: HomeProps) {
           </Section>
         ) : null}
 
-        {state.status === "idle" && favorites.length > 0 ? (
-          <Section title="Favorites">
-            {favorites.map((entry) => (
+        {matchedFavorites.length > 0 ? (
+          <LibrarySection title="Favorites" count={matchedFavorites.length}>
+            {matchedFavorites.map((entry) => (
               <SongRow
                 key={entry.key}
                 name={entry.name}
@@ -168,12 +173,12 @@ export function Home({ viewer, authEnabled, signIn, signOut }: HomeProps) {
                 onToggleFavorite={() => void onToggleFavorite(entry)}
               />
             ))}
-          </Section>
+          </LibrarySection>
         ) : null}
 
-        {state.status === "idle" && recent.length > 0 ? (
-          <Section title="Recently played">
-            {recent.map((entry) => (
+        {matchedRecent.length > 0 ? (
+          <LibrarySection title="Recently played" count={matchedRecent.length}>
+            {matchedRecent.map((entry) => (
               <SongRow
                 key={entry.key}
                 name={entry.name}
@@ -185,7 +190,7 @@ export function Home({ viewer, authEnabled, signIn, signOut }: HomeProps) {
                 onToggleFavorite={() => void onToggleFavorite(entry)}
               />
             ))}
-          </Section>
+          </LibrarySection>
         ) : null}
       </main>
 

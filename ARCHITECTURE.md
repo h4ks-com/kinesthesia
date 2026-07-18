@@ -27,6 +27,7 @@ src/server/
     search.ts                 searches sources and attaches player links
 src/components/
   song-row.tsx                one song with its favourite and mode links
+  library-section.tsx         preview, expand and bound a saved list
   player.tsx                  transport, gating, scoring, input wiring
   piano-roll-view.tsx         canvas, the frame loop, touch input and panning
   track-menu.tsx              show, hide and claim tracks
@@ -43,7 +44,8 @@ src/lib/
   input/web-midi.ts           MIDI devices, including hot plug
   scoring/judge.ts            hit windows, combo and accuracy
   battle/protocol.ts          messages exchanged between peers
-  storage/library.ts          recents and favourites in IndexedDB
+  storage/library.ts          recents and favourites in IndexedDB, and the
+                              word filter the home page runs over them
 ```
 
 ## How playback stays in time

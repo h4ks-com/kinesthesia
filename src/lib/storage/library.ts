@@ -10,10 +10,28 @@ const databaseName = "kinesthesia";
 const databaseVersion = 1;
 const recentStore = "recent";
 const favouriteStore = "favourite";
-const recentLimit = 12;
+const recentLimit = 40;
 
 export function entryKey(source: string | null, url: string): string {
   return `${source ?? "unknown"}:${url}`;
+}
+
+/** Every word has to appear somewhere in the name, so "queen rhap" finds
+ * "Queen - Bohemian Rhapsody" without needing the words in order. */
+export function matchesLibrary(entry: LibraryEntry, query: string): boolean {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) {
+    return true;
+  }
+  const haystack = `${entry.name} ${entry.source ?? ""}`.toLowerCase();
+  return words.every((word) => haystack.includes(word));
+}
+
+export function filterLibrary(
+  entries: readonly LibraryEntry[],
+  query: string,
+): LibraryEntry[] {
+  return entries.filter((entry) => matchesLibrary(entry, query));
 }
 
 function open(): Promise<IDBDatabase> {

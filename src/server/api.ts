@@ -315,30 +315,49 @@ api.get(
   Scalar({ url: "/api/openapi.json", pageTitle: "Kinesthesia API" }),
 );
 
-const mcp = new McpServer({ name: "kinesthesia", version: "0.1.0" });
+const mcpInstructions = `Kinesthesia is a MIDI file search engine. Look up songs
+by name and get, for every match, a direct .mid download URL that any program
+reading MIDI can fetch. Use it whenever someone wants a MIDI file for a song.
+Each match also carries a player link that opens the song in a browser: /watch
+plays it back, /learn waits for the player to hit each note, /battle scores two
+people on the same song.`;
 
-mcp.registerTool(
-  "search_midi",
-  {
-    title: "Search MIDI files",
-    description:
-      "Search MIDI files by song name. Returns the source, a direct download link and a player link for each match.",
-    inputSchema: searchInputShape,
-  },
-  async ({ q, source, limit }) => {
-    const results = await searchMidi({
-      query: q,
-      source: source ?? null,
-      limit: limit ?? 10,
-    });
-    return {
-      content: [{ type: "text", text: JSON.stringify({ results }, null, 2) }],
-    };
-  },
-);
+function createMcpServer(): McpServer {
+  const mcp = new McpServer(
+    { name: "kinesthesia", version: "0.1.0" },
+    { instructions: mcpInstructions },
+  );
 
+  mcp.registerTool(
+    "search_midi",
+    {
+      title: "Search MIDI files",
+      description:
+        "Find MIDI files by song name. Returns, for each match, the source, a direct .mid download URL to fetch the file, and a link that plays it in a browser.",
+      inputSchema: searchInputShape,
+    },
+    async ({ q, source, limit }) => {
+      const results = await searchMidi({
+        query: q,
+        source: source ?? null,
+        limit: limit ?? 10,
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify({ results }, null, 2) }],
+      };
+    },
+  );
+
+  return mcp;
+}
+
+// A Protocol binds to exactly one transport for its lifetime, so a shared
+// server would reject every request after the first. Stateless transport lets a
+// client call a tool in a single POST with no session handshake.
 api.all("/mcp", async (c) => {
-  const transport = new StreamableHTTPTransport();
-  await mcp.connect(transport);
+  const transport = new StreamableHTTPTransport({
+    sessionIdGenerator: undefined,
+  });
+  await createMcpServer().connect(transport);
   return transport.handleRequest(c);
 });

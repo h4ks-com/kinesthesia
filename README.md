@@ -2,7 +2,8 @@
 
 [![ci](https://github.com/h4ks-com/kinesthesia/actions/workflows/ci.yml/badge.svg)](https://github.com/h4ks-com/kinesthesia/actions/workflows/ci.yml)
 [![docker](https://github.com/h4ks-com/kinesthesia/actions/workflows/docker.yml/badge.svg)](https://github.com/h4ks-com/kinesthesia/actions/workflows/docker.yml)
-[![ghcr](https://img.shields.io/badge/ghcr.io-kinesthesia-blue?logo=docker&logoColor=white)](https://github.com/h4ks-com/kinesthesia/pkgs/container/kinesthesia)
+[![image](https://ghcr-badge.egpl.dev/h4ks-com/kinesthesia/latest_tag?trim=major&label=ghcr.io)](https://github.com/h4ks-com/kinesthesia/pkgs/container/kinesthesia)
+[![size](https://ghcr-badge.egpl.dev/h4ks-com/kinesthesia/size?label=image%20size)](https://github.com/h4ks-com/kinesthesia/pkgs/container/kinesthesia)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ![Kinesthesia playing a song](public/screenshot.png)
@@ -37,10 +38,16 @@ bun install
 bun run dev
 ```
 
-Or with Docker:
+Or with Docker, either building it here:
 
 ```
 docker compose up
+```
+
+or straight from the published image, which is built for amd64 and arm64:
+
+```
+docker run -p 3000:3000 -v kinesthesia:/app/data ghcr.io/h4ks-com/kinesthesia:latest
 ```
 
 Every setting lives in `.env`, and `.env.example` documents all of them.

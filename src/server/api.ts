@@ -2,9 +2,11 @@ import { StreamableHTTPTransport } from "@hono/mcp";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Scalar } from "@scalar/hono-api-reference";
+import { currentViewer } from "@/server/auth";
 import { type BattleRoom, createRoom, findRoom } from "@/server/battle/rooms";
 import { midiSourceIds, midiSources } from "@/server/midi/registry";
 import { searchMidi } from "@/server/midi/search";
+import { saveScore, topScores } from "@/server/scores/store";
 
 const searchInputShape = {
   q: z.string().min(1).describe("Song or file name to look for"),
@@ -151,6 +153,94 @@ api.openapi(joinRoomRoute, (c) => {
     return c.json({ error: "That room is not open" }, 404);
   }
   return c.json(roomResponse(room), 200);
+});
+
+const scoreSchema = z
+  .object({
+    id: z.number(),
+    player: z.string(),
+    song: z.string(),
+    url: z.string(),
+    mode: z.string(),
+    points: z.number(),
+    accuracy: z.number(),
+    bestCombo: z.number(),
+    playedAt: z.number(),
+  })
+  .openapi("Score");
+
+const leaderboardRoute = createRoute({
+  method: "get",
+  path: "/scores",
+  summary: "Top scores",
+  description: "Public leaderboard of scores from signed in players.",
+  request: {
+    query: z.object({
+      limit: z.coerce.number().int().min(1).max(100).default(20),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Highest scoring runs",
+      content: {
+        "application/json": {
+          schema: z.object({ scores: z.array(scoreSchema) }),
+        },
+      },
+    },
+  },
+});
+
+const submitScoreRoute = createRoute({
+  method: "post",
+  path: "/scores",
+  summary: "Record a score",
+  description:
+    "Stores a finished run against the signed in player. Requires Logto to be configured and a signed in session.",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            song: z.string().min(1),
+            url: z.string().url(),
+            mode: z.enum(["play", "battle"]),
+            points: z.number().int().min(0),
+            accuracy: z.number().min(0).max(1),
+            bestCombo: z.number().int().min(0),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The score that was stored",
+      content: { "application/json": { schema: scoreSchema } },
+    },
+    401: {
+      description: "Nobody is signed in, or sign in is not configured",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+  },
+});
+
+api.openapi(leaderboardRoute, async (c) =>
+  c.json({ scores: await topScores(c.req.valid("query").limit) }, 200),
+);
+
+api.openapi(submitScoreRoute, async (c) => {
+  const viewer = await currentViewer();
+  if (viewer === null) {
+    return c.json({ error: "Sign in to record a score" }, 401);
+  }
+  const stored = await saveScore({
+    ...c.req.valid("json"),
+    player: viewer.name,
+  });
+  return c.json(stored, 200);
 });
 
 api.doc31("/openapi.json", {

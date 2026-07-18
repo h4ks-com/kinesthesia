@@ -46,3 +46,6 @@ next-env.d.ts
 # playwright
 /playwright-report
 /test-results
+
+# local score file
+/data

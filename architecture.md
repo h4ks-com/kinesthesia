@@ -14,8 +14,10 @@ src/app/
 src/server/
   api.ts                      routes, OpenAPI spec, Scalar docs, MCP server
   config.ts                   environment
+  auth.ts                     optional Logto session and sign in actions
   http/fetch.ts               proxy aware fetch for outbound source calls
   battle/rooms.ts             room codes pointing at a host peer
+  scores/store.ts             leaderboard on a JSON file
   midi/
     types.ts                  MidiSource contract and result shapes
     registry.ts               sources available to search
@@ -83,3 +85,9 @@ is what `MIDI_SOURCE_PROXY_URL` is for.
 Battle rooms live in memory, so they are lost on restart and do not span
 replicas. Web MIDI is unavailable in Safari, which is why the computer keyboard
 path is not optional.
+
+Signing in is optional. With no Logto values set, `authConfig` is null, the
+header renders no button and the app is fully anonymous with recents and
+favourites kept in the browser. Scores are stored as JSON rather than SQLite
+because `bun:sqlite` and `node:sqlite` each exist in only one of the two
+runtimes this app has to run under.

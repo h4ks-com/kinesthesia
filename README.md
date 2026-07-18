@@ -45,6 +45,10 @@ docker compose up
 
 Every setting lives in `.env`, and `.env.example` documents all of them.
 
+You never have to sign in to play. Recent songs and favourites are kept in your
+browser. If you fill in the Logto values a sign in button appears, and finished
+runs are recorded to a leaderboard that anyone can read.
+
 ## API
 
 The search API is public and self documenting.
@@ -54,6 +58,8 @@ GET  /api/midi/search?q=<song>   search across sources
 GET  /api/midi/sources           list the sources it can search
 POST /api/battle/rooms           open a battle room
 GET  /api/battle/rooms/{code}    look one up
+GET  /api/scores                 public leaderboard
+POST /api/scores                 record a run, needs a signed in player
 GET  /api/openapi.json           OpenAPI 3.1 spec
 GET  /api/docs                   browsable reference
 ALL  /api/mcp                    the same tools over MCP

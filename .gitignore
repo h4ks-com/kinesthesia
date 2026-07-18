@@ -42,3 +42,7 @@ next-env.d.ts
 
 # keep the example env committed
 !.env.example
+
+# playwright
+/playwright-report
+/test-results

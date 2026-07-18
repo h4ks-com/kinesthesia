@@ -23,7 +23,7 @@ exactly one definition. Change a check in `package.json` and both follow.
 
 ## Layout
 
-`architecture.md` maps the codebase. Update it whenever you add, move or remove
+`ARCHITECTURE.md` maps the codebase. Update it whenever you add, move or remove
 a module.
 
 ## Code rules

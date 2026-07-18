@@ -4,12 +4,16 @@ import { Check, Copy } from "lucide-react";
 import Link from "next/link";
 import type { DataConnection } from "peerjs";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { OpponentView } from "@/components/opponent-view";
 import { Player } from "@/components/player";
+import type { IceServer } from "@/lib/battle/ice";
 import {
   type BattleMessage,
   isBattleMessage,
+  noOpponent,
   type Opponent,
 } from "@/lib/battle/protocol";
+import { useSong } from "@/lib/midi/use-song";
 import type { PlayerParams } from "@/lib/player-url";
 import { accuracy, type Score, scorePoints } from "@/lib/scoring/judge";
 
@@ -23,13 +27,16 @@ type Connection =
 type BattleProps = {
   params: PlayerParams;
   playerName: string;
+  ice: readonly IceServer[];
 };
 
-export function Battle({ params, playerName }: BattleProps) {
+export function Battle({ params, playerName, ice }: BattleProps) {
   const [connection, setConnection] = useState<Connection>({ status: "idle" });
   const [opponent, setOpponent] = useState<Opponent | null>(null);
   const [joinCode, setJoinCode] = useState("");
   const [copied, setCopied] = useState(false);
+  const opponentKeys = useRef<Set<number>>(new Set());
+  const song = useSong(params);
   const linkRef = useRef<DataConnection | null>(null);
 
   const attach = useCallback(
@@ -44,26 +51,27 @@ export function Battle({ params, playerName }: BattleProps) {
           return;
         }
         if (raw.kind === "hello") {
-          setOpponent({
-            name: raw.name,
-            points: 0,
-            accuracy: 1,
-            finished: false,
-          });
+          setOpponent({ ...noOpponent, name: raw.name });
         }
         if (raw.kind === "score") {
           setOpponent((current) => ({
-            name: current?.name ?? "Opponent",
+            ...(current ?? noOpponent),
             points: raw.points,
             accuracy: raw.accuracy,
-            finished: current?.finished ?? false,
+            combo: raw.score.combo,
+            position: raw.position,
           }));
+        }
+        if (raw.kind === "press") {
+          opponentKeys.current.add(raw.pitch);
+        }
+        if (raw.kind === "release") {
+          opponentKeys.current.delete(raw.pitch);
         }
         if (raw.kind === "finished") {
           setOpponent((current) => ({
-            name: current?.name ?? "Opponent",
+            ...(current ?? noOpponent),
             points: raw.points,
-            accuracy: current?.accuracy ?? 1,
             finished: true,
           }));
         }
@@ -81,7 +89,7 @@ export function Battle({ params, playerName }: BattleProps) {
   async function host() {
     setConnection({ status: "joining" });
     const { Peer } = await import("peerjs");
-    const peer = new Peer();
+    const peer = new Peer({ config: { iceServers: [...ice] } });
     peer.on("error", (error) =>
       setConnection({ status: "failed", message: error.message }),
     );
@@ -121,7 +129,7 @@ export function Battle({ params, playerName }: BattleProps) {
     }
     const room: { peerId: string } = await response.json();
     const { Peer } = await import("peerjs");
-    const peer = new Peer();
+    const peer = new Peer({ config: { iceServers: [...ice] } });
     peer.on("error", (error) =>
       setConnection({ status: "failed", message: error.message }),
     );
@@ -137,34 +145,55 @@ export function Battle({ params, playerName }: BattleProps) {
     }
   }
 
-  const onScore = useCallback((score: Score) => {
+  const onScore = useCallback((score: Score, position: number) => {
     linkRef.current?.send({
       kind: "score",
       score,
       points: scorePoints(score),
       accuracy: accuracy(score),
+      position,
     } satisfies BattleMessage);
   }, []);
 
+  const onPress = useCallback((pitch: number) => {
+    linkRef.current?.send({ kind: "press", pitch } satisfies BattleMessage);
+  }, []);
+
+  const onRelease = useCallback((pitch: number) => {
+    linkRef.current?.send({ kind: "release", pitch } satisfies BattleMessage);
+  }, []);
+
+  const opponentPressed = useCallback(
+    () => opponentKeys.current as ReadonlySet<number>,
+    [],
+  );
+
   useEffect(() => () => linkRef.current?.close(), []);
 
-  if (connection.status === "connected") {
-    return (
-      <Player
-        mode="battle"
-        params={params}
-        onScore={onScore}
-        opponent={
-          opponent === null
-            ? null
-            : {
-                name: opponent.name,
-                points: opponent.points,
-                accuracy: opponent.accuracy,
-              }
-        }
-      />
-    );
+  if (connection.status === "connected" || connection.status === "failed") {
+    if (song.status === "ready") {
+      return (
+        <div className="flex h-dvh flex-col lg:flex-row">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <Player
+              mode="battle"
+              params={params}
+              onScore={onScore}
+              onPress={onPress}
+              onRelease={onRelease}
+              opponent={null}
+            />
+          </div>
+          <OpponentView
+            song={song.song}
+            hiddenTracks={new Set()}
+            opponent={opponent ?? noOpponent}
+            pressed={opponentPressed}
+            connected={connection.status === "connected"}
+          />
+        </div>
+      );
+    }
   }
 
   return (

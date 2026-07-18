@@ -105,6 +105,14 @@ export async function listFavourites(): Promise<LibraryEntry[]> {
   );
 }
 
+export async function clearRecent(): Promise<void> {
+  await run(recentStore, "readwrite", (store) => store.clear());
+}
+
+export async function clearFavourites(): Promise<void> {
+  await run(favouriteStore, "readwrite", (store) => store.clear());
+}
+
 export async function toggleFavourite(
   entry: Omit<LibraryEntry, "key" | "playedAt">,
 ): Promise<boolean> {

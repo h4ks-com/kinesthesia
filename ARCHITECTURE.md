@@ -28,22 +28,35 @@ src/server/
 src/components/
   song-row.tsx                one song with its favourite and mode links
   library-section.tsx         preview, expand and bound a saved list
-  player.tsx                  transport, gating, scoring, input wiring
+  player.tsx                  composes the hooks below into a mode
+  player-header.tsx           title, score, tracks and mode switching
+  player-transport.tsx        play, clock, scrubber and settings
+  settings-menu.tsx           speed and octave in one place
   piano-roll-view.tsx         canvas, the frame loop, touch input and panning
-  track-menu.tsx              show, hide and claim tracks
-  battle.tsx                  room handshake, then renders the player
+  track-menu.tsx              show, hide, solo and claim tracks
+  battle.tsx                  room handshake, then the split view
+  opponent-view.tsx           the other player's roll, silent by design
 src/lib/
   player-url.ts               builds and parses player URLs
   search-params.ts            route search params to URLSearchParams
   midi/song.ts                parses a .mid into a flat note list
   midi/palette.ts             per track and per pitch colours
   audio/transport.ts          song position on the audio clock
-  audio/engine.ts             piano samples and the look ahead scheduler
+  audio/engine.ts             instruments and the look ahead scheduler
+  audio/instruments.ts        one voice per General MIDI program
+  audio/general-midi.ts       program number to soundfont name
+  audio/percussion.ts         drum note number to kit sample
+  audio/use-playback-engine.ts  engine lifecycle, transport and speed
+  midi/use-song.ts            loads and remembers a song
   render/piano-roll.ts        draws notes, keyboard, glow and sparks
   input/keyboard-map.ts       computer keyboard to pitch
   input/web-midi.ts           MIDI devices, including hot plug
   scoring/judge.ts            hit windows, combo and accuracy
+  scoring/gates.ts            chords the player owes, as one unit each
+  scoring/use-gates.ts        waiting, judging and missing
+  input/use-note-input.ts     keyboard, MIDI and octave in one listener
   battle/protocol.ts          messages exchanged between peers
+  battle/ice.ts               STUN, plus a TURN relay when configured
   storage/library.ts          recents and favourites in IndexedDB, and the
                               word filter the home page runs over them
 ```
@@ -61,8 +74,11 @@ backwards.
 `watch` plays every track. `learn` and `battle` hand the chosen tracks to the
 player: those tracks are muted and the roll shows only them. `learn` pauses when
 it reaches a note the player owes and resumes once they press it, while `battle`
-plays straight through and simply counts the miss. `battle` adds a peer
-connection that carries score updates.
+plays straight through and simply counts the miss.
+
+`battle` shows both players side by side, stacked on a narrow screen. Each side
+hears only itself; the opponent's roll, keys and score are drawn from the
+messages arriving over the peer connection.
 
 ## Endpoints
 

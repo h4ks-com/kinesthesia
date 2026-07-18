@@ -6,6 +6,8 @@ import { LibrarySection } from "@/components/library-section";
 import { SongRow } from "@/components/song-row";
 import { TopBar } from "@/components/top-bar";
 import {
+  clearFavourites,
+  clearRecent,
   entryKey,
   filterLibrary,
   type LibraryEntry,
@@ -169,7 +171,19 @@ export function Home({
         ) : null}
 
         {matchedFavorites.length > 0 ? (
-          <LibrarySection title="Favorites" count={matchedFavorites.length}>
+          <LibrarySection
+            title="Favorites"
+            count={matchedFavorites.length}
+            action={
+              <ClearButton
+                label="Clear favorites"
+                onClear={async () => {
+                  await clearFavourites();
+                  refreshLibrary();
+                }}
+              />
+            }
+          >
             {matchedFavorites.map((entry) => (
               <SongRow
                 key={entry.key}
@@ -186,7 +200,19 @@ export function Home({
         ) : null}
 
         {matchedRecent.length > 0 ? (
-          <LibrarySection title="Recently played" count={matchedRecent.length}>
+          <LibrarySection
+            title="Recently played"
+            count={matchedRecent.length}
+            action={
+              <ClearButton
+                label="Clear history"
+                onClear={async () => {
+                  await clearRecent();
+                  refreshLibrary();
+                }}
+              />
+            }
+          >
             {matchedRecent.map((entry) => (
               <SongRow
                 key={entry.key}
@@ -255,6 +281,26 @@ export function Home({
         </span>
       </footer>
     </>
+  );
+}
+
+function ClearButton({
+  label,
+  onClear,
+}: {
+  label: string;
+  onClear: () => Promise<void>;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => void onClear()}
+      aria-label={label}
+      data-tip={label}
+      className="rounded-md px-2 py-1 font-mono text-faint text-xs transition-colors hover:text-danger"
+    >
+      clear
+    </button>
   );
 }
 

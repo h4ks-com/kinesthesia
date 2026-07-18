@@ -100,6 +100,17 @@ body {
   bottom: calc(100% + 8px);
 }
 
+[data-tip-align="left"]::after {
+  left: 0;
+  translate: 0 0;
+}
+
+[data-tip-align="right"]::after {
+  left: auto;
+  right: 0;
+  translate: 0 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* biome-ignore-start lint/complexity/noImportantStyles: this override has to beat every animation declared elsewhere */
   *,

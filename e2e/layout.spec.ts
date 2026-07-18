@@ -71,12 +71,14 @@ test.describe("nothing overflows sideways", () => {
     }
   });
 
-  test("the speed menu opens upward and stays on screen", async ({ page }) => {
+  test("the settings menu opens upward and stays on screen", async ({
+    page,
+  }) => {
     await serveFixture(page);
     await page.setViewportSize({ width: 800, height: 700 });
     await page.goto(`/watch?${playerQuery()}`);
     await page.waitForSelector("canvas");
-    await page.getByRole("button", { name: "Playback speed" }).click();
+    await page.getByRole("button", { name: "Settings" }).click();
 
     const box = await page.locator("div.rise").boundingBox();
     expect(box).not.toBeNull();

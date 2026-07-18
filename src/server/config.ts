@@ -42,6 +42,9 @@ export const config = {
   databaseUrl:
     optional(process.env.DATABASE_URL) ?? "file:./data/kinesthesia.db",
   databaseAuthToken: optional(process.env.DATABASE_AUTH_TOKEN),
+  turnUrl: optional(process.env.NEXT_PUBLIC_TURN_URL),
+  turnUsername: optional(process.env.NEXT_PUBLIC_TURN_USERNAME),
+  turnCredential: optional(process.env.NEXT_PUBLIC_TURN_CREDENTIAL),
   homeLink: optional(process.env.NEXT_PUBLIC_HOME_LINK) ?? "https://h4ks.com",
   chatLink:
     optional(process.env.NEXT_PUBLIC_CHAT_LINK) ?? "https://chat.h4ks.com",

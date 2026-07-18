@@ -39,7 +39,7 @@ export class PlaybackEngine {
   // resumed inside a user gesture, so every entry point routes through here.
   private async wake(): Promise<Transport> {
     if (this.context === null) {
-      this.context = new AudioContext({ latencyHint: "interactive" });
+      this.context = new AudioContext({ latencyHint: 0 });
       this.bank = new InstrumentBank(this.context);
       this.transport = new Transport(this.context);
       this.transport.seek(this.pendingPosition);

@@ -2,7 +2,7 @@
 
 import { Settings2 } from "lucide-react";
 import { Popover } from "@/components/ui/popover";
-import { latencyRange } from "@/lib/audio/latency";
+import { latencyAdvice, latencyRange } from "@/lib/audio/latency";
 import { defaultSpeed, speeds } from "@/lib/player-url";
 
 type SettingsMenuProps = {
@@ -31,6 +31,7 @@ export function SettingsMenu({
   showLatency,
 }: SettingsMenuProps) {
   const tweaked = speed !== defaultSpeed;
+  const advice = latencyAdvice(measuredLatency);
 
   return (
     <Popover
@@ -111,7 +112,11 @@ export function SettingsMenu({
           <section className="flex flex-col gap-1 border-line border-t pt-2">
             <div className="flex items-baseline gap-2 px-2">
               <h3 className="label">Timing</h3>
-              <span className="ml-auto font-mono text-[0.7rem] text-faint">
+              <span
+                className={`ml-auto font-mono text-[0.7rem] ${
+                  advice === null ? "text-faint" : "text-danger"
+                }`}
+              >
                 output {Math.round(measuredLatency * 1000)}ms
               </span>
             </div>
@@ -134,7 +139,7 @@ export function SettingsMenu({
               </span>
             </div>
             <p className="px-2 pb-1 font-mono text-[0.7rem] text-faint leading-relaxed">
-              Raise it if your playing scores late.
+              {advice ?? "Raise it if your playing scores late."}
             </p>
           </section>
         ) : null}

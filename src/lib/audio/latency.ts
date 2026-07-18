@@ -23,3 +23,15 @@ export function judgedPosition(
     position - sincePress - outputLatency - offsetMilliseconds / 1000,
   );
 }
+
+/** Above this, the delay is almost certainly the output device rather than the
+ * browser: wireless headphones and speakers buffer far more than wired ones. */
+export const suspiciousLatencyMs = 80;
+
+export function latencyAdvice(totalSeconds: number): string | null {
+  const milliseconds = Math.round(totalSeconds * 1000);
+  if (milliseconds < suspiciousLatencyMs) {
+    return null;
+  }
+  return `${milliseconds}ms is high. Wireless audio is the usual cause, so try wired output.`;
+}

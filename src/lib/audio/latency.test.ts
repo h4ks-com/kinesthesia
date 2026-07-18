@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   clampLatency,
   judgedPosition,
+  latencyAdvice,
   latencyRange,
 } from "@/lib/audio/latency";
 
@@ -44,5 +45,17 @@ describe("judgedPosition", () => {
 
   it("never goes before the start of the song", () => {
     expect(judgedPosition(0.01, 1000, 1000, 0.5, 0)).toBe(0);
+  });
+});
+
+describe("latencyAdvice", () => {
+  it("stays quiet when the output is quick", () => {
+    expect(latencyAdvice(0.04)).toBeNull();
+  });
+
+  it("calls out a slow output device", () => {
+    const advice = latencyAdvice(0.2);
+    expect(advice).toContain("200ms");
+    expect(advice).toContain("wired");
   });
 });

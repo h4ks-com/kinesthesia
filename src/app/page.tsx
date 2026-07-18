@@ -1,65 +1,106 @@
-import Image from "next/image";
+"use client";
+
+import { type FormEvent, useState } from "react";
+import type { MidiSearchItem } from "@/server/midi/types";
+
+type SearchState =
+  | { status: "idle" }
+  | { status: "searching" }
+  | { status: "failed"; message: string }
+  | { status: "done"; results: readonly MidiSearchItem[] };
+
+async function fetchResults(query: string): Promise<readonly MidiSearchItem[]> {
+  const response = await fetch(
+    `/api/midi/search?q=${encodeURIComponent(query)}&limit=20`,
+  );
+  if (!response.ok) {
+    throw new Error(`Search failed with status ${response.status}`);
+  }
+  const body: { results: readonly MidiSearchItem[] } = await response.json();
+  return body.results;
+}
 
 export default function Home() {
+  const [query, setQuery] = useState("");
+  const [state, setState] = useState<SearchState>({ status: "idle" });
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = query.trim();
+    if (trimmed === "") {
+      return;
+    }
+    setState({ status: "searching" });
+    try {
+      setState({ status: "done", results: await fetchResults(trimmed) });
+    } catch (error) {
+      setState({
+        status: "failed",
+        message: error instanceof Error ? error.message : "Search failed",
+      });
+    }
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-16">
+      <header className="flex flex-col gap-2">
+        <h1 className="font-semibold text-4xl tracking-tight">Kinesthesia</h1>
+        <p className="text-zinc-500">
+          Find a song, then watch it play or sit down and play it yourself.
+        </p>
+      </header>
+
+      <form onSubmit={onSubmit} className="flex gap-2">
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search for a song"
+          aria-label="Search for a song"
+          className="flex-1 rounded-lg border border-zinc-300 bg-transparent px-4 py-2.5 outline-none focus:border-zinc-500 dark:border-zinc-700"
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+        <button
+          type="submit"
+          className="rounded-lg bg-zinc-900 px-5 py-2.5 font-medium text-white dark:bg-white dark:text-zinc-900"
+        >
+          Search
+        </button>
+      </form>
+
+      {state.status === "searching" ? (
+        <p className="text-zinc-500">Searching</p>
+      ) : null}
+
+      {state.status === "failed" ? (
+        <p className="text-red-600 dark:text-red-400">{state.message}</p>
+      ) : null}
+
+      {state.status === "done" && state.results.length === 0 ? (
+        <p className="text-zinc-500">Nothing found for that one.</p>
+      ) : null}
+
+      {state.status === "done" ? (
+        <ul className="flex flex-col divide-y divide-zinc-200 dark:divide-zinc-800">
+          {state.results.map((result) => (
+            <li
+              key={`${result.source}-${result.id}`}
+              className="flex items-center justify-between gap-4 py-3"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+              <div className="min-w-0">
+                <p className="truncate font-medium">{result.name}</p>
+                <p className="text-sm text-zinc-500">
+                  {result.source} · {result.plays.toLocaleString()} plays
+                </p>
+              </div>
+              <a
+                href={result.playUrl}
+                className="shrink-0 rounded-lg border border-zinc-300 px-4 py-2 font-medium text-sm dark:border-zinc-700"
+              >
+                Watch
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </main>
   );
 }

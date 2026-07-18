@@ -1,0 +1,10 @@
+services:
+  app:
+    build: .
+    image: ghcr.io/h4ks-com/kinesthesia:latest
+    ports:
+      - "${PORT:-3000}:3000"
+    env_file:
+      - path: .env
+        required: false
+    restart: unless-stopped

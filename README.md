@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Kinesthesia
 
-## Getting Started
+[![ci](https://github.com/h4ks-com/kinesthesia/actions/workflows/ci.yml/badge.svg)](https://github.com/h4ks-com/kinesthesia/actions/workflows/ci.yml)
+[![docker](https://github.com/h4ks-com/kinesthesia/actions/workflows/docker.yml/badge.svg)](https://github.com/h4ks-com/kinesthesia/actions/workflows/docker.yml)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-First, run the development server:
+A piano roll for the web, inspired by [Synthesia](https://synthesiagame.com/).
+Search for a song and it pulls the MIDI straight from the source so you can
+watch it fall down the keyboard.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+Live at [kinesthesia.h4ks.com](https://kinesthesia.h4ks.com).
+
+## Run it
+
+```
+cp .env.example .env
+bun install
+bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Or with Docker:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+docker compose up
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Every setting lives in `.env`, and `.env.example` documents all of them.
 
-## Learn More
+## API
 
-To learn more about Next.js, take a look at the following resources:
+The search API is public and self documenting.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+GET /api/midi/search?q=<song>   search across sources
+GET /api/midi/sources           list the sources it can search
+GET /api/openapi.json           OpenAPI 3.1 spec
+GET /api/docs                   browsable reference
+ALL /api/mcp                    the same tools over MCP
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Every result carries the source it came from, a direct link to the `.mid` file
+and a link that opens it in the player. Sources are pluggable, so more can be
+added without touching the API.
 
-## Deploy on Vercel
+## Credits
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+MIDI files come from [BitMidi](https://bitmidi.com). The falling note idea comes
+from [Synthesia](https://synthesiagame.com/).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT licensed. Copyright 2026 Matheus Fillipe.
+[github.com/h4ks-com/kinesthesia](https://github.com/h4ks-com/kinesthesia)

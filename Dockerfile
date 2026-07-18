@@ -21,6 +21,5 @@ COPY --from=builder --chown=bun:bun /app/public ./public
 COPY --from=builder --chown=bun:bun /app/drizzle ./drizzle
 RUN mkdir -p /app/data && chown bun:bun /app/data
 USER bun
-VOLUME ["/app/data"]
 EXPOSE 3000
 CMD ["bun", "server.js"]

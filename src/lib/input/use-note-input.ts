@@ -28,11 +28,30 @@ type Options = {
   onToggle: () => void;
 };
 
-function fromInteractiveElement(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLElement &&
-    target.closest("button, a, input, select, textarea") !== null
-  );
+const textInputTypes = new Set([
+  "text",
+  "search",
+  "email",
+  "url",
+  "password",
+  "number",
+  "tel",
+]);
+
+/** Where the spacebar types a character, so play must not steal it. A button,
+ * slider or track toggle is not one of these, which is what lets space stay
+ * play everywhere else. */
+function isTextEntry(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target.isContentEditable) {
+    return true;
+  }
+  if (target instanceof HTMLTextAreaElement) {
+    return true;
+  }
+  return target instanceof HTMLInputElement && textInputTypes.has(target.type);
 }
 
 export function useNoteInput({
@@ -69,10 +88,11 @@ export function useNoteInput({
         return;
       }
       if (event.code === "Space") {
-        // Space belongs to whatever control has focus before it means play.
-        if (fromInteractiveElement(event.target)) {
+        if (isTextEntry(event.target)) {
           return;
         }
+        // Space is play everywhere else, so preventDefault stops a focused
+        // button or track toggle from firing on the key instead.
         event.preventDefault();
         toggleRef.current();
         return;

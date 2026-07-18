@@ -188,3 +188,20 @@ test("key width is remembered across different songs", async ({ page }) => {
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.getByLabel("Piano key width")).toHaveValue("60");
 });
+
+test("space plays even when a control was just clicked", async ({ page }) => {
+  await serveFixture(page);
+  await page.goto(`/learn?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  // Clicking Simplify leaves it focused; space must still start playback and
+  // must not toggle Simplify a second time.
+  const simplify = page.getByRole("button", { name: "Simplify" });
+  await simplify.click();
+  await expect(page).toHaveURL(/simple=1/);
+  await expect(simplify).toBeFocused();
+
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
+  await expect(page).toHaveURL(/simple=1/);
+});

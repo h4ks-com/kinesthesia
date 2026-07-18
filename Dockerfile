@@ -1,13 +1,8 @@
-FROM oven/bun:1 AS deps
-WORKDIR /app
-ENV HUSKY=0
-COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile
-
 FROM oven/bun:1 AS builder
 WORKDIR /app
 ENV HUSKY=0 NEXT_TELEMETRY_DISABLED=1
-COPY --from=deps /app/node_modules ./node_modules
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 COPY . .
 RUN bun run build
 

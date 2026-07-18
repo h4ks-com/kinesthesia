@@ -1,70 +1,36 @@
-import { mkdirSync } from "node:fs";
-import { readFile, rename, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
-import { config } from "@/server/config";
+import { desc, eq } from "drizzle-orm";
+import { db, ready } from "@/server/db/client";
+import { type NewScore, type Score, scores } from "@/server/db/schema";
 
-export type ScoreRow = {
-  readonly id: number;
-  readonly player: string;
-  readonly song: string;
-  readonly url: string;
-  readonly mode: string;
-  readonly points: number;
-  readonly accuracy: number;
-  readonly bestCombo: number;
-  readonly playedAt: number;
-};
+export type { NewScore, Score };
 
-export type NewScore = Omit<ScoreRow, "id" | "playedAt">;
-
-let cache: ScoreRow[] | null = null;
-
-async function load(): Promise<ScoreRow[]> {
-  if (cache !== null) {
-    return cache;
+export async function saveScore(score: NewScore): Promise<Score> {
+  await ready();
+  const [saved] = await db().insert(scores).values(score).returning();
+  if (saved === undefined) {
+    throw new Error("The score was not stored");
   }
-  try {
-    cache = JSON.parse(
-      await readFile(config.databasePath, "utf8"),
-    ) as ScoreRow[];
-  } catch {
-    cache = [];
-  }
-  return cache;
+  return saved;
 }
 
-/** Written to a sibling file and renamed so a crash mid write cannot leave a
- * half serialised leaderboard behind. */
-async function persist(rows: readonly ScoreRow[]): Promise<void> {
-  mkdirSync(dirname(config.databasePath), { recursive: true });
-  const staging = `${config.databasePath}.writing`;
-  await writeFile(staging, JSON.stringify(rows), "utf8");
-  await rename(staging, config.databasePath);
+export async function topScores(limit: number): Promise<Score[]> {
+  await ready();
+  return db()
+    .select()
+    .from(scores)
+    .orderBy(desc(scores.points), scores.playedAt)
+    .limit(limit);
 }
 
-export async function saveScore(score: NewScore): Promise<ScoreRow> {
-  const rows = await load();
-  const row: ScoreRow = {
-    ...score,
-    id: rows.reduce((highest, current) => Math.max(highest, current.id), 0) + 1,
-    playedAt: Date.now(),
-  };
-  rows.push(row);
-  await persist(rows);
-  return row;
-}
-
-export async function topScores(limit: number): Promise<ScoreRow[]> {
-  const rows = await load();
-  return [...rows]
-    .sort((left, right) =>
-      right.points === left.points
-        ? left.playedAt - right.playedAt
-        : right.points - left.points,
-    )
-    .slice(0, limit);
-}
-
-export async function scoresFor(url: string): Promise<ScoreRow[]> {
-  return (await load()).filter((row) => row.url === url);
+export async function scoresForSong(
+  url: string,
+  limit: number,
+): Promise<Score[]> {
+  await ready();
+  return db()
+    .select()
+    .from(scores)
+    .where(eq(scores.url, url))
+    .orderBy(desc(scores.points))
+    .limit(limit);
 }

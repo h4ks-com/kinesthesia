@@ -39,5 +39,7 @@ export const config = {
   // Some sources block datacenter IPs. Self-hosters on a blocked host set this;
   // everyone else goes direct.
   proxyUrl: optional(process.env.MIDI_SOURCE_PROXY_URL),
-  databasePath: optional(process.env.DATABASE_PATH) ?? "./data/scores.json",
+  databaseUrl:
+    optional(process.env.DATABASE_URL) ?? "file:./data/kinesthesia.db",
+  databaseAuthToken: optional(process.env.DATABASE_AUTH_TOKEN),
 } as const;

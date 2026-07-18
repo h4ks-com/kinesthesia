@@ -4,6 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Scalar } from "@scalar/hono-api-reference";
 import { currentViewer } from "@/server/auth";
 import { type BattleRoom, createRoom, findRoom } from "@/server/battle/rooms";
+import type { Score } from "@/server/db/schema";
 import { midiSourceIds, midiSources } from "@/server/midi/registry";
 import { searchMidi } from "@/server/midi/search";
 import { saveScore, topScores } from "@/server/scores/store";
@@ -169,6 +170,21 @@ const scoreSchema = z
   })
   .openapi("Score");
 
+/** The account id stays server side; a leaderboard only needs the display name. */
+function publicScore(row: Score) {
+  return {
+    id: row.id,
+    player: row.playerName,
+    song: row.song,
+    url: row.url,
+    mode: row.mode,
+    points: row.points,
+    accuracy: row.accuracy,
+    bestCombo: row.bestCombo,
+    playedAt: row.playedAt,
+  };
+}
+
 const leaderboardRoute = createRoute({
   method: "get",
   path: "/scores",
@@ -227,9 +243,10 @@ const submitScoreRoute = createRoute({
   },
 });
 
-api.openapi(leaderboardRoute, async (c) =>
-  c.json({ scores: await topScores(c.req.valid("query").limit) }, 200),
-);
+api.openapi(leaderboardRoute, async (c) => {
+  const rows = await topScores(c.req.valid("query").limit);
+  return c.json({ scores: rows.map(publicScore) }, 200);
+});
 
 api.openapi(submitScoreRoute, async (c) => {
   const viewer = await currentViewer();
@@ -238,9 +255,10 @@ api.openapi(submitScoreRoute, async (c) => {
   }
   const stored = await saveScore({
     ...c.req.valid("json"),
-    player: viewer.name,
+    playerId: viewer.id,
+    playerName: viewer.name,
   });
-  return c.json(stored, 200);
+  return c.json(publicScore(stored), 200);
 });
 
 api.doc31("/openapi.json", {

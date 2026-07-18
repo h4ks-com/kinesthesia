@@ -17,6 +17,10 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000
 COPY --from=builder --chown=bun:bun /app/.next/standalone ./
 COPY --from=builder --chown=bun:bun /app/.next/static ./.next/static
 COPY --from=builder --chown=bun:bun /app/public ./public
+# The migrations are read at runtime, and standalone output does not carry them.
+COPY --from=builder --chown=bun:bun /app/drizzle ./drizzle
+RUN mkdir -p /app/data && chown bun:bun /app/data
 USER bun
+VOLUME ["/app/data"]
 EXPOSE 3000
 CMD ["bun", "server.js"]

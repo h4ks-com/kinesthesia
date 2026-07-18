@@ -7,4 +7,11 @@ services:
     env_file:
       - path: .env
         required: false
+    environment:
+      DATABASE_URL: file:/app/data/kinesthesia.db
+    volumes:
+      - scores:/app/data
     restart: unless-stopped
+
+volumes:
+  scores:

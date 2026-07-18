@@ -17,7 +17,9 @@ src/server/
   auth.ts                     optional Logto session and sign in actions
   http/fetch.ts               proxy aware fetch for outbound source calls
   battle/rooms.ts             room codes pointing at a host peer
-  scores/store.ts             leaderboard on a JSON file
+  db/schema.ts                Drizzle tables
+  db/client.ts                libSQL connection and migration runner
+  scores/store.ts             leaderboard queries
   midi/
     types.ts                  MidiSource contract and result shapes
     registry.ts               sources available to search
@@ -88,6 +90,12 @@ path is not optional.
 
 Signing in is optional. With no Logto values set, `authConfig` is null, the
 header renders no button and the app is fully anonymous with recents and
-favourites kept in the browser. Scores are stored as JSON rather than SQLite
-because `bun:sqlite` and `node:sqlite` each exist in only one of the two
-runtimes this app has to run under.
+favourites kept in the browser.
+
+Scores live in SQLite through Drizzle over the libSQL driver. The driver matters:
+`bun:sqlite` exists only under Bun and `node:sqlite` only under Node, while this
+app runs under both (`next start` uses Node, the container runs `bun server.js`).
+Migrations in `drizzle/` are generated with `bun run db:generate` and applied
+automatically on the first query, so a fresh volume comes up ready. Pointing
+`DATABASE_URL` at a libSQL host with `DATABASE_AUTH_TOKEN` moves it off the file
+with no code change.

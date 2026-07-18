@@ -20,7 +20,6 @@ type PlayerTransportProps = {
   onKeyWidth: (width: number) => void;
   melodyRate: number;
   onMelodyRate: (rate: number) => void;
-  onMelodyRateCommit: (rate: number) => void;
   showMelodyRate: boolean;
   octave: number | null;
   inputStatus: InputStatus;
@@ -44,7 +43,6 @@ export function PlayerTransport({
   onKeyWidth,
   melodyRate,
   onMelodyRate,
-  onMelodyRateCommit,
   showMelodyRate,
   octave,
   inputStatus,
@@ -107,7 +105,6 @@ export function PlayerTransport({
           onKeyWidth={onKeyWidth}
           melodyRate={melodyRate}
           onMelodyRate={onMelodyRate}
-          onMelodyRateCommit={onMelodyRateCommit}
           showMelodyRate={showMelodyRate}
           octave={octave}
           onOctave={onOctave}

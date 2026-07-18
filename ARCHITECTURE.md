@@ -61,8 +61,10 @@ src/lib/
   input/use-note-input.ts     keyboard, MIDI and octave in one listener
   battle/protocol.ts          messages exchanged between peers
   battle/ice.ts               STUN, plus a TURN relay when configured
-  storage/library.ts          recents and favourites in IndexedDB, and the
-                              word filter the home page runs over them
+  storage/idb.ts              the IndexedDB connection and one query helper
+  storage/library.ts          recents and favourites, and the word filter the
+                              home page runs over them
+  storage/settings.ts         remembered settings, per song and global
 ```
 
 ## How playback stays in time
@@ -132,6 +134,12 @@ path is not optional.
 Signing in is optional. With no Logto values set, `authConfig` is null, the
 header renders no button and the app is fully anonymous with recents and
 favourites kept in the browser.
+
+Settings are remembered in the browser. Per song settings (speed, tracks,
+simplify and its note rate) come back when the song opens in any mode; global
+settings (key width, timing offset) hold across every song. A link that states
+a song setting outright still wins, so a shared view reproduces itself. A locked
+battle neither reads nor writes this memory, since its part is the agreed one.
 
 A finished run is recorded with the settings that made it easier or harder, so
 a leaderboard can say what a score was worth: speed, whether the part was

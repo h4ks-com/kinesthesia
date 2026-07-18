@@ -95,6 +95,7 @@ const roomSchema = z
     name: z.string(),
     source: z.string().nullable(),
     tracks: z.array(z.number().int()),
+    speed: z.number(),
     simplified: z.boolean(),
     melodyRate: z.number().int(),
   })
@@ -116,6 +117,7 @@ const createRoomRoute = createRoute({
             name: z.string(),
             source: z.string().nullable().default(null),
             tracks: z.array(z.number().int()).default([]),
+            speed: z.number().positive().max(4).default(1),
             simplified: z.boolean().default(false),
             melodyRate: z.number().int().min(1).max(12).default(8),
           }),

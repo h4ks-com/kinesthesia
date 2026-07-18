@@ -23,19 +23,21 @@ test("a battle is set up and previewed before anyone is invited", async ({
   ).toBeVisible();
 });
 
-test("the invite is a link carrying the settings", async ({
+test("the room stores the difficulty and the link stays short", async ({
   page,
   context,
 }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await serveFixture(page);
-  await page.route("**/api/battle/rooms", (route) =>
-    route.fulfill({
+  let posted: { simplified?: boolean } = {};
+  await page.route("**/api/battle/rooms", async (route) => {
+    posted = route.request().postDataJSON();
+    await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({ code: "ABCDE" }),
-    }),
-  );
+    });
+  });
 
   await page.goto(`/battle?${playerQuery()}`);
   await expect(page.locator("canvas")).toBeVisible();
@@ -44,9 +46,11 @@ test("the invite is a link carrying the settings", async ({
 
   const invite = page.getByRole("button", { name: "Copy the invite link" });
   await expect(invite).toBeVisible({ timeout: 20_000 });
+
   const link = await page.evaluate(() => navigator.clipboard.readText());
   expect(link).toContain("join=ABCDE");
-  expect(link).toContain("simple=1");
+  expect(link).not.toContain("url=");
+  expect(posted.simplified).toBe(true);
 });
 
 test("opening an invite link joins without typing a code", async ({ page }) => {
@@ -61,13 +65,14 @@ test("opening an invite link joins without typing a code", async ({ page }) => {
         name: "Fixture Song",
         source: "bitmidi",
         tracks: [0],
+        speed: 1,
         simplified: true,
         melodyRate: 4,
       }),
     }),
   );
 
-  await page.goto(`/battle?${playerQuery()}&join=ABCDE`);
+  await page.goto("/battle?join=ABCDE");
   await expect(page.getByText("Joining the match")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Invite a player" }),

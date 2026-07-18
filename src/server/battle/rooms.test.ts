@@ -7,6 +7,7 @@ const host: NewRoom = {
   name: "A song",
   source: "bitmidi",
   tracks: [0, 2],
+  speed: 1,
   simplified: true,
   melodyRate: 4,
 };

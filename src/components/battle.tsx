@@ -18,7 +18,11 @@ import {
   type MelodyRate,
 } from "@/lib/midi/melody";
 import { useSong } from "@/lib/midi/use-song";
-import { type PlayerParams, parsePlayerParams } from "@/lib/player-url";
+import {
+  asSpeed,
+  type PlayerParams,
+  parsePlayerParams,
+} from "@/lib/player-url";
 import { accuracy, type Score, scorePoints } from "@/lib/scoring/judge";
 
 type Connection =
@@ -30,11 +34,21 @@ type Connection =
   | { status: "connected" };
 
 type BattleProps = {
-  params: PlayerParams;
+  params: PlayerParams | null;
   playerName: string;
   ice: readonly IceServer[];
   joinCode: string | null;
 };
+
+function matchKey(match: PlayerParams): string {
+  return [
+    match.url,
+    match.simplified,
+    match.melodyRate,
+    match.speed,
+    (match.tracks ?? []).join(","),
+  ].join("|");
+}
 
 type OpponentPart = {
   readonly simplified: boolean;
@@ -43,18 +57,22 @@ type OpponentPart = {
 };
 
 type RoomReply = {
-  peerId: string;
-  url: string;
-  name: string;
-  source: string | null;
-  tracks: number[];
-  simplified: boolean;
-  melodyRate: number;
+  readonly peerId: string;
+  readonly url: string;
+  readonly name: string;
+  readonly source: string | null;
+  readonly tracks: readonly number[];
+  readonly speed: number;
+  readonly simplified: boolean;
+  readonly melodyRate: number;
 };
 
-/** The player keeps the URL in step with the settings, so the address bar is
- * what a room is opened with and what an invite link carries. */
-function settingsFromUrl(fallback: PlayerParams): PlayerParams {
+/** The player publishes its settings to the URL, so the address bar is the
+ * host's live truth for what a room carries. */
+function settingsFromUrl(fallback: PlayerParams | null): PlayerParams | null {
+  if (typeof window === "undefined") {
+    return fallback;
+  }
   return (
     parsePlayerParams(new URLSearchParams(window.location.search)) ?? fallback
   );
@@ -66,25 +84,38 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
   );
   const [opponent, setOpponent] = useState<Opponent | null>(null);
   const [agreed, setAgreed] = useState<PlayerParams | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "denied">(
+    "idle",
+  );
   const [theirPart, setTheirPart] = useState<OpponentPart | null>(null);
+  const [roomOpen, setRoomOpen] = useState(joinCode !== null);
   const opponentKeys = useRef<Set<number>>(new Set());
   const match = agreed ?? params;
   const song = useSong(match);
   const linkRef = useRef<DataConnection | null>(null);
+  const peerRef = useRef<{ destroy: () => void } | null>(null);
+  const joining = useRef(false);
+  // The player publishes to the URL without re-rendering this component, so a
+  // closed-over render value goes stale; this reads the URL fresh each time.
+  const agreedRef = useRef(agreed);
+  agreedRef.current = agreed;
+  const currentSettings = useCallback(
+    (): PlayerParams | null => agreedRef.current ?? settingsFromUrl(params),
+    [params],
+  );
 
   const attach = useCallback(
     (link: DataConnection) => {
       linkRef.current = link;
       link.on("open", () => {
         setConnection({ status: "connected" });
-        const mine = settingsFromUrl(params);
+        const mine = currentSettings();
         link.send({
           kind: "hello",
           name: playerName,
-          simplified: mine.simplified,
-          melodyRate: mine.melodyRate,
-          tracks: mine.tracks ?? [],
+          simplified: mine?.simplified ?? false,
+          melodyRate: mine?.melodyRate ?? defaultMelodyRate,
+          tracks: mine?.tracks ?? [],
         } satisfies BattleMessage);
       });
       link.on("data", (raw) => {
@@ -129,14 +160,19 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
         setConnection({ status: "failed", message: "The connection dropped" }),
       );
     },
-    [playerName, params],
+    [playerName, currentSettings],
   );
 
   async function invite() {
+    const settings = currentSettings();
+    if (settings === null) {
+      return;
+    }
     setConnection({ status: "opening" });
-    const settings = settingsFromUrl(params);
     const { Peer } = await import("peerjs");
+    peerRef.current?.destroy();
     const peer = new Peer({ config: { iceServers: [...ice] } });
+    peerRef.current = peer;
     peer.on("error", (error) =>
       setConnection({ status: "failed", message: error.message }),
     );
@@ -150,6 +186,7 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
           name: settings.name,
           source: settings.source,
           tracks: settings.tracks ?? [],
+          speed: settings.speed,
           simplified: settings.simplified,
           melodyRate: settings.melodyRate,
         }),
@@ -159,9 +196,12 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
         return;
       }
       const room: { code: string } = await response.json();
-      const invitation = new URL(window.location.href);
+      // The room holds the whole match, so the link stays short enough to send
+      // in a chat or read aloud.
+      const invitation = new URL("/battle", window.location.origin);
       invitation.searchParams.set("join", room.code);
       const link = invitation.toString();
+      setRoomOpen(true);
       setConnection({ status: "waiting", link });
       void copy(link);
     });
@@ -180,36 +220,47 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
       }
       const room: RoomReply = await response.json();
       setAgreed({
-        ...params,
         url: room.url,
         name: room.name,
         source: room.source,
         tracks: room.tracks,
+        speed: asSpeed(room.speed),
         simplified: room.simplified,
         melodyRate: clampMelodyRate(room.melodyRate),
       });
       const { Peer } = await import("peerjs");
+      peerRef.current?.destroy();
       const peer = new Peer({ config: { iceServers: [...ice] } });
+      peerRef.current = peer;
       peer.on("error", (error) =>
         setConnection({ status: "failed", message: error.message }),
       );
       peer.on("open", () => attach(peer.connect(room.peerId)));
     },
-    [attach, ice, params],
+    [attach, ice],
   );
 
   useEffect(() => {
-    if (joinCode !== null) {
+    if (joinCode !== null && !joining.current) {
+      joining.current = true;
       void joinRoom(joinCode);
     }
   }, [joinCode, joinRoom]);
 
+  useEffect(
+    () => () => {
+      linkRef.current?.close();
+      peerRef.current?.destroy();
+    },
+    [],
+  );
+
   async function copy(text: string) {
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(true);
+      setCopyState("copied");
     } catch {
-      setCopied(false);
+      setCopyState("denied");
     }
   }
 
@@ -236,42 +287,50 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
     [],
   );
 
-  useEffect(() => () => linkRef.current?.close(), []);
-
   const live = connection.status === "connected";
-  // Once the room carries the settings, changing them here would hand the
-  // other player a different part from the one they accepted.
-  const settled =
-    connection.status !== "setup" && connection.status !== "failed";
+  // A room outlives the connection that drops, and its invite link is already
+  // out, so once one is open the settings stay frozen even between attempts.
+  const settled = roomOpen || connection.status === "opening";
 
   return (
     <div className="flex h-dvh flex-col lg:flex-row">
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        <Player
-          mode="battle"
-          params={match}
-          onScore={onScore}
-          onPress={onPress}
-          onRelease={onRelease}
-          opponent={null}
-          locked={settled}
-        />
-        {live ? null : (
-          <BattleInvite
-            state={connection.status === "failed" ? "setup" : connection.status}
-            link={connection.status === "waiting" ? connection.link : null}
-            copied={copied}
-            onInvite={() => void invite()}
-            onCopy={() =>
-              connection.status === "waiting" && void copy(connection.link)
-            }
+        {match === null ? (
+          <div className="flex flex-1 items-center justify-center bg-void" />
+        ) : (
+          <Player
+            key={matchKey(match)}
+            mode="battle"
+            params={match}
+            onScore={onScore}
+            onPress={onPress}
+            onRelease={onRelease}
+            opponent={null}
+            locked={settled}
           />
         )}
-        {connection.status === "failed" ? (
-          <p className="-translate-x-1/2 absolute top-16 left-1/2 z-40 rounded-full border border-danger/40 bg-panel/95 px-3 py-1.5 text-danger text-xs backdrop-blur">
-            {connection.message}
-          </p>
-        ) : null}
+        {live ? null : (
+          <BattleInvite
+            connection={connection}
+            copyState={copyState}
+            onInvite={() => {
+              if (joinCode === null) {
+                void invite();
+                return;
+              }
+              // A join link carries no settings, so a retry rejoins the room it
+              // already points at.
+              joining.current = false;
+              setConnection({ status: "joining" });
+              void joinRoom(joinCode);
+            }}
+            onCopy={() => {
+              if (connection.status === "waiting") {
+                void copy(connection.link);
+              }
+            }}
+          />
+        )}
       </div>
 
       {live && song.status === "ready" ? (

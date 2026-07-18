@@ -29,6 +29,33 @@ function isSpeed(value: number): value is Speed {
   return speeds.some((option) => option === value);
 }
 
+export function asSpeed(value: number): Speed {
+  return isSpeed(value) ? value : defaultSpeed;
+}
+
+export type SongSettingKey = "speed" | "tracks" | "simplified" | "melodyRate";
+
+/** A setting a link states outright wins over what the device remembers for
+ * the tune, which is how a shared view reproduces itself. */
+export function explicitSongSettings(
+  searchParams: URLSearchParams,
+): ReadonlySet<SongSettingKey> {
+  const present = new Set<SongSettingKey>();
+  if (searchParams.has("speed")) {
+    present.add("speed");
+  }
+  if (searchParams.has("tracks")) {
+    present.add("tracks");
+  }
+  if (searchParams.has("simple")) {
+    present.add("simplified");
+  }
+  if (searchParams.has("rate")) {
+    present.add("melodyRate");
+  }
+  return present;
+}
+
 function readRate(raw: string | null): MelodyRate {
   if (raw === null) {
     return defaultMelodyRate;
@@ -41,27 +68,32 @@ function isPlayableUrl(url: string): boolean {
   return /^https?:\/\//i.test(url);
 }
 
+/** Explicit spells out every song setting even at its default, so a link
+ * copied from a running player reproduces that exact view. A default left
+ * implicit defers to whatever the recipient's device remembers. */
 export function buildPlayerUrl(
   baseUrl: string,
   mode: PlayerMode,
   params: PlayerParams,
+  options: { explicit?: boolean } = {},
 ): string {
+  const explicit = options.explicit ?? false;
   const target = new URL(`/${mode}`, baseUrl);
   target.searchParams.set("url", params.url);
   target.searchParams.set("name", params.name);
   if (params.source !== null) {
     target.searchParams.set("source", params.source);
   }
-  if (params.tracks !== null && params.tracks.length > 0) {
-    target.searchParams.set("tracks", params.tracks.join(","));
+  if (explicit || (params.tracks !== null && params.tracks.length > 0)) {
+    target.searchParams.set("tracks", (params.tracks ?? []).join(","));
   }
-  if (params.speed !== defaultSpeed) {
+  if (explicit || params.speed !== defaultSpeed) {
     target.searchParams.set("speed", String(params.speed));
   }
-  if (params.simplified) {
-    target.searchParams.set("simple", "1");
+  if (explicit || params.simplified) {
+    target.searchParams.set("simple", params.simplified ? "1" : "0");
   }
-  if (params.melodyRate !== defaultMelodyRate) {
+  if (explicit || params.melodyRate !== defaultMelodyRate) {
     target.searchParams.set("rate", String(params.melodyRate));
   }
   return target.toString();

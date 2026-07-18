@@ -16,7 +16,9 @@ import {
 import type { Song } from "@/lib/midi/song";
 import { useSong } from "@/lib/midi/use-song";
 import {
+  asSpeed,
   buildPlayerUrl,
+  explicitSongSettings,
   type PlayerMode,
   type PlayerParams,
   type Speed,
@@ -26,6 +28,13 @@ import { busiestTrack } from "@/lib/scoring/gates";
 import type { Score } from "@/lib/scoring/judge";
 import { useGates } from "@/lib/scoring/use-gates";
 import { useRunRecord } from "@/lib/scoring/use-run-record";
+import {
+  loadGlobalSettings,
+  loadSongSettings,
+  saveGlobalSettings,
+  saveSongSettings,
+  songSettingsKey,
+} from "@/lib/storage/settings";
 
 type PlayerProps = {
   mode: PlayerMode;
@@ -64,13 +73,151 @@ export function Player({
   const [keyWidth, setKeyWidth] = useState(defaultKeyWidth);
   const [simplified, setSimplified] = useState(params.simplified);
   const [melodyRate, setMelodyRate] = useState(params.melodyRate);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const globalTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (settleTimer.current !== null) {
+        clearTimeout(settleTimer.current);
+      }
+      if (globalTimer.current !== null) {
+        clearTimeout(globalTimer.current);
+      }
+    },
+    [],
+  );
 
+  type SongSettingsValue = {
+    tracks: readonly number[];
+    speed: Speed;
+    simplified: boolean;
+    melodyRate: MelodyRate;
+  };
+  type UrlChange = Partial<SongSettingsValue>;
+
+  // Read at write time, so a deferred write never clobbers a change made after
+  // it was scheduled.
+  const settingsRef = useRef<SongSettingsValue>({
+    tracks: [...playerTracks],
+    speed,
+    simplified,
+    melodyRate,
+  });
+  settingsRef.current = {
+    tracks: [...playerTracks],
+    speed,
+    simplified,
+    melodyRate,
+  };
+
+  const merge = useCallback((next: UrlChange): SongSettingsValue => {
+    const current = settingsRef.current;
+    return {
+      tracks: next.tracks ?? current.tracks,
+      speed: next.speed ?? current.speed,
+      simplified: next.simplified ?? current.simplified,
+      melodyRate: next.melodyRate ?? current.melodyRate,
+    };
+  }, []);
+
+  const updateUrl = useCallback(
+    (next: UrlChange) => {
+      window.history.replaceState(
+        null,
+        "",
+        buildPlayerUrl(
+          window.location.origin,
+          mode,
+          { ...params, ...merge(next) },
+          { explicit: true },
+        ),
+      );
+    },
+    [params, mode, merge],
+  );
+
+  // A locked match plays the agreed part, so it leaves what this device
+  // remembers for the song untouched.
+  const commit = useCallback(
+    (next: UrlChange) => {
+      updateUrl(next);
+      if (!locked) {
+        void saveSongSettings(
+          songSettingsKey(params.source, params.url),
+          merge(next),
+        );
+      }
+    },
+    [params, locked, updateUrl, merge],
+  );
+
+  const bootstrapped = useRef(false);
+  const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
-    if (song === null || !interactive || playerTracks.size > 0) {
+    if (bootstrapped.current) {
       return;
     }
-    setPlayerTracks(new Set([busiestTrack(song)]));
-  }, [song, interactive, playerTracks.size]);
+    bootstrapped.current = true;
+    const explicit = explicitSongSettings(
+      new URLSearchParams(window.location.search),
+    );
+    void loadGlobalSettings().then((stored) => {
+      if (stored !== null) {
+        setKeyWidth(clampKeyWidth(stored.keyWidth));
+        setLatencyOffset(clampLatency(stored.latencyOffset));
+      }
+    });
+    if (locked) {
+      setHydrated(true);
+      return;
+    }
+    void loadSongSettings(songSettingsKey(params.source, params.url))
+      .then((stored) => {
+        if (stored === null) {
+          return;
+        }
+        const next = {
+          speed: explicit.has("speed") ? params.speed : asSpeed(stored.speed),
+          simplified: explicit.has("simplified")
+            ? params.simplified
+            : stored.simplified,
+          melodyRate: explicit.has("melodyRate")
+            ? params.melodyRate
+            : clampMelodyRate(stored.melodyRate),
+          tracks: explicit.has("tracks") ? null : stored.tracks,
+        };
+        setSpeed(next.speed);
+        setSimplified(next.simplified);
+        setMelodyRate(next.melodyRate);
+        if (next.tracks !== null) {
+          setPlayerTracks(new Set(next.tracks));
+        }
+        updateUrl({
+          speed: next.speed,
+          simplified: next.simplified,
+          melodyRate: next.melodyRate,
+          tracks: next.tracks ?? undefined,
+        });
+      })
+      .finally(() => setHydrated(true));
+  }, [params, locked, updateUrl]);
+
+  useEffect(() => {
+    if (
+      !hydrated ||
+      locked ||
+      song === null ||
+      !interactive ||
+      playerTracks.size > 0
+    ) {
+      return;
+    }
+    // Publishing the default claim lets a battle invite record the part the
+    // host is actually about to play.
+    const claimed = busiestTrack(song);
+    setPlayerTracks(new Set([claimed]));
+    commit({ tracks: [claimed] });
+  }, [hydrated, locked, song, interactive, playerTracks.size, commit]);
 
   const focusedSong = useRef<Song | null>(null);
   useEffect(() => {
@@ -215,44 +362,55 @@ export function Player({
     gates.moveTo(position);
   }
 
-  function updateUrl(next: {
-    tracks?: readonly number[];
-    speed?: Speed;
-    simplified?: boolean;
-    melodyRate?: MelodyRate;
-  }) {
-    window.history.replaceState(
-      null,
-      "",
-      buildPlayerUrl(window.location.origin, mode, {
-        ...params,
-        tracks: next.tracks ?? [...playerTracks],
-        speed: next.speed ?? speed,
-        simplified: next.simplified ?? simplified,
-        melodyRate: next.melodyRate ?? melodyRate,
-      }),
+  // A write per slider step trips Safari's replaceState limit, so the write
+  // settles a moment after the last change while state tracks it live.
+  function settleCommit(next: UrlChange) {
+    if (settleTimer.current !== null) {
+      clearTimeout(settleTimer.current);
+    }
+    settleTimer.current = setTimeout(() => commit(next), 250);
+  }
+
+  function settleGlobal(keyWidthNext: number, latencyNext: number) {
+    if (globalTimer.current !== null) {
+      clearTimeout(globalTimer.current);
+    }
+    globalTimer.current = setTimeout(
+      () =>
+        void saveGlobalSettings({
+          keyWidth: keyWidthNext,
+          latencyOffset: latencyNext,
+        }),
+      250,
     );
+  }
+
+  function changeKeyWidth(next: number) {
+    const width = clampKeyWidth(next);
+    setKeyWidth(width);
+    settleGlobal(width, latencyOffset);
+  }
+
+  function changeLatency(next: number) {
+    const offset = clampLatency(next);
+    setLatencyOffset(offset);
+    settleGlobal(keyWidth, offset);
   }
 
   function changeSimplified(next: boolean) {
     setSimplified(next);
-    updateUrl({ simplified: next });
+    commit({ simplified: next });
   }
 
-  // Dragging a slider fires on every step, and a URL write per step both costs
-  // a full reduction and trips Safari's replaceState limit, so the address bar
-  // only catches up once the drag settles.
   function changeMelodyRate(next: number) {
-    setMelodyRate(clampMelodyRate(next));
-  }
-
-  function commitMelodyRate(next: number) {
-    updateUrl({ melodyRate: clampMelodyRate(next) });
+    const rate = clampMelodyRate(next);
+    setMelodyRate(rate);
+    settleCommit({ melodyRate: rate });
   }
 
   function changeSpeed(next: Speed) {
     setSpeed(next);
-    updateUrl({ speed: next });
+    settleCommit({ speed: next });
   }
 
   function toggleTrack(index: number) {
@@ -287,7 +445,7 @@ export function Player({
       } else {
         next.add(index);
       }
-      updateUrl({ tracks: [...next].sort((left, right) => left - right) });
+      commit({ tracks: [...next].sort((left, right) => left - right) });
       return next;
     });
   }
@@ -360,14 +518,13 @@ export function Player({
         speed={speed}
         showSpeed={!locked}
         keyWidth={keyWidth}
-        onKeyWidth={(next) => setKeyWidth(clampKeyWidth(next))}
+        onKeyWidth={(next) => changeKeyWidth(next)}
         melodyRate={melodyRate}
         onMelodyRate={changeMelodyRate}
-        onMelodyRateCommit={commitMelodyRate}
         showMelodyRate={interactive && simplified && !locked}
         octave={interactive ? input.octave : null}
         latencyOffset={latencyOffset}
-        onLatencyOffset={(next) => setLatencyOffset(clampLatency(next))}
+        onLatencyOffset={(next) => changeLatency(next)}
         measuredLatency={playback.latency()}
         showLatency={interactive}
         inputStatus={input.status}

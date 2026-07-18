@@ -140,8 +140,6 @@ test("the note speed slider follows the simplify toggle", async ({ page }) => {
   const rate = page.getByLabel("Maximum notes per second");
   await expect(rate).toBeVisible();
   await rate.fill("3");
-  // The URL catches up when the drag settles, not on every step.
-  await rate.dispatchEvent("pointerup");
   await expect(page).toHaveURL(/rate=3/);
 });
 
@@ -154,4 +152,39 @@ test("a battle keeps the simplify setting fixed for both players", async ({
 
   const battle = page.getByRole("link", { name: "Switch to Battle" });
   await expect(battle).toHaveAttribute("href", /simple=1/);
+});
+
+test("a song remembers its settings across modes", async ({ page }) => {
+  await serveFixture(page);
+  await page.goto(`/learn?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByLabel("Playback speed").fill("1");
+  await expect(page).toHaveURL(/speed=0.5/);
+  await page.keyboard.press("Escape");
+
+  await page.goto(`/watch?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+  await expect(page).toHaveURL(/speed=0.5/);
+});
+
+test("key width is remembered across different songs", async ({ page }) => {
+  await serveFixture(page);
+  await page.goto(`/learn?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByLabel("Piano key width").fill("60");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(400);
+
+  await page.goto(
+    `/learn?url=${encodeURIComponent("https://example.test/other.mid")}&name=Other`,
+  );
+  await serveFixture(page);
+  await page.goto(`/learn?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByLabel("Piano key width")).toHaveValue("60");
 });

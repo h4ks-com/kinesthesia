@@ -18,7 +18,6 @@ type SettingsMenuProps = {
   onKeyWidth: (width: number) => void;
   melodyRate: number;
   onMelodyRate: (rate: number) => void;
-  onMelodyRateCommit: (rate: number) => void;
   showMelodyRate: boolean;
   octave: number | null;
   onOctave: (octave: number) => void;
@@ -37,7 +36,6 @@ export function SettingsMenu({
   onKeyWidth,
   melodyRate,
   onMelodyRate,
-  onMelodyRateCommit,
   showMelodyRate,
   octave,
   onOctave,
@@ -111,7 +109,6 @@ export function SettingsMenu({
               value={melodyRate}
               valueText={`${melodyRate}/sec`}
               onChange={onMelodyRate}
-              onCommit={onMelodyRateCommit}
             />
             <Note>Lower keeps the peaks of the tune and drops the rest.</Note>
           </Section>
@@ -213,7 +210,6 @@ function SliderRow({
   value,
   valueText,
   onChange,
-  onCommit,
 }: {
   ariaLabel: string;
   min: number;
@@ -222,7 +218,6 @@ function SliderRow({
   value: number;
   valueText: string;
   onChange: (value: number) => void;
-  onCommit?: (value: number) => void;
 }) {
   return (
     <div className="flex items-center gap-2 px-2">
@@ -233,8 +228,6 @@ function SliderRow({
         step={step}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        onPointerUp={(event) => onCommit?.(Number(event.currentTarget.value))}
-        onKeyUp={(event) => onCommit?.(Number(event.currentTarget.value))}
         aria-label={ariaLabel}
         aria-valuetext={valueText}
         className="min-w-0 flex-1"

@@ -10,11 +10,16 @@ export type SongState =
   | { status: "failed"; message: string }
   | { status: "ready"; song: Song };
 
-export function useSong(params: PlayerParams): SongState {
+export function useSong(params: PlayerParams | null): SongState {
   const [state, setState] = useState<SongState>({ status: "loading" });
-  const { url, name, source } = params;
+  const url = params?.url ?? null;
+  const name = params?.name ?? null;
+  const source = params?.source ?? null;
 
   useEffect(() => {
+    if (url === null || name === null) {
+      return;
+    }
     let cancelled = false;
     setState({ status: "loading" });
     loadSong(url, name)

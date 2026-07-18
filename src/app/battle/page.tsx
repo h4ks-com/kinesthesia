@@ -12,14 +12,15 @@ export default async function BattlePage({
 }) {
   const query = toSearchParams(await searchParams);
   const params = parsePlayerParams(query);
-  if (params === null) {
+  const joinCode = query.get("join");
+  if (params === null && joinCode === null) {
     return <MissingSong />;
   }
   return (
     <Battle
       params={params}
       playerName={query.get("player") ?? "Player"}
-      joinCode={query.get("join")}
+      joinCode={joinCode}
       ice={iceServers(
         config.turnUrl,
         config.turnUsername,

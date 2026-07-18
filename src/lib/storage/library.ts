@@ -1,3 +1,5 @@
+import { run, stores } from "@/lib/storage/idb";
+
 export type LibraryEntry = {
   readonly key: string;
   readonly url: string;
@@ -6,10 +8,8 @@ export type LibraryEntry = {
   readonly playedAt: number;
 };
 
-const databaseName = "kinesthesia";
-const databaseVersion = 1;
-const recentStore = "recent";
-const favouriteStore = "favourite";
+const recentStore = stores.recent;
+const favouriteStore = stores.favourite;
 const recentLimit = 40;
 
 export function entryKey(source: string | null, url: string): string {
@@ -32,39 +32,6 @@ export function filterLibrary(
   query: string,
 ): LibraryEntry[] {
   return entries.filter((entry) => matchesLibrary(entry, query));
-}
-
-function open(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(databaseName, databaseVersion);
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      for (const store of [recentStore, favouriteStore]) {
-        if (!database.objectStoreNames.contains(store)) {
-          database.createObjectStore(store, { keyPath: "key" });
-        }
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-function run<T>(
-  store: string,
-  mode: IDBTransactionMode,
-  action: (store: IDBObjectStore) => IDBRequest<T>,
-): Promise<T> {
-  return open().then(
-    (database) =>
-      new Promise<T>((resolve, reject) => {
-        const transaction = database.transaction(store, mode);
-        const request = action(transaction.objectStore(store));
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-        transaction.oncomplete = () => database.close();
-      }),
-  );
 }
 
 function byNewest(entries: LibraryEntry[]): LibraryEntry[] {

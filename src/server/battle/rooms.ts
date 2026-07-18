@@ -7,6 +7,7 @@ export type BattleRoom = {
   readonly tracks: readonly number[];
   /** The host's settings travel with the room, so a joiner cannot hand
    * themselves an easier part than the player they are up against. */
+  readonly speed: number;
   readonly simplified: boolean;
   readonly melodyRate: number;
   readonly createdAt: number;

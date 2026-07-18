@@ -1,6 +1,14 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { SongRow } from "@/components/song-row";
+import {
+  entryKey,
+  type LibraryEntry,
+  listFavourites,
+  listRecent,
+  toggleFavourite,
+} from "@/lib/storage/library";
 import type { MidiSearchItem } from "@/server/midi/types";
 
 type SearchState =
@@ -23,6 +31,17 @@ async function fetchResults(query: string): Promise<readonly MidiSearchItem[]> {
 export default function Home() {
   const [query, setQuery] = useState("");
   const [state, setState] = useState<SearchState>({ status: "idle" });
+  const [recent, setRecent] = useState<readonly LibraryEntry[]>([]);
+  const [favourites, setFavourites] = useState<readonly LibraryEntry[]>([]);
+
+  const refreshLibrary = useCallback(() => {
+    void listRecent().then(setRecent);
+    void listFavourites().then(setFavourites);
+  }, []);
+
+  useEffect(refreshLibrary, [refreshLibrary]);
+
+  const favouriteKeys = new Set(favourites.map((entry) => entry.key));
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -41,12 +60,22 @@ export default function Home() {
     }
   }
 
+  async function onToggleFavourite(entry: {
+    url: string;
+    name: string;
+    source: string | null;
+  }) {
+    await toggleFavourite(entry);
+    refreshLibrary();
+  }
+
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-16">
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-6 py-16">
       <header className="flex flex-col gap-2">
         <h1 className="font-semibold text-4xl tracking-tight">Kinesthesia</h1>
         <p className="text-zinc-500">
-          Find a song, then watch it play or sit down and play it yourself.
+          Find a song, then watch it play, learn it at your own pace, or take
+          someone on.
         </p>
       </header>
 
@@ -78,29 +107,80 @@ export default function Home() {
         <p className="text-zinc-500">Nothing found for that one.</p>
       ) : null}
 
-      {state.status === "done" ? (
-        <ul className="flex flex-col divide-y divide-zinc-200 dark:divide-zinc-800">
+      {state.status === "done" && state.results.length > 0 ? (
+        <Section title="Results">
           {state.results.map((result) => (
-            <li
+            <SongRow
               key={`${result.source}-${result.id}`}
-              className="flex items-center justify-between gap-4 py-3"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-medium">{result.name}</p>
-                <p className="text-sm text-zinc-500">
-                  {result.source} · {result.plays.toLocaleString()} plays
-                </p>
-              </div>
-              <a
-                href={result.playUrl}
-                className="shrink-0 rounded-lg border border-zinc-300 px-4 py-2 font-medium text-sm dark:border-zinc-700"
-              >
-                Watch
-              </a>
-            </li>
+              name={result.name}
+              url={result.downloadUrl}
+              source={result.source}
+              detail={`${result.source} · ${result.plays.toLocaleString()} plays`}
+              favourite={favouriteKeys.has(
+                entryKey(result.source, result.downloadUrl),
+              )}
+              onToggleFavourite={() =>
+                void onToggleFavourite({
+                  url: result.downloadUrl,
+                  name: result.name,
+                  source: result.source,
+                })
+              }
+            />
           ))}
-        </ul>
+        </Section>
+      ) : null}
+
+      {favourites.length > 0 ? (
+        <Section title="Favourites">
+          {favourites.map((entry) => (
+            <SongRow
+              key={entry.key}
+              name={entry.name}
+              url={entry.url}
+              source={entry.source}
+              detail={entry.source}
+              favourite
+              onToggleFavourite={() => void onToggleFavourite(entry)}
+            />
+          ))}
+        </Section>
+      ) : null}
+
+      {recent.length > 0 ? (
+        <Section title="Recently played">
+          {recent.map((entry) => (
+            <SongRow
+              key={entry.key}
+              name={entry.name}
+              url={entry.url}
+              source={entry.source}
+              detail={entry.source}
+              favourite={favouriteKeys.has(entry.key)}
+              onToggleFavourite={() => void onToggleFavourite(entry)}
+            />
+          ))}
+        </Section>
       ) : null}
     </main>
+  );
+}
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="font-medium text-sm text-zinc-500 uppercase tracking-wide">
+        {title}
+      </h2>
+      <ul className="flex flex-col divide-y divide-zinc-200 dark:divide-zinc-800">
+        {children}
+      </ul>
+    </section>
   );
 }

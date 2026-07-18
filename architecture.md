@@ -22,6 +22,7 @@ src/server/
     bitmidi.ts                BitMidi adapter
     search.ts                 searches sources and attaches player links
 src/components/
+  song-row.tsx                one song with its favourite and mode links
   player.tsx                  transport, gating, scoring, input wiring
   piano-roll-view.tsx         canvas element and the animation frame loop
   track-menu.tsx              show, hide and claim tracks
@@ -38,6 +39,7 @@ src/lib/
   input/web-midi.ts           MIDI devices, including hot plug
   scoring/judge.ts            hit windows, combo and accuracy
   battle/protocol.ts          messages exchanged between peers
+  storage/library.ts          recents and favourites in IndexedDB
 ```
 
 ## How playback stays in time

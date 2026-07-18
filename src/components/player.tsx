@@ -27,6 +27,7 @@ import {
   type Score,
   scorePoints,
 } from "@/lib/scoring/judge";
+import { recordPlay } from "@/lib/storage/library";
 
 const chordWindow = 0.03;
 
@@ -111,6 +112,11 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
       .then((loaded) => {
         if (!cancelled) {
           setLoad({ status: "ready", song: loaded });
+          void recordPlay({
+            url: params.url,
+            name: params.name,
+            source: params.source,
+          });
         }
       })
       .catch((error: unknown) => {
@@ -127,7 +133,7 @@ export function Player({ mode, params, onScore, opponent }: PlayerProps) {
     return () => {
       cancelled = true;
     };
-  }, [params.url, params.name]);
+  }, [params.url, params.name, params.source]);
 
   useEffect(() => {
     if (song === null || !interactive || playerTracks.size > 0) {

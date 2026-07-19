@@ -12,6 +12,7 @@ async function walkToEnd(page: Page): Promise<string[]> {
       break;
     }
     seen.push((await title.textContent()) ?? "");
+    await page.waitForTimeout(250);
     await page.getByRole("button", { name: /^(Next|Done)$/ }).click();
   }
   return seen;
@@ -81,6 +82,42 @@ test("a match joiner is not walked through the host's setup", async ({
   await expect(page.locator("canvas").first()).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(1200);
   await expect(skip(page)).toHaveCount(0);
+});
+
+test("the tour opens the tracks and points inside them", async ({ page }) => {
+  await serveFixture(page, { tour: true });
+  await page.goto(`/learn?${playerQuery()}`);
+  await expect(skip(page)).toBeVisible({ timeout: 15_000 });
+
+  // The first tracks step opens the list, revealing its rows.
+  await expect(page.locator("#walkthrough-title")).toHaveText("Your part");
+  await expect(
+    page.getByRole("button", { name: /Play .* yourself/ }).first(),
+  ).toBeVisible();
+
+  const advanceTo = async (title: string) => {
+    const heading = page.locator("#walkthrough-title");
+    for (let guard = 0; guard < 8; guard += 1) {
+      if ((await heading.textContent()) === title) {
+        return;
+      }
+      await page.getByRole("button", { name: /^(Next|Done)$/ }).click();
+      await page.waitForTimeout(250);
+    }
+    throw new Error(`never reached ${title}`);
+  };
+
+  // The sound step points at a track's instrument control, inside the list.
+  await advanceTo("Change the sound");
+  await expect(
+    page.getByRole("button", { name: /Change how .* sounds/ }).first(),
+  ).toBeVisible();
+
+  // Moving past the tracks steps puts the list away again.
+  await advanceTo("Make it easier");
+  await expect(
+    page.getByRole("button", { name: /Change how .* sounds/ }),
+  ).toHaveCount(0);
 });
 
 test("on a phone the walkthrough fits and never covers what it points at", async ({

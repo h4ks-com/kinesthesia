@@ -102,7 +102,7 @@ export function TrackMenu({
       )}
     >
       {shaped === null || onVoicing === null ? (
-        <div className="w-[19rem] max-sm:w-auto">
+        <div data-tour="track-list" className="w-[19rem] max-sm:w-auto">
           {tracks.map((track) => {
             const visible = !hidden.has(track.index);
             const claimed = mine.has(track.index);
@@ -134,6 +134,7 @@ export function TrackMenu({
                 </button>
                 <button
                   type="button"
+                  data-tour="track-solo"
                   onClick={() => onSolo(track.index)}
                   aria-pressed={soloed === track.index}
                   aria-label={`Show only ${track.name}`}
@@ -149,6 +150,7 @@ export function TrackMenu({
                 {interactive && canClaim ? (
                   <button
                     type="button"
+                    data-tour="track-claim"
                     onClick={() => onToggleMine(track.index)}
                     aria-pressed={claimed}
                     aria-label={`Play ${track.name} yourself`}
@@ -172,6 +174,7 @@ export function TrackMenu({
                       shapeButtons.current.set(track.index, node);
                     }}
                     type="button"
+                    data-tour="track-sound"
                     onClick={() => setShaping(track.index)}
                     aria-label={`Change how ${track.name} sounds`}
                     data-tip="How it sounds"

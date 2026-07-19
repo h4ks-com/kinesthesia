@@ -6,13 +6,23 @@ export type TourStep = {
   readonly anchor: string;
   readonly title: string;
   readonly body: string;
+  /** A `data-tour` popover trigger to hold open for this step, so the tour can
+   * point at what lives inside it. */
+  readonly open?: string;
 };
 
 const watch: readonly TourStep[] = [
   {
-    anchor: "tracks",
+    anchor: "track-list",
+    open: "tracks",
     title: "Tracks",
-    body: "Show or hide any track, solo one to hear it alone, or open a track to change its instrument and shape its sound.",
+    body: "Every track in the song. Hide the ones you don't want, or solo one to hear it alone.",
+  },
+  {
+    anchor: "track-sound",
+    open: "tracks",
+    title: "Change the sound",
+    body: "Open a track to pick its instrument and shape how it sounds.",
   },
   {
     anchor: "speed",
@@ -38,9 +48,22 @@ const watch: readonly TourStep[] = [
 
 const learn: readonly TourStep[] = [
   {
-    anchor: "tracks",
+    anchor: "track-list",
+    open: "tracks",
     title: "Your part",
-    body: "Pick the track you play. Hide the rest, solo one to hear it, or open a track to change how it sounds.",
+    body: "The song's tracks. Hide the ones you're not playing, or solo one to hear it alone.",
+  },
+  {
+    anchor: "track-claim",
+    open: "tracks",
+    title: "Pick what you play",
+    body: "The hand marks the track you play. The rest play themselves.",
+  },
+  {
+    anchor: "track-sound",
+    open: "tracks",
+    title: "Change the sound",
+    body: "Open a track to pick its instrument and shape how it sounds.",
   },
   {
     anchor: "simplify",
@@ -71,9 +94,16 @@ const multiplayer: readonly TourStep[] = [
     body: "Set their side here. Battle gives you both the same part; Co-op lets each of you play a different one.",
   },
   {
-    anchor: "tracks",
+    anchor: "track-list",
+    open: "tracks",
     title: "Your side",
-    body: "Choose the track you play and how it sounds. Their side is set on the right.",
+    body: "The tracks you play. Hide the rest, or solo one to hear it alone.",
+  },
+  {
+    anchor: "track-sound",
+    open: "tracks",
+    title: "Change the sound",
+    body: "Open a track to pick its instrument and shape how it sounds.",
   },
   {
     anchor: "speed",

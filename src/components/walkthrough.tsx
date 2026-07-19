@@ -33,12 +33,20 @@ function shownAnchor(anchor: string): Element | null {
   return el !== null && el.getClientRects().length > 0 ? el : null;
 }
 
-function anchorRect(step: TourStep | null): DOMRect | null {
-  if (step === null) {
-    return null;
-  }
-  const el = shownAnchor(step.anchor);
-  return el === null ? null : el.getBoundingClientRect();
+function triggerButton(anchor: string): HTMLButtonElement | null {
+  return (
+    document.querySelector(`[data-tour="${anchor}"]`)?.closest("button") ?? null
+  );
+}
+
+function popoverOpen(anchor: string): boolean {
+  return triggerButton(anchor)?.getAttribute("aria-expanded") === "true";
+}
+
+/** Toggles the popover a `data-tour` trigger controls, so the tour can reveal
+ * what lives inside it and put it away again. */
+function clickTrigger(anchor: string): void {
+  triggerButton(anchor)?.click();
 }
 
 /** Sits the dialog below the spotlight, or above when the bottom is tight, and
@@ -78,9 +86,17 @@ export function Walkthrough({ steps, onClose }: WalkthroughProps) {
   const [place, setPlace] = useState<Placement | null>(null);
   const dialog = useRef<HTMLDivElement | null>(null);
   const next = useRef<HTMLButtonElement | null>(null);
+  const held = useRef<string | null>(null);
+  const advanceRef = useRef<() => void>(() => {});
 
   useLayoutEffect(() => {
-    const present = steps.filter((step) => shownAnchor(step.anchor) !== null);
+    // A step whose anchor lives inside a popover counts as present when its
+    // trigger is on the page, since the tour opens it to reveal the anchor.
+    const present = steps.filter(
+      (step) =>
+        shownAnchor(step.anchor) !== null ||
+        (step.open !== undefined && shownAnchor(step.open) !== null),
+    );
     if (present.length === 0) {
       onClose();
       return;
@@ -95,11 +111,37 @@ export function Walkthrough({ steps, onClose }: WalkthroughProps) {
     if (step === null) {
       return;
     }
-    const measure = () => setRect(anchorRect(step));
+    const desired = step.open ?? null;
+    if (
+      held.current !== null &&
+      held.current !== desired &&
+      popoverOpen(held.current)
+    ) {
+      clickTrigger(held.current);
+    }
+    if (desired !== null && !popoverOpen(desired)) {
+      clickTrigger(desired);
+    }
+    held.current = desired;
+    // Opening a popover lands the anchor a render later, so the rect is chased
+    // across a few frames before the step is given up as empty.
+    let frame = 0;
+    let tries = 0;
+    const measure = () => {
+      const el = shownAnchor(step.anchor);
+      if (el !== null) {
+        setRect(el.getBoundingClientRect());
+      } else if (tries++ < 20) {
+        frame = requestAnimationFrame(measure);
+      } else {
+        advanceRef.current();
+      }
+    };
     measure();
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", measure, true);
     return () => {
+      cancelAnimationFrame(frame);
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure, true);
     };
@@ -117,15 +159,30 @@ export function Walkthrough({ steps, onClose }: WalkthroughProps) {
     }
   }, [rect]);
 
-  // Hands focus back to whatever opened the tour, so a keyboard user keeps
-  // their place after it closes.
+  // Closes any popover the tour opened and hands focus back to whatever opened
+  // the tour, so the page is left as it was found.
   useEffect(() => {
     const opener = document.activeElement;
     return () => {
+      if (held.current !== null && popoverOpen(held.current)) {
+        clickTrigger(held.current);
+      }
+      held.current = null;
       if (opener instanceof HTMLElement) {
         opener.focus();
       }
     };
+  }, []);
+
+  // A React handler's stopPropagation would not reach the popover's own native
+  // document listener, so this native one keeps a Next click from reading as a
+  // click-away that closes the popover the tour is holding open.
+  const shell = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const node = shell.current;
+    const swallow = (event: PointerEvent) => event.stopPropagation();
+    node?.addEventListener("pointerdown", swallow);
+    return () => node?.removeEventListener("pointerdown", swallow);
   }, []);
 
   const advance = useCallback(() => {
@@ -135,6 +192,7 @@ export function Walkthrough({ steps, onClose }: WalkthroughProps) {
     }
     setIndex(index + 1);
   }, [index, live.length, onClose]);
+  advanceRef.current = advance;
 
   const back = useCallback(
     () => setIndex((current) => Math.max(0, current - 1)),
@@ -186,7 +244,7 @@ export function Walkthrough({ steps, onClose }: WalkthroughProps) {
   const last = index + 1 >= live.length;
 
   return (
-    <div className="fixed inset-0 z-[70]">
+    <div ref={shell} className="fixed inset-0 z-[70]">
       {/* Swallows clicks on the app: the tour is read by clicking through it. */}
       <button
         type="button"

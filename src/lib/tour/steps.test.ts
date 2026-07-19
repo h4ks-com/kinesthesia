@@ -10,9 +10,18 @@ describe("tourFor", () => {
   });
 
   it("opens each mode where its work starts", () => {
-    expect(tourFor("watch")[0]?.anchor).toBe("tracks");
-    expect(tourFor("learn")[0]?.anchor).toBe("tracks");
+    expect(tourFor("watch")[0]?.anchor).toBe("track-list");
+    expect(tourFor("learn")[0]?.anchor).toBe("track-list");
     expect(tourFor("multiplayer")[0]?.anchor).toBe("opponent");
+  });
+
+  it("holds the tracks popover open for the steps that point inside it", () => {
+    const inside = tourFor("learn").filter((step) => step.open === "tracks");
+    expect(inside.map((step) => step.anchor)).toEqual([
+      "track-list",
+      "track-claim",
+      "track-sound",
+    ]);
   });
 
   it("only points at anchors that carry a title and a body", () => {

@@ -53,6 +53,7 @@ src/lib/
   audio/transport.ts          song position on the audio clock
   audio/engine.ts             instruments and the look ahead scheduler
   audio/instruments.ts        one voice per General MIDI program
+  audio/voicing.ts            the instrument and shaping a track sounds with
   audio/general-midi.ts       program number to soundfont name
   audio/percussion.ts         drum note number to kit sample
   audio/use-playback-engine.ts  engine lifecycle, transport and speed

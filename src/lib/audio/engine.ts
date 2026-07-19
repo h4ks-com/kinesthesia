@@ -1,5 +1,6 @@
 import { InstrumentBank, type Voice } from "@/lib/audio/instruments";
 import { Transport } from "@/lib/audio/transport";
+import { type SongVoicing, shapingFor, velocityFor } from "@/lib/audio/voicing";
 import type { Song, SongNote } from "@/lib/midi/song";
 
 const lookAhead = 0.2;
@@ -11,6 +12,7 @@ export class PlaybackEngine {
   private transport: Transport | null = null;
   private song: Song | null = null;
   private autoNotes: ReadonlySet<number> = new Set();
+  private voicing: SongVoicing = new Map();
   private cursor = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private pendingPosition = 0;
@@ -23,6 +25,13 @@ export class PlaybackEngine {
     // cursor alone would hand them out a second time.
     this.bank?.stopAll();
     this.resetCursor();
+  }
+
+  /** How each track is made to sound. Tracks left out keep the instrument the
+   * file named and the sample's own shape. */
+  setVoicing(voicing: SongVoicing): void {
+    this.voicing = voicing;
+    this.bank?.stopAll();
   }
 
   /** A player who owes only the melody still hears the rest of their part. */
@@ -66,7 +75,7 @@ export class PlaybackEngine {
     await this.wake();
     await this.bank?.warm(
       song.tracks.map((track) => ({
-        program: track.program,
+        program: this.voicing.get(track.index)?.program ?? track.program,
         percussion: track.percussion,
       })),
     );
@@ -100,19 +109,17 @@ export class PlaybackEngine {
   }
 
   strike(pitch: number, velocity: number, track: number): void {
+    const shaped = this.voicing.get(track) ?? null;
+    const options = {
+      note: pitch,
+      velocity: velocityFor(velocity, shaped),
+      ...shapingFor(shaped),
+    };
     if (this.context === null || this.context.state !== "running") {
-      void this.wake().then(() => {
-        this.voiceFor(track)?.start({
-          note: pitch,
-          velocity: Math.round(velocity * 127),
-        });
-      });
+      void this.wake().then(() => this.voiceFor(track)?.start(options));
       return;
     }
-    this.voiceFor(track)?.start({
-      note: pitch,
-      velocity: Math.round(velocity * 127),
-    });
+    this.voiceFor(track)?.start(options);
   }
 
   /** A live key ends when it is lifted, the same as a scheduled note ends at
@@ -149,7 +156,7 @@ export class PlaybackEngine {
       return null;
     }
     return this.bank.voiceFor({
-      program: definition.program,
+      program: this.voicing.get(track)?.program ?? definition.program,
       percussion: definition.percussion,
     });
   }
@@ -198,11 +205,13 @@ export class PlaybackEngine {
       return false;
     }
     const rate = this.transport?.rate ?? 1;
+    const shaped = this.voicing.get(note.track) ?? null;
     voice.start({
       note: note.pitch,
       time: context.currentTime + Math.max(0, note.start - position) / rate,
       duration: Math.max(0.05, (note.end - note.start) / rate),
-      velocity: Math.round(note.velocity * 127),
+      velocity: velocityFor(note.velocity, shaped),
+      ...shapingFor(shaped),
     });
     return true;
   }

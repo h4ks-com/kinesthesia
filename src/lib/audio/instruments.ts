@@ -8,6 +8,11 @@ export type Voice = {
     time?: number;
     duration?: number;
     velocity?: number;
+    /** Seconds faded in and out over the sample's own shape. */
+    ampAttack?: number;
+    ampRelease?: number;
+    /** Low pass cutoff, for taking the edge off an instrument. */
+    lpfCutoffHz?: number;
   }): void;
   /** With a note, releases just that pitch through the instrument's envelope;
    * with none, stops the whole voice. */

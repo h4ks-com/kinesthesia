@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
 } from "react";
+import type { Reach } from "@/lib/input/keyboard-map";
 import type { Song } from "@/lib/midi/song";
 import { PianoRollRenderer } from "@/lib/render/piano-roll";
 
@@ -23,6 +24,9 @@ type PianoRollViewProps = {
   getPressed: () => ReadonlySet<number>;
   getOwed: () => ReadonlySet<number>;
   getYours: () => ReadonlySet<number> | null;
+  /** What the computer keyboard reaches from the current octave, or null where
+   * there is nothing to play. */
+  reach?: Reach | null;
   onStrike?: (pitch: number) => void;
   onRelease?: (pitch: number) => void;
 };
@@ -36,6 +40,7 @@ export function PianoRollView({
   getPressed,
   getOwed,
   getYours,
+  reach = null,
   onStrike,
   onRelease,
 }: PianoRollViewProps) {
@@ -45,6 +50,8 @@ export function PianoRollView({
   hiddenRef.current = hiddenTracks;
   const keyWidthRef = useRef(keyWidth);
   keyWidthRef.current = keyWidth;
+  const reachRef = useRef(reach);
+  reachRef.current = reach;
   const gestures = useRef(new Map<number, Gesture>());
   // A rebuilt renderer starts on the lowest keys, so it is framed on creation
   // as well as on a move: the pitch itself often has not changed.
@@ -69,6 +76,7 @@ export function PianoRollView({
         pressed: getPressed(),
         owed: getOwed(),
         yours: getYours(),
+        reach: reachRef.current,
       });
       frame = requestAnimationFrame(loop);
     });

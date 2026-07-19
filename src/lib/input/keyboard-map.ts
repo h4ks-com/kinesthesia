@@ -44,6 +44,17 @@ export const lowestOctave = 1;
 export const highestOctave = 6;
 export const defaultOctave = 3;
 
+/** The span the two key rows cover, so the roll can mark what is under the
+ * hands at this octave. */
+export type Reach = { readonly low: number; readonly high: number };
+
+const highestSemitone = Math.max(...semitoneByCode.values());
+
+export function reachFor(octave: number): Reach {
+  const low = (octave + 1) * 12;
+  return { low, high: low + highestSemitone };
+}
+
 export function pitchForCode(code: string, octave: number): number | null {
   const semitone = semitoneByCode.get(code);
   if (semitone === undefined) {

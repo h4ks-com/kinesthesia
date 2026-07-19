@@ -150,6 +150,33 @@ export async function keyIsLit(page: Page, x: number): Promise<boolean> {
 
 /** One measure of how much of the song is drawn as yours, since ghosted notes
  * are painted faintly. */
+/** Left edge of the accent bar marking what the computer keyboard reaches,
+ * read off the strip just above the keys. Null when no bar is drawn. */
+export async function reachBarLeft(page: Page): Promise<number | null> {
+  return page.evaluate(() => {
+    const canvas = document.querySelector("canvas");
+    const context = canvas?.getContext("2d") ?? null;
+    if (canvas === null || context === null) {
+      return null;
+    }
+    const ratio = canvas.width / canvas.clientWidth;
+    const band = Math.min(120, canvas.clientHeight * 0.22) * ratio;
+    for (let above = 2; above < 10; above += 1) {
+      const y = Math.round(canvas.height - band - above);
+      const { data } = context.getImageData(0, y, canvas.width, 1);
+      for (let x = 0; x < canvas.width; x += 1) {
+        const red = data[x * 4] ?? 0;
+        const green = data[x * 4 + 1] ?? 0;
+        const blue = data[x * 4 + 2] ?? 0;
+        if (blue > 180 && green > 110 && green < 200 && red < 130) {
+          return Math.round(x / ratio);
+        }
+      }
+    }
+    return null;
+  });
+}
+
 export async function brightNotePixels(page: Page): Promise<number> {
   return page.evaluate(() => {
     const canvas = document.querySelector("canvas");

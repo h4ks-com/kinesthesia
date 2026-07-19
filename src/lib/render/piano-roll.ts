@@ -1,3 +1,4 @@
+import type { Reach } from "@/lib/input/keyboard-map";
 import { type NoteColor, pitchColor, trackColor } from "@/lib/midi/palette";
 import {
   highestPitch,
@@ -55,6 +56,9 @@ export type Frame = {
   /** Note ids the player has to play. Everything else is drawn faintly, so a
    * reduced part still shows the song it came from. Null draws them all. */
   readonly yours: ReadonlySet<number> | null;
+  /** What the computer keyboard can reach from here, marked over the keys so
+   * the octave keys have something to move. */
+  readonly reach: Reach | null;
 };
 
 export class PianoRollRenderer {
@@ -163,7 +167,45 @@ export class PianoRollRenderer {
       total,
     );
     this.paintParticles();
+    this.paintReach(frame.reach, keyboardTop, whiteWidth, total);
     ctx.translate(this.pan, 0);
+  }
+
+  /** A bar over the stretch the computer keyboard covers, drawn on top of the
+   * keys so shifting the octave visibly slides it. */
+  private paintReach(
+    reach: Reach | null,
+    keyboardTop: number,
+    whiteWidth: number,
+    total: number,
+  ): void {
+    if (reach === null) {
+      return;
+    }
+    const left = Math.max(0, keyCenter(reach.low, whiteWidth) - whiteWidth / 2);
+    const right = Math.min(
+      total,
+      keyCenter(reach.high, whiteWidth) + whiteWidth / 2,
+    );
+    if (right <= left) {
+      return;
+    }
+    const ctx = this.context;
+    const thickness = 3;
+    ctx.save();
+    ctx.fillStyle = "#4c9eff";
+    ctx.shadowColor = "rgba(76,158,255,0.7)";
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.roundRect(
+      left,
+      keyboardTop - thickness - 1,
+      right - left,
+      thickness,
+      2,
+    );
+    ctx.fill();
+    ctx.restore();
   }
 
   private paintBackground(

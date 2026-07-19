@@ -17,6 +17,7 @@ import { PlayerHeader } from "@/components/player-header";
 import { PlayerTransport, TransportBar } from "@/components/player-transport";
 import { clampLatency, judgedPosition } from "@/lib/audio/latency";
 import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
+import { reachFor } from "@/lib/input/keyboard-map";
 import { useNoteInput } from "@/lib/input/use-note-input";
 import {
   clampMelodyRate,
@@ -612,6 +613,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
               getPressed={input.pressed}
               getOwed={gates.owed}
               getYours={yours}
+              reach={interactive ? reachFor(input.octave) : null}
               onStrike={(pitch) => input.press(pitch, 0.8)}
               onRelease={input.release}
             />

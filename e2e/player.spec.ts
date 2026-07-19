@@ -5,6 +5,7 @@ import {
   keyRowFromBottom,
   litKeyCentre,
   playerQuery,
+  reachBarLeft,
   serveFixture,
   songName,
 } from "./fixture";
@@ -229,4 +230,21 @@ test("learn ghosts every track but the one you play, without simplify", async ({
   await expect
     .poll(async () => brightNotePixels(page))
     .toBeLessThan(whole * 0.9);
+});
+
+test("the octave keys move the reach marker over the keyboard", async ({
+  page,
+}) => {
+  await serveFixture(page);
+  await page.goto(`/learn?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  await expect.poll(async () => reachBarLeft(page)).not.toBeNull();
+  const start = await reachBarLeft(page);
+
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(async () => reachBarLeft(page)).toBeGreaterThan(start ?? 0);
+
+  await page.keyboard.press("ArrowLeft");
+  await expect.poll(async () => reachBarLeft(page)).toBe(start);
 });

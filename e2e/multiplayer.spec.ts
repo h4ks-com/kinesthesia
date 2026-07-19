@@ -87,7 +87,12 @@ test("opening an invite link joins without typing a code", async ({ page }) => {
   );
 
   await page.goto("/multiplayer?join=ABCDE");
-  await expect(page.getByText("Joining the match")).toBeVisible();
+  // The joining state is announced both on the empty page and on the bar, and
+  // the page half of it goes as soon as the room answers, so the bar is the
+  // one that is there either way.
+  await expect(
+    page.getByRole("contentinfo").getByText("Joining the match"),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Invite a player" }),
   ).toHaveCount(0);

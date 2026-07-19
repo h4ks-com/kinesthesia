@@ -13,6 +13,7 @@ src/app/
   api/[[...route]]/route.ts   mounts the Hono app at /api
 src/server/
   api.ts                      routes, OpenAPI spec, Scalar docs, MCP server
+                              and the player links it builds for agents
   config.ts                   environment
   auth.ts                     optional Logto session and sign in actions
   http/fetch.ts               proxy aware fetch for outbound source calls
@@ -161,6 +162,15 @@ single transport for its lifetime, so sharing one server across requests makes
 every request after the first fail with `Already connected to a transport`.
 The server's `instructions` are the context an LLM client gets about what
 kinesthesia is, alongside each tool's own description.
+
+`search_midi` returns a plain link per mode. `player_link` builds one carrying
+the speed, key, tracks, simplify and focus a caller asks for, which is what
+makes those settings reachable by an agent at all: they live only in the query
+string and nothing else advertises them. It clamps through the same functions
+the player parses with, so a link it hands back cannot ask for a value the
+player would refuse. A setting the caller names is written down even at its
+default, since leaving it out would hand it to whatever the listener's device
+remembers for that song.
 
 ## Adding a MIDI source
 

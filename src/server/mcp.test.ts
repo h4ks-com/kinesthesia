@@ -88,3 +88,95 @@ describe("mcp endpoint", () => {
     expect(match.multiplayerUrl).toContain("/multiplayer");
   });
 });
+
+describe("player_link", () => {
+  async function build(args: Record<string, unknown>) {
+    const response = await rpc("tools/call", {
+      name: "player_link",
+      arguments: args,
+    });
+    const body = await result(response);
+    const content = body.content as { text: string }[];
+    return { text: content[0]?.text ?? "", isError: body.isError === true };
+  }
+
+  it("is offered alongside the search", async () => {
+    const tools = (await result(await rpc("tools/list"))).tools as {
+      name: string;
+    }[];
+    expect(tools.map((entry) => entry.name)).toContain("player_link");
+  });
+
+  it("carries every setting the player reads", async () => {
+    const { text } = await build({
+      url: "https://bitmidi.com/uploads/87216.mid",
+      name: "Queen - Bohemian Rhapsody.mid",
+      source: "bitmidi",
+      mode: "watch",
+      tracks: [4],
+      speed: 1,
+      simplified: true,
+      melodyRate: 7,
+      transpose: 0,
+      focus: true,
+    });
+
+    expect(text).toContain("/watch?");
+    expect(text).toContain("tracks=4");
+    expect(text).toContain("simple=1");
+    expect(text).toContain("rate=7");
+    expect(text).toContain("focus=1");
+  });
+
+  it("opens a song plainly when nothing is asked for", async () => {
+    const { text } = await build({
+      url: "https://bitmidi.com/uploads/87216.mid",
+      mode: "learn",
+    });
+
+    expect(text).toContain("/learn?");
+    expect(text).not.toContain("focus");
+    expect(text).not.toContain("simple");
+  });
+
+  // A setting left out defers to what the listener's device remembers, so one
+  // that was named has to be written down even at its default.
+  it("writes down a setting that was named even at its default", async () => {
+    const { text } = await build({
+      url: "https://bitmidi.com/uploads/1.mid",
+      speed: 1,
+      transpose: 0,
+      simplified: false,
+    });
+
+    expect(text).toContain("speed=1");
+    expect(text).toContain("transpose=0");
+    expect(text).toContain("simple=0");
+  });
+
+  it("holds a key inside what the player accepts", async () => {
+    const { text } = await build({
+      url: "https://bitmidi.com/uploads/1.mid",
+      transpose: 99,
+    });
+    expect(text).toContain("transpose=12");
+  });
+
+  it("refuses a speed the player has no setting for", async () => {
+    const { text, isError } = await build({
+      url: "https://bitmidi.com/uploads/1.mid",
+      speed: 3,
+    });
+    expect(isError).toBe(true);
+    expect(text).toContain("speed must be one of");
+  });
+
+  it("refuses to strip the chrome off a mode that scores", async () => {
+    const { isError } = await build({
+      url: "https://bitmidi.com/uploads/1.mid",
+      mode: "learn",
+      focus: true,
+    });
+    expect(isError).toBe(true);
+  });
+});

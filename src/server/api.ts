@@ -2,7 +2,22 @@ import { StreamableHTTPTransport } from "@hono/mcp";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Scalar } from "@scalar/hono-api-reference";
+import {
+  clampMelodyRate,
+  defaultMelodyRate,
+  melodyRates,
+} from "@/lib/midi/melody";
+import { clampTranspose, defaultTranspose } from "@/lib/midi/song";
+import {
+  asSpeed,
+  buildPlayerUrl,
+  defaultSpeed,
+  type PlayerMode,
+  playerModes,
+  speeds,
+} from "@/lib/player-url";
 import { currentViewer } from "@/server/auth";
+import { config } from "@/server/config";
 import type { Score } from "@/server/db/schema";
 import { midiSourceIds, midiSources } from "@/server/midi/registry";
 import { searchMidi } from "@/server/midi/search";
@@ -514,12 +529,133 @@ api.get(
   Scalar({ url: "/api/openapi.json", pageTitle: "Kinesthesia API" }),
 );
 
+const playerLinkShape = {
+  url: z.string().url().describe("Direct link to the .mid file"),
+  name: z.string().default("").describe("Song name to show in the player"),
+  source: z
+    .string()
+    .optional()
+    .describe("Provider the file came from, from search_midi"),
+  mode: z
+    .enum(playerModes)
+    .default("watch")
+    .describe(
+      "watch plays it back, learn waits for each note, multiplayer plays it with two people",
+    ),
+  speed: z
+    .number()
+    .optional()
+    .describe(`Playback speed, one of ${speeds.join(", ")}`),
+  transpose: z
+    .number()
+    .int()
+    .optional()
+    .describe(
+      "Semitones to move the song by, -12 to 12. Percussion stays where it is",
+    ),
+  tracks: z
+    .array(z.number().int().min(0))
+    .optional()
+    .describe(
+      "Track numbers the player owes. Everything else is played for them",
+    ),
+  simplified: z
+    .boolean()
+    .optional()
+    .describe("Reduce the part they owe to one note at a time"),
+  melodyRate: z
+    .number()
+    .int()
+    .optional()
+    .describe(
+      `Most notes per second a simplified part asks for, ${melodyRates[0]} to ${melodyRates[melodyRates.length - 1]}`,
+    ),
+  focus: z
+    .boolean()
+    .optional()
+    .describe(
+      "Strip the page back to the keys and the falling notes, for recording. Watch only",
+    ),
+};
+
+type PlayerLinkInput = {
+  readonly url: string;
+  readonly name: string;
+  readonly source?: string;
+  readonly mode: PlayerMode;
+  readonly speed?: number;
+  readonly transpose?: number;
+  readonly tracks?: readonly number[];
+  readonly simplified?: boolean;
+  readonly melodyRate?: number;
+  readonly focus?: boolean;
+};
+
+type PlayerLink = { ok: true; url: string } | { ok: false; why: string };
+
+/** Every value goes through the same clamp the player uses, so a link this
+ * returns cannot ask for a speed or a key the player would refuse. */
+function playerLink(input: PlayerLinkInput): PlayerLink {
+  if (!/^https?:\/\//i.test(input.url)) {
+    return { ok: false, why: "the song must be an http or https .mid URL" };
+  }
+  if (
+    input.speed !== undefined &&
+    !speeds.some((option) => option === input.speed)
+  ) {
+    return { ok: false, why: `speed must be one of ${speeds.join(", ")}` };
+  }
+  if (input.focus === true && input.mode !== "watch") {
+    return {
+      ok: false,
+      why: "focus strips the scoring chrome, so it is only offered in watch",
+    };
+  }
+  const built = new URL(
+    buildPlayerUrl(config.appBaseUrl, input.mode, {
+      url: input.url,
+      name: input.name,
+      source: input.source ?? null,
+      tracks: input.tracks ?? null,
+      speed: asSpeed(input.speed ?? defaultSpeed),
+      simplified: input.simplified ?? false,
+      melodyRate: clampMelodyRate(input.melodyRate ?? defaultMelodyRate),
+      transpose: clampTranspose(input.transpose ?? defaultTranspose),
+      focus: input.focus ?? false,
+    }),
+  );
+  // A setting left at its default is otherwise dropped, which hands it back to
+  // whatever the listener's device remembers for the song. Naming one is an
+  // instruction, so it is written down even when it matches the default.
+  if (input.speed !== undefined) {
+    built.searchParams.set("speed", String(asSpeed(input.speed)));
+  }
+  if (input.transpose !== undefined) {
+    built.searchParams.set(
+      "transpose",
+      String(clampTranspose(input.transpose)),
+    );
+  }
+  if (input.simplified !== undefined) {
+    built.searchParams.set("simple", input.simplified ? "1" : "0");
+  }
+  if (input.melodyRate !== undefined) {
+    built.searchParams.set("rate", String(clampMelodyRate(input.melodyRate)));
+  }
+  return { ok: true, url: built.toString() };
+}
+
 const mcpInstructions = `Kinesthesia is a MIDI file search engine. Look up songs
 by name and get, for every match, a direct .mid download URL that any program
 reading MIDI can fetch. Use it whenever someone wants a MIDI file for a song.
 Each match also carries a player link that opens the song in a browser: /watch
 plays it back, /learn waits for the player to hit each note, /multiplayer plays
-it with two people together.`;
+it with two people together.
+
+Those links take the song as it comes. To open one at a different speed, in
+another key, on chosen tracks, or stripped back for recording, build the link
+with player_link rather than editing the query string by hand: it validates
+every value and refuses a combination the player would ignore.`;
 
 function createMcpServer(): McpServer {
   const mcp = new McpServer(
@@ -543,6 +679,31 @@ function createMcpServer(): McpServer {
       });
       return {
         content: [{ type: "text", text: JSON.stringify({ results }, null, 2) }],
+      };
+    },
+  );
+
+  mcp.registerTool(
+    "player_link",
+    {
+      title: "Build a player link",
+      description:
+        "Turn a .mid URL into a browser link that opens it exactly as asked: the mode to open in, the speed, the key, which tracks the player owes, whether the part is reduced to one note at a time, and whether the page is stripped back to the keys and the falling notes for recording. Take the .mid URL from search_midi.",
+      inputSchema: playerLinkShape,
+    },
+    async (input) => {
+      const link = playerLink(input);
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              link.ok === true
+                ? link.url
+                : `That link cannot be built: ${link.why}`,
+          },
+        ],
+        isError: link.ok === false,
       };
     },
   );

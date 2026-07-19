@@ -1,4 +1,5 @@
 import { InstrumentBank, type Voice } from "@/lib/audio/instruments";
+import { unmuteWebAudio } from "@/lib/audio/ios-unmute";
 import { Transport } from "@/lib/audio/transport";
 import { type SongVoicing, shapingFor, velocityFor } from "@/lib/audio/voicing";
 import type { Song, SongNote } from "@/lib/midi/song";
@@ -54,6 +55,7 @@ export class PlaybackEngine {
   // Browsers only allow an AudioContext to make sound if it was created or
   // resumed inside a user gesture, so every entry point routes through here.
   private async wake(): Promise<Transport> {
+    unmuteWebAudio();
     if (this.context === null) {
       this.context = new AudioContext({ latencyHint: 0 });
       this.bank = new InstrumentBank(this.context);

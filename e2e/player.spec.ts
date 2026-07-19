@@ -250,9 +250,7 @@ test("the octave keys move the reach marker over the keyboard", async ({
   await expect.poll(async () => reachBarLeft(page)).toBe(start);
 });
 
-test("moving the song to another key holds your place in it", async ({
-  page,
-}) => {
+test("transposing holds your place in the song", async ({ page }) => {
   await serveFixture(page);
   await page.goto(`/learn?${playerQuery()}`);
   await expect(page.locator("canvas")).toBeVisible();
@@ -261,7 +259,10 @@ test("moving the song to another key holds your place in it", async ({
   await expect(page.getByText("0:03")).toBeVisible();
   const home = await noteSpan(page);
 
-  await page.locator("footer").getByRole("button", { name: "Key" }).click();
+  await page
+    .locator("footer")
+    .getByRole("button", { name: "Transpose" })
+    .click();
   await page.getByLabel("Transpose in semitones").fill("7");
 
   await expect

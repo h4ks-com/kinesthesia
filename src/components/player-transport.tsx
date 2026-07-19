@@ -148,13 +148,13 @@ export function PlayerTransport({
       {onTranspose === null ? (
         transpose === defaultTranspose ? null : (
           <span
-            data-tip="The host set this key"
+            data-tip="The host set this transpose"
             data-tip-side="top"
             data-tip-align="right"
             className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-accent p-2 font-mono text-accent text-xs"
           >
             <Music4 className="size-3.5" aria-hidden="true" />
-            <span className="sr-only">Key,</span>
+            <span className="sr-only">Transpose,</span>
             {formatTranspose(transpose)}
             <span className="sr-only">semitones</span>
           </span>
@@ -162,13 +162,13 @@ export function PlayerTransport({
       ) : (
         <div className="shrink-0">
           <Popover
-            label={`Key, ${formatTranspose(transpose)} semitones`}
+            label={`Transpose, ${formatTranspose(transpose)} semitones`}
             side="top"
             align="right"
             clearance="keyboard"
             trigger={(open) => (
               <span
-                data-tip="Move the song to another key"
+                data-tip="Transpose"
                 data-tip-side="top"
                 data-tip-align="right"
                 className={`inline-flex items-center gap-1.5 rounded-lg border p-2 font-mono text-xs transition-colors ${
@@ -185,7 +185,7 @@ export function PlayerTransport({
             )}
           >
             <div className="w-56 p-1 max-sm:w-full">
-              <h3 className="label px-2">Key</h3>
+              <h3 className="label px-2">Transpose</h3>
               <SliderRow
                 ariaLabel="Transpose in semitones"
                 min={transposeRange.min}

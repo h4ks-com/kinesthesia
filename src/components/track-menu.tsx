@@ -38,9 +38,11 @@ type TrackMenuProps = {
  * moved anything, and whether they can put it back for everyone. */
 export type SoundSharing = {
   readonly playing: string;
+  readonly others: readonly { readonly id: string; readonly name: string }[];
   readonly dirty: boolean;
   readonly canSave: boolean;
   readonly onSave: () => void;
+  readonly onAdopt: (authorId: string) => void;
   readonly onReset: () => void;
 };
 
@@ -187,15 +189,39 @@ export function TrackMenu({
               </div>
             );
           })}
-          {sound === null || (!sound.dirty && sound.playing === "") ? null : (
+          {sound === null ||
+          (!sound.dirty &&
+            sound.playing === "" &&
+            sound.others.length === 0) ? null : (
             <div className="mt-1 flex items-center gap-2 border-line border-t px-2 pt-2">
-              <p className="min-w-0 flex-1 font-mono text-[0.7rem] text-faint leading-relaxed">
-                {sound.dirty
-                  ? sound.canSave
-                    ? "Yours, not saved"
-                    : "Sign in to keep this"
-                  : `Sound by ${sound.playing}`}
-              </p>
+              <div className="min-w-0 flex-1">
+                <p className="font-mono text-[0.7rem] text-faint leading-relaxed">
+                  {sound.dirty
+                    ? sound.canSave
+                      ? "Yours, not saved"
+                      : "Sign in to keep this"
+                    : sound.playing === ""
+                      ? "The sounds in the file"
+                      : `Sound by ${sound.playing}`}
+                </p>
+                {sound.others.length === 0 ? null : (
+                  <label className="mt-1 flex items-center gap-1.5 font-mono text-[0.7rem] text-faint">
+                    <span className="sr-only">Whose sound to play</span>
+                    <select
+                      value=""
+                      onChange={(event) => sound.onAdopt(event.target.value)}
+                      className="min-w-0 flex-1 rounded-lg border border-line-strong bg-panel px-1.5 py-1 text-muted outline-none focus:border-accent"
+                    >
+                      <option value="">Hear someone else's</option>
+                      {sound.others.map((author) => (
+                        <option key={author.id} value={author.id}>
+                          {author.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
               {sound.dirty && sound.canSave ? (
                 <button
                   type="button"

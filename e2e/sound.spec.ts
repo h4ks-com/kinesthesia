@@ -146,3 +146,57 @@ for (const width of [390, 1280]) {
     await expect(page.getByText("75%")).toBeVisible();
   });
 }
+
+const shaped = (program: number) => ({
+  0: { program, attack: 0, release: 0, brightness: 20000, volume: 100 },
+});
+
+test("a song someone else shaped arrives that way, and others can be heard", async ({
+  page,
+}) => {
+  await serveFixture(page);
+  await page.route("**/api/voicings?**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        voicings: [
+          {
+            authorId: "bo",
+            authorName: "Bo",
+            tracks: shaped(12),
+            updatedAt: 2,
+          },
+          {
+            authorId: "ana",
+            authorName: "Ana",
+            tracks: shaped(56),
+            updatedAt: 1,
+          },
+        ],
+      }),
+    }),
+  );
+
+  await page.goto(`/learn?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+  await page.getByRole("button", { name: "Tracks" }).first().click();
+
+  // Nobody signed in has a version of their own, so the newest one is playing.
+  await expect(page.getByText("Sound by Bo")).toBeVisible();
+  await page
+    .getByRole("button", { name: /Change how .* sounds/ })
+    .first()
+    .click();
+  await expect(page.getByText(/Marimba\. Play a key/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Back to tracks" }).click();
+  await page.getByLabel("Whose sound to play").selectOption("ana");
+
+  await expect(page.getByText("Sound by Ana")).toBeVisible();
+  await page
+    .getByRole("button", { name: /Change how .* sounds/ })
+    .first()
+    .click();
+  await expect(page.getByText(/Trumpet\. Play a key/)).toBeVisible();
+});

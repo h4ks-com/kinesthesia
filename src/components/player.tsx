@@ -693,9 +693,14 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
               onVoicing={sound.change}
               sound={{
                 playing: sound.playing,
+                others: sound.saved.map((entry) => ({
+                  id: entry.authorId,
+                  name: entry.authorName,
+                })),
                 dirty: sound.dirty,
                 canSave: viewerId !== null,
                 onSave: () => void sound.save(),
+                onAdopt: sound.adopt,
                 onReset: sound.reset,
               }}
               onFocus={focusable ? () => changeFocus(true) : null}

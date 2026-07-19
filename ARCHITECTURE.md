@@ -187,6 +187,13 @@ settings (key width, timing offset) hold across every song. A link that states
 a song setting outright still wins, so a shared view reproduces itself. A locked
 match neither reads nor writes this memory, since its part is the prepared one.
 
+How a song sounds is shared instead of local. A signed in listener saves the
+instrument and shaping they gave each track, one saved version per person per
+song, and everyone reads from the same table. What plays is what you picked
+this session, then your own saved version, then whoever shaped it last, then
+the instruments the file named. It stays out of the URL: there is a version per
+track and a link carrying all of it would be unreadable.
+
 Focus mode strips watch back to the keys and the falling notes, for recording.
 It rides in the link so a focused view reproduces itself, and stays out of that
 per song memory because it belongs to the recording rather than to the song.

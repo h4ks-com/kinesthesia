@@ -12,7 +12,7 @@ import type { PlayerParams } from "@/lib/player-url";
  * handed a new map on every frame. */
 const noVoicing: SongVoicing = new Map();
 
-type SavedVoicing = {
+export type SavedVoicing = {
   readonly authorId: string;
   readonly authorName: string;
   readonly tracks: SongVoicing;
@@ -30,11 +30,14 @@ type Reply = {
 
 export type SongVoicingState = {
   readonly voicing: SongVoicing;
+  /** Everyone's saved version, newest first, so one can be picked to hear. */
+  readonly saved: readonly SavedVoicing[];
   /** Whose version is playing. Empty while it is the file's own or yours in
    * progress. */
   readonly playing: string;
   readonly dirty: boolean;
   readonly change: (track: number, voicing: Voicing) => void;
+  readonly adopt: (authorId: string) => void;
   readonly reset: () => void;
   readonly save: () => Promise<void>;
 };
@@ -77,7 +80,23 @@ function asRecord(voicing: SongVoicing): Record<string, Voicing> {
 }
 
 /** Precedence, in one place: what you picked this session, then your own saved
- * version, then whoever shaped it last, then the instruments in the file. */
+ * version, then whoever shaped it last. Null falls back to the instruments the
+ * file named, so a song you have shaped comes back the way you left it and a
+ * song you have never touched arrives the way it was last shaped by anyone. */
+export function chooseVoicing(
+  saved: readonly SavedVoicing[],
+  viewerId: string | null,
+  picked: string | null,
+): SavedVoicing | null {
+  const mine =
+    viewerId === null
+      ? null
+      : (saved.find((entry) => entry.authorId === viewerId) ?? null);
+  return (
+    saved.find((entry) => entry.authorId === picked) ?? mine ?? saved[0] ?? null
+  );
+}
+
 export function useSongVoicing(
   params: PlayerParams,
   viewerId: string | null,
@@ -118,12 +137,7 @@ export function useSongVoicing(
     };
   }, [load]);
 
-  const mine = saved.find((entry) => entry.authorId === viewerId) ?? null;
-  const chosen =
-    saved.find((entry) => entry.authorId === picked) ??
-    mine ??
-    saved[0] ??
-    null;
+  const chosen = chooseVoicing(saved, viewerId, picked);
   const settled = chosen?.tracks ?? noVoicing;
   const voicing = edited ?? settled;
   const dirty = edited !== null && !same(edited, settled);
@@ -141,6 +155,11 @@ export function useSongVoicing(
     },
     [settled],
   );
+
+  const adopt = useCallback((authorId: string) => {
+    setPicked(authorId);
+    setEdited(null);
+  }, []);
 
   const reset = useCallback(() => {
     setPicked(null);
@@ -163,9 +182,11 @@ export function useSongVoicing(
 
   return {
     voicing,
+    saved,
     playing: dirty ? "" : (chosen?.authorName ?? ""),
     dirty,
     change,
+    adopt,
     reset,
     save,
   };

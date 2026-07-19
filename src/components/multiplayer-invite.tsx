@@ -15,19 +15,16 @@ type MultiplayerInviteProps = {
   connection: InviteConnection;
   copyState: "idle" | "copied" | "denied";
   coop: boolean;
-  /** Null for a joiner, whose side is whatever the host prepared. */
-  onCoop: ((coop: boolean) => void) | null;
   onInvite: () => void;
   onCopy: () => void;
 };
 
-/** Sits over the roll while the host sets the match up, so they can play the
- * song and change the difficulty before anyone is waiting on them. */
+/** Sits under the other player, since sending the invite is the last step of
+ * setting them up. */
 export function MultiplayerInvite({
   connection,
   copyState,
   coop,
-  onCoop,
   onInvite,
   onCopy,
 }: MultiplayerInviteProps) {
@@ -40,9 +37,13 @@ export function MultiplayerInvite({
     }
   }, [waiting]);
 
+  if (connection.status === "connected") {
+    return null;
+  }
+
   if (connection.status === "opening" || connection.status === "joining") {
     return (
-      <Banner>
+      <span className="flex items-center gap-2 text-muted text-xs">
         <Loader2
           className="size-3.5 animate-spin text-accent"
           aria-hidden="true"
@@ -50,17 +51,15 @@ export function MultiplayerInvite({
         {connection.status === "opening"
           ? "Opening the room"
           : "Joining the match"}
-      </Banner>
+      </span>
     );
   }
 
   if (connection.status === "waiting") {
     return (
-      <Banner>
-        <span className="text-muted">
-          {copyState === "denied"
-            ? "Copy this link, then wait"
-            : "Sent, waiting"}
+      <>
+        <span className="shrink-0 text-muted text-xs">
+          {copyState === "denied" ? "Copy this link" : "Sent, waiting"}
         </span>
         <input
           readOnly
@@ -82,20 +81,21 @@ export function MultiplayerInvite({
             <Copy className="size-3.5" aria-hidden="true" />
           )}
         </button>
-      </Banner>
+      </>
     );
   }
 
   return (
-    <Banner>
-      {onCoop === null ? null : <CoopToggle coop={coop} onCoop={onCoop} />}
-      {connection.status === "failed" ? (
-        <span className="text-danger">{connection.message}</span>
-      ) : (
-        <span className="text-muted">
-          {coop ? "Set each side's part" : "Set the part and difficulty"}
-        </span>
-      )}
+    <>
+      <span className="min-w-0 flex-1 truncate text-xs">
+        {connection.status === "failed" ? (
+          <span className="text-danger">{connection.message}</span>
+        ) : (
+          <span className="text-muted">
+            {coop ? "Set the part they play" : "Both play your part"}
+          </span>
+        )}
+      </span>
       <button
         type="button"
         onClick={onInvite}
@@ -104,54 +104,6 @@ export function MultiplayerInvite({
         <Swords className="size-3.5" aria-hidden="true" />
         {connection.status === "failed" ? "Try again" : "Invite a player"}
       </button>
-    </Banner>
-  );
-}
-
-/** Battle locks both sides to one part; co-op lets the host set a part per
- * side. */
-function CoopToggle({
-  coop,
-  onCoop,
-}: {
-  coop: boolean;
-  onCoop: (coop: boolean) => void;
-}) {
-  return (
-    <fieldset className="flex shrink-0 items-center rounded-full border border-line-strong p-0.5">
-      <legend className="sr-only">Match type</legend>
-      <button
-        type="button"
-        aria-pressed={!coop}
-        onClick={() => onCoop(false)}
-        className={`rounded-full px-2.5 py-0.5 text-xs transition-colors ${
-          coop ? "text-muted hover:text-text" : "bg-accent text-void"
-        }`}
-      >
-        Battle
-      </button>
-      <button
-        type="button"
-        aria-pressed={coop}
-        onClick={() => onCoop(true)}
-        className={`rounded-full px-2.5 py-0.5 text-xs transition-colors ${
-          coop ? "bg-accent text-void" : "text-muted hover:text-text"
-        }`}
-      >
-        Co-op
-      </button>
-    </fieldset>
-  );
-}
-
-function Banner({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="-translate-x-1/2 rise pointer-events-auto absolute top-[4.5rem] left-1/2 z-40 flex max-w-[calc(100vw-1.5rem)] items-center gap-2 rounded-full border border-line-strong bg-panel/95 px-3 py-1.5 text-xs backdrop-blur"
-    >
-      {children}
-    </div>
+    </>
   );
 }

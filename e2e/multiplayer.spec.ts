@@ -12,14 +12,19 @@ test("a match is set up and previewed before anyone is invited", async ({
   await expect(
     page.getByRole("button", { name: "Play", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Simplify" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Simplify to one note at a time" }),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.getByLabel("Playback speed")).toBeVisible();
   await page.keyboard.press("Escape");
 
+  // Sending the invite is the last step, and it lives under the other player.
   await expect(
-    page.getByRole("button", { name: "Invite a player" }),
+    page
+      .getByRole("region", { name: "Other player" })
+      .getByRole("button", { name: "Invite a player" }),
   ).toBeVisible();
 });
 
@@ -41,7 +46,9 @@ test("the room stores the difficulty and the link stays short", async ({
 
   await page.goto(`/multiplayer?${playerQuery()}`);
   await expect(page.locator("canvas").first()).toBeVisible();
-  await page.getByRole("button", { name: "Simplify" }).click();
+  await page
+    .getByRole("button", { name: "Simplify to one note at a time" })
+    .click();
   await page.getByRole("button", { name: "Invite a player" }).click();
 
   const invite = page.getByRole("button", { name: "Copy the invite link" });
@@ -102,17 +109,25 @@ test("confirming the invite freezes the settings", async ({ page }) => {
 
   await page.goto(`/multiplayer?${playerQuery()}`);
   await expect(page.locator("canvas").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Simplify" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Simplify to one note at a time" }),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "Invite a player" }).click();
   await expect(
     page.getByRole("button", { name: "Copy the invite link" }),
   ).toBeVisible({ timeout: 20_000 });
 
-  // The room already holds these settings, so they cannot move underneath it.
-  await expect(page.getByRole("button", { name: "Simplify" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Settings" }).click();
-  await expect(page.getByLabel("Playback speed")).toHaveCount(0);
+  // The invite ends setup: the part is fixed and neither side is played again.
+  await expect(
+    page.getByRole("button", { name: "Simplify to one note at a time" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Play", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Battle", exact: true }),
+  ).toBeDisabled();
 });
 
 test("claiming a track is frozen once the invite is out", async ({ page }) => {
@@ -127,7 +142,7 @@ test("claiming a track is frozen once the invite is out", async ({ page }) => {
 
   await page.goto(`/multiplayer?${playerQuery()}`);
   await expect(page.locator("canvas").first()).toBeVisible();
-  await page.getByRole("button", { name: "Tracks" }).click();
+  await page.getByRole("button", { name: "Tracks" }).first().click();
   await expect(
     page.getByRole("button", { name: /Play .* yourself/ }).first(),
   ).toBeVisible();
@@ -139,7 +154,7 @@ test("claiming a track is frozen once the invite is out", async ({ page }) => {
   ).toBeVisible({ timeout: 20_000 });
 
   // The room stored which tracks the host plays, so they cannot swap now.
-  await page.getByRole("button", { name: "Tracks" }).click();
+  await page.getByRole("button", { name: "Tracks" }).first().click();
   await expect(
     page.getByRole("button", { name: /Play .* yourself/ }),
   ).toHaveCount(0);
@@ -150,24 +165,32 @@ test("the match is split with an opponent side from the start", async ({
 }) => {
   await serveFixture(page);
   await page.goto(`/multiplayer?${playerQuery()}`);
+  const theirs = page.getByRole("region", { name: "Other player" });
 
-  // Two rolls before anyone joins: yours and the opponent's, which waits.
+  // Two rolls before anyone joins: yours and theirs, with their score beside it.
   await expect(page.locator("canvas")).toHaveCount(2);
-  await expect(page.getByText("Opponent")).toBeVisible();
-  await expect(page.getByText("waiting for a player")).toBeVisible();
+  await expect(theirs.getByText("Opponent")).toBeVisible();
+  await expect(theirs.getByText(/%\s*·\s*\dx/)).toBeVisible();
 });
 
-test("co-op lets the host set the opponent's part", async ({ page }) => {
+test("battle locks the other side, co-op opens it up", async ({ page }) => {
   await serveFixture(page);
   await page.goto(`/multiplayer?${playerQuery()}`);
   await expect(page.locator("canvas").first()).toBeVisible();
+  const theirs = page.getByRole("region", { name: "Other player" });
+  const theirSimplify = theirs.getByRole("button", {
+    name: "Simplify their part to one note at a time",
+  });
 
-  // Battle is the default, so the opponent side just waits.
-  await expect(page.getByText("waiting for a player")).toBeVisible();
+  // Battle means one shared part, so their side is fixed to yours.
+  await expect(theirSimplify).toBeDisabled();
 
-  await page.getByRole("button", { name: "Co-op" }).click();
+  await page.getByRole("button", { name: "Co-op", exact: true }).click();
 
-  // Co-op opens the opponent side for the host to build a different part.
-  await expect(page.getByText("Opponent plays")).toBeVisible();
-  await expect(page.getByText("waiting for a player")).toHaveCount(0);
+  // Co-op hands their part over to the host to build.
+  await expect(theirSimplify).toBeEnabled();
+  await theirs.getByRole("button", { name: "Tracks" }).click();
+  await expect(
+    page.getByRole("button", { name: /Play .* yourself/ }).first(),
+  ).toBeVisible();
 });

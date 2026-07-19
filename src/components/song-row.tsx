@@ -114,10 +114,9 @@ export function SongRow({
             data-tip={tip}
             data-tip-side="top"
             aria-label={`${label} ${name}`}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-line-strong px-3 py-2 font-medium text-sm transition-colors hover:border-accent hover:text-accent"
+            className="rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"
           >
             <Icon className="size-4" aria-hidden="true" />
-            <span className="hidden sm:inline">{label}</span>
           </Link>
         ))}
       </div>

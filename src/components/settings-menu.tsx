@@ -4,6 +4,7 @@ import { Settings2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/ui/popover";
+import { SliderRow } from "@/components/ui/slider-row";
 import { latencyAdvice, latencyRange } from "@/lib/audio/latency";
 import type { InputStatus } from "@/lib/input/use-note-input";
 import { melodyRateRange } from "@/lib/midi/melody";
@@ -60,14 +61,14 @@ export function SettingsMenu({
           data-tip="Settings"
           data-tip-side="top"
           data-tip-align="right"
-          className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 font-mono text-xs transition-colors ${
+          className={`inline-flex items-center gap-1.5 rounded-lg border p-2 font-mono text-xs transition-colors ${
             open || tweaked
               ? "border-accent text-accent"
               : "border-line-strong text-muted hover:border-accent hover:text-accent"
           }`}
         >
           <Settings2 className="size-3.5" aria-hidden="true" />
-          {tweaked ? `${speed}x` : "Setup"}
+          {tweaked ? `${speed}x` : null}
         </span>
       )}
     >
@@ -199,46 +200,6 @@ function Section({
       </div>
       {children}
     </section>
-  );
-}
-
-function SliderRow({
-  ariaLabel,
-  min,
-  max,
-  step,
-  value,
-  valueText,
-  onChange,
-}: {
-  ariaLabel: string;
-  min: number;
-  max: number;
-  step: number;
-  value: number;
-  valueText: string;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <div className="flex items-center gap-2 px-2">
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        aria-label={ariaLabel}
-        aria-valuetext={valueText}
-        className="min-w-0 flex-1"
-      />
-      <span
-        aria-hidden="true"
-        className="w-12 shrink-0 text-right font-mono text-accent text-xs tabular-nums"
-      >
-        {valueText}
-      </span>
-    </div>
   );
 }
 

@@ -46,6 +46,10 @@ export function PianoRollView({
   const keyWidthRef = useRef(keyWidth);
   keyWidthRef.current = keyWidth;
   const gestures = useRef(new Map<number, Gesture>());
+  // A rebuilt renderer starts on the lowest keys, so it is framed on creation
+  // as well as on a move: the pitch itself often has not changed.
+  const focusRef = useRef(focusPitch);
+  focusRef.current = focusPitch;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -54,6 +58,9 @@ export function PianoRollView({
     }
     const renderer = new PianoRollRenderer(canvas, keyWidthRef.current);
     rendererRef.current = renderer;
+    if (focusRef.current !== null) {
+      renderer.centreOn(focusRef.current);
+    }
     let frame = requestAnimationFrame(function loop() {
       renderer.draw({
         song,

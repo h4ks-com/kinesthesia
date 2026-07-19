@@ -3,6 +3,7 @@
 import { Eye, GraduationCap, Music2, Piano, Swords } from "lucide-react";
 import Link from "next/link";
 import { TrackMenu } from "@/components/track-menu";
+import { ScoreReadout } from "@/components/ui/score-readout";
 import type { SongTrack } from "@/lib/midi/song";
 import {
   type PlayerMode,
@@ -75,12 +76,11 @@ export function PlayerHeader({
       </span>
 
       {interactive ? (
-        <span className="hidden shrink-0 items-center gap-2 rounded-lg border border-line px-2.5 py-1.5 font-mono text-xs sm:flex">
-          <span className="text-accent">{scorePoints(score)}</span>
-          <span className="text-faint">
-            {Math.round(accuracy(score) * 100)}% · {score.combo}x
-          </span>
-        </span>
+        <ScoreReadout
+          points={scorePoints(score)}
+          accuracy={accuracy(score)}
+          combo={score.combo}
+        />
       ) : null}
 
       {opponent === null ? null : (
@@ -110,14 +110,13 @@ export function PlayerHeader({
             simplified ? "Play the full part" : "Play one note at a time"
           }
           aria-label="Simplify to one note at a time"
-          className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 font-medium text-sm transition-colors sm:px-3 ${
+          className={`shrink-0 rounded-lg border p-2 transition-colors ${
             simplified
               ? "border-accent bg-accent-soft text-accent"
               : "border-line-strong text-muted hover:border-accent hover:text-accent"
           }`}
         >
           <Music2 className="size-4" aria-hidden="true" />
-          <span className="hidden lg:inline">Simplify</span>
         </button>
       ) : null}
 
@@ -127,10 +126,9 @@ export function PlayerHeader({
           href={playerPath(target, params)}
           data-tip={`Switch to ${label.toLowerCase()}`}
           aria-label={`Switch to ${label}`}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line-strong px-2.5 py-2 font-medium text-sm transition-colors hover:border-accent hover:text-accent sm:px-3"
+          className="shrink-0 rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"
         >
           <Icon className="size-4" aria-hidden="true" />
-          <span className="hidden lg:inline">{label}</span>
         </Link>
       ))}
     </header>

@@ -39,14 +39,13 @@ export function TrackMenu({
       trigger={(open) => (
         <span
           data-tip="Show or hide tracks"
-          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 font-medium text-sm transition-colors ${
+          className={`inline-flex items-center gap-1.5 rounded-lg border py-2 pr-2 pl-2 transition-colors ${
             open
               ? "border-accent text-accent"
-              : "border-line-strong text-text hover:border-accent hover:text-accent"
+              : "border-line-strong text-muted hover:border-accent hover:text-accent"
           }`}
         >
           <Layers className="size-4" aria-hidden="true" />
-          Tracks
           <span className="font-mono text-faint text-xs">
             {tracks.length - hidden.size}/{tracks.length}
           </span>

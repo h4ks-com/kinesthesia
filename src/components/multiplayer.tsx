@@ -3,8 +3,7 @@
 import type { DataConnection } from "peerjs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MultiplayerInvite } from "@/components/multiplayer-invite";
-import { OpponentSetup } from "@/components/opponent-setup";
-import { OpponentView } from "@/components/opponent-view";
+import { OpponentPanel } from "@/components/opponent-panel";
 import { Player, type PlayerHandle } from "@/components/player";
 import { clampMelodyRate, defaultMelodyRate } from "@/lib/midi/melody";
 import type { Part } from "@/lib/midi/part";
@@ -102,6 +101,7 @@ export function Multiplayer({
   const [theirPart, setTheirPart] = useState<Part | null>(null);
   const [roomOpen, setRoomOpen] = useState(joinCode !== null);
   const [coop, setCoop] = useState(false);
+  const [hostPart, setHostPart] = useState<Part | null>(null);
   const [opponentPart, setOpponentPart] = useState<Part>(() => ({
     simplified: params?.simplified ?? false,
     melodyRate: params?.melodyRate ?? defaultMelodyRate,
@@ -123,6 +123,11 @@ export function Multiplayer({
   const match = agreed ?? params;
   const theirPoints = opponent?.points ?? 0;
   const opponentFinished = opponent?.finished === true;
+  const live = connection.status === "connected";
+  const settled = roomOpen || connection.status === "opening";
+  // Sending the invite ends setup: from there neither side is played or edited,
+  // it is only watched until the round starts.
+  const setupDone = settled || live;
   const song = useSong(match);
   const linkRef = useRef<DataConnection | null>(null);
   const peerRef = useRef<{ destroy: () => void } | null>(null);
@@ -323,6 +328,14 @@ export function Multiplayer({
     }
   }, [opponentGone, phase]);
 
+  // The invite takes the transport away, so a preview still rolling at that
+  // moment would play on with no way to stop it.
+  useEffect(() => {
+    if (setupDone) {
+      playerRef.current?.stop();
+    }
+  }, [setupDone]);
+
   const onEnd = useCallback(
     (score: Score): void => {
       const points = scorePoints(score);
@@ -429,11 +442,11 @@ export function Multiplayer({
     // the host's own, so both play the one line.
     const theirs: Part = coop
       ? opponentPart
-      : {
+      : (hostPart ?? {
           tracks: settings.tracks ?? [],
           simplified: settings.simplified,
           melodyRate: settings.melodyRate,
-        };
+        });
     peer.on("open", async (peerId) => {
       const response = await fetch("/api/multiplayer/rooms", {
         method: "POST",
@@ -516,8 +529,11 @@ export function Multiplayer({
     [],
   );
 
-  const live = connection.status === "connected";
-  const settled = roomOpen || connection.status === "opening";
+  const canBuildTheirSide = isHost && coop && !setupDone;
+  // A battle mirrors your own line onto their side; a co-op shows the one you
+  // built for them, and once they are here, whatever they told us they play.
+  const theirSide =
+    !isHost || live ? theirPart : coop ? opponentPart : hostPart;
   const announcement = opponentGone
     ? "The other player left"
     : phase === "result" && opponentFinished
@@ -540,33 +556,11 @@ export function Multiplayer({
             params={match}
             onScore={onScore}
             onHit={onHit}
+            onConfig={setHostPart}
             opponent={null}
             locked={settled}
-            matchActive={live}
+            matchActive={setupDone}
             onEnd={onEnd}
-          />
-        )}
-
-        {live ? null : (
-          <MultiplayerInvite
-            connection={connection}
-            copyState={copyState}
-            coop={coop}
-            onCoop={isHost ? setCoop : null}
-            onInvite={() => {
-              if (isHost) {
-                void invite();
-                return;
-              }
-              joining.current = false;
-              setConnection({ status: "joining" });
-              void joinRoom(joinCode);
-            }}
-            onCopy={() => {
-              if (connection.status === "waiting") {
-                void copy(connection.link);
-              }
-            }}
           />
         )}
 
@@ -592,22 +586,39 @@ export function Multiplayer({
         <section className="flex min-h-0 min-w-0 flex-1 items-center justify-center border-line bg-void text-muted text-sm max-lg:border-t lg:border-l">
           waiting for a player
         </section>
-      ) : isHost && !live && coop ? (
-        <OpponentSetup
-          song={song.song}
-          part={opponentPart}
-          onChange={setOpponentPart}
-          getPosition={opponentPosition}
-        />
       ) : (
-        <OpponentView
+        <OpponentPanel
           song={song.song}
-          hiddenTracks={new Set()}
+          part={theirSide}
+          onPart={canBuildTheirSide ? setOpponentPart : null}
+          coop={coop}
+          onCoop={isHost ? setCoop : null}
+          locked={setupDone}
           opponent={opponent ?? noOpponent}
-          part={theirPart}
           getPosition={opponentPosition}
           hit={theirHit}
           state={live ? "playing" : opponent !== null ? "gone" : "waiting"}
+          footer={
+            <MultiplayerInvite
+              connection={connection}
+              copyState={copyState}
+              coop={coop}
+              onInvite={() => {
+                if (isHost) {
+                  void invite();
+                  return;
+                }
+                joining.current = false;
+                setConnection({ status: "joining" });
+                void joinRoom(joinCode);
+              }}
+              onCopy={() => {
+                if (connection.status === "waiting") {
+                  void copy(connection.link);
+                }
+              }}
+            />
+          }
         />
       )}
     </div>

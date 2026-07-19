@@ -23,6 +23,13 @@ import {
   type MelodyRate,
   reduceToMelody,
 } from "@/lib/midi/melody";
+import {
+  medianPitch,
+  type Part,
+  soloHidden,
+  toggleHidden,
+  tracksToHide,
+} from "@/lib/midi/part";
 import type { Song } from "@/lib/midi/song";
 import { useSong } from "@/lib/midi/use-song";
 import {
@@ -51,6 +58,9 @@ type PlayerProps = {
   params: PlayerParams;
   onScore?: (score: Score) => void;
   onHit?: (judgement: Judgement) => void;
+  /** Reports the part being played, so a match can mirror it on the other side
+   * without reading it back out of the address bar. */
+  onConfig?: (part: Part) => void;
   opponent?: { name: string; points: number; accuracy: number } | null;
   /** A live match freezes the settings, since both sides derive their part
    * from them and have to keep agreeing once the scoring starts. */
@@ -76,6 +86,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     params,
     onScore,
     onHit,
+    onConfig,
     opponent = null,
     locked = false,
     matchActive = false,
@@ -254,13 +265,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
       return;
     }
     focusedSong.current = song;
-    setHiddenTracks(
-      new Set(
-        song.tracks
-          .map((track) => track.index)
-          .filter((index) => !playerTracks.has(index)),
-      ),
-    );
+    setHiddenTracks(tracksToHide(song, playerTracks));
   }, [song, interactive, playerTracks]);
 
   const owed = useMemo(() => {
@@ -365,11 +370,9 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
       return null;
     }
     const source = owed.length > 0 ? owed : song.notes;
-    const pitches = source
-      .filter((note) => interactive || !hiddenTracks.has(note.track))
-      .map((note) => note.pitch)
-      .sort((left, right) => left - right);
-    return pitches[Math.floor(pitches.length / 2)] ?? null;
+    return medianPitch(
+      source.filter((note) => interactive || !hiddenTracks.has(note.track)),
+    );
   }, [song, owed, interactive, hiddenTracks]);
 
   // Interactive modes light only the part you owe and ghost the rest, so the
@@ -397,6 +400,16 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   useEffect(() => {
     onScore?.(gates.score);
   }, [gates.score, onScore]);
+
+  const configRef = useRef(onConfig);
+  configRef.current = onConfig;
+  useEffect(() => {
+    configRef.current?.({
+      tracks: [...playerTracks].sort((left, right) => left - right),
+      simplified,
+      melodyRate,
+    });
+  }, [playerTracks, simplified, melodyRate]);
 
   const hitRef = useRef(gates.lastHit?.seq ?? 0);
   useEffect(() => {
@@ -501,27 +514,12 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   }
 
   function toggleTrack(index: number) {
-    setHiddenTracks((current) => {
-      const next = new Set(current);
-      if (next.has(index)) {
-        next.delete(index);
-      } else {
-        next.add(index);
-      }
-      return next;
-    });
+    setHiddenTracks((current) => toggleHidden(current, index));
   }
 
   function soloTrack(index: number) {
     const all = song?.tracks.map((track) => track.index) ?? [];
-    setHiddenTracks((current) => {
-      const alreadySolo =
-        all.filter((other) => !current.has(other)).length === 1 &&
-        !current.has(index);
-      return alreadySolo
-        ? new Set()
-        : new Set(all.filter((other) => other !== index));
-    });
+    setHiddenTracks((current) => soloHidden(all, current, index));
   }
 
   function togglePlayerTrack(index: number) {

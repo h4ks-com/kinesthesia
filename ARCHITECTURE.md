@@ -36,9 +36,9 @@ src/components/
   track-menu.tsx              show, hide, solo and claim tracks
   hit-flag.tsx                the per-note perfect, good or miss verdict
   multiplayer.tsx             set up, invite, then the split view
-  multiplayer-invite.tsx      the invite banner and battle or co-op toggle
-  opponent-setup.tsx          the host building the co-op opponent's part
-  opponent-view.tsx           the other player's roll, silent by design
+  multiplayer-invite.tsx      the invite bar under the other player
+  opponent-panel.tsx          the other side: match type, their part, their
+                              score and roll, silent by design
 src/lib/
   player-url.ts               builds and parses player URLs
   search-params.ts            route search params to URLSearchParams
@@ -93,13 +93,19 @@ note the player owes and resumes once they press it, while `multiplayer` plays
 straight through and simply counts the miss. Each judged note pops a `hit-flag`,
 green, gold or red, high on the roll clear of the keys.
 
-`multiplayer` opens on the song itself: the host picks the part and difficulty
-and plays it as much as they like, then confirms with an invite. That opens a
-room, freezes the settings, and hands back a link. Opening that link joins
-straight away and adopts what the host prepared, so nobody types a code. A
-**battle** locks both sides to one part; a **co-op** lets the host build a
-different part per side (`opponent-setup`) and hands the joiner theirs. Speed is
-always shared, so the two rolls stay in step.
+`multiplayer` opens on the song itself and the host prepares the whole match.
+Their own half is the player they already know; the other half is
+`opponent-panel`, which reads the same way and is where the other player is set
+up, in order: the match type, then the part they get, then the invite under
+them. A **battle** mirrors the host's own line onto their side and locks it; a
+**co-op** hands their part over to the host to build, with the same track menu
+and simplify controls as the player. Speed is always shared, so the two rolls
+stay in step, and each side frames the line it owes so the halves read alike.
+
+Sending the invite ends setup. It opens a room, freezes both parts and hides the
+transport, so from then on neither side is played or edited, only watched.
+Opening the invite link joins straight away and adopts what the host prepared,
+so nobody types a code.
 
 Once connected it shows both players side by side, stacked on a narrow screen.
 Each side hears only itself and rolls from its own clock; because both start

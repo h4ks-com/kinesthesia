@@ -19,6 +19,7 @@ import {
 import { currentViewer } from "@/server/auth";
 import { config } from "@/server/config";
 import type { Score } from "@/server/db/schema";
+import { analyseMidi } from "@/server/midi/analyse";
 import { midiSourceIds, midiSources } from "@/server/midi/registry";
 import { searchMidi } from "@/server/midi/search";
 import {
@@ -88,6 +89,65 @@ const searchRoute = createRoute({
   },
 });
 
+const trackSummarySchema = z.object({
+  index: z
+    .number()
+    .int()
+    .describe("Track number, for the tracks player option"),
+  name: z.string(),
+  instrument: z.string(),
+  percussion: z.boolean().describe("A drum kit, which is never transposed"),
+  notes: z.number().int(),
+});
+
+const midiSummarySchema = z.object({
+  name: z.string(),
+  duration: z.number().describe("How long the song runs, in seconds"),
+  notes: z.number().int().describe("Notes in the whole file"),
+  tracks: z.array(trackSummarySchema),
+  playedTrack: z
+    .number()
+    .int()
+    .describe("The track the player claims unless told otherwise"),
+  lowestPitch: z
+    .number()
+    .int()
+    .describe("MIDI note number, 21 is the lowest key"),
+  highestPitch: z
+    .number()
+    .int()
+    .describe("MIDI note number, 108 is the highest key"),
+  density: z
+    .number()
+    .describe("Notes per second across the file, as a sense of how busy it is"),
+});
+
+const infoInputShape = {
+  url: z.string().url().describe("Direct link to the .mid file"),
+  name: z.string().default("").describe("Name to report it under"),
+};
+
+const infoRoute = createRoute({
+  method: "get",
+  path: "/midi/info",
+  summary: "Read a MIDI file",
+  description:
+    "Downloads a .mid and reports how long it runs, how many notes it holds and what is on each track.",
+  request: { query: z.object(infoInputShape) },
+  responses: {
+    200: {
+      description: "What the file holds",
+      content: { "application/json": { schema: midiSummarySchema } },
+    },
+    502: {
+      description: "The file could not be downloaded or read",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+  },
+});
+
 const sourcesRoute = createRoute({
   method: "get",
   path: "/midi/sources",
@@ -106,6 +166,19 @@ api.openapi(searchRoute, async (c) => {
   const { q, source, limit } = c.req.valid("query");
   const results = await searchMidi({ query: q, source: source ?? null, limit });
   return c.json({ results }, 200);
+});
+
+api.openapi(infoRoute, async (c) => {
+  const { url, name } = c.req.valid("query");
+  try {
+    const summary = await analyseMidi(url, name);
+    return c.json({ ...summary, tracks: [...summary.tracks] }, 200);
+  } catch (error) {
+    return c.json(
+      { error: error instanceof Error ? error.message : "Unreadable MIDI" },
+      502,
+    );
+  }
 });
 
 api.openapi(sourcesRoute, (c) =>
@@ -652,6 +725,10 @@ Each match also carries a player link that opens the song in a browser: /watch
 plays it back, /learn waits for the player to hit each note, /multiplayer plays
 it with two people together.
 
+Search only knows a song's name. midi_info reads the file itself and reports how
+long it runs, how many notes it holds and what is on each track, which is how to
+answer how long or how hard a song is, and how to pick a track to play.
+
 Those links take the song as it comes. To open one at a different speed, in
 another key, on chosen tracks, or stripped back for recording, build the link
 with player_link rather than editing the query string by hand: it validates
@@ -680,6 +757,34 @@ function createMcpServer(): McpServer {
       return {
         content: [{ type: "text", text: JSON.stringify({ results }, null, 2) }],
       };
+    },
+  );
+
+  mcp.registerTool(
+    "midi_info",
+    {
+      title: "Read a MIDI file",
+      description:
+        "Download a .mid and report how long it runs, how many notes it holds, and what is on each track. Use it to answer how long or how hard a song is, and to choose the tracks argument for player_link rather than guessing.",
+      inputSchema: infoInputShape,
+    },
+    async ({ url, name }) => {
+      try {
+        const summary = await analyseMidi(url, name);
+        return {
+          content: [{ type: "text", text: JSON.stringify(summary, null, 2) }],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: error instanceof Error ? error.message : "Unreadable MIDI",
+            },
+          ],
+          isError: true,
+        };
+      }
     },
   );
 

@@ -4,6 +4,32 @@ vi.mock("@/server/auth", () => ({
   currentViewer: vi.fn(async () => null),
 }));
 
+vi.mock("@/server/midi/analyse", () => ({
+  analyseMidi: vi.fn(async (url: string, name: string) => {
+    if (url.includes("missing")) {
+      throw new Error("Could not download that MIDI (status 404)");
+    }
+    return {
+      name,
+      duration: 12.5,
+      notes: 40,
+      tracks: [
+        {
+          index: 0,
+          name: "piano",
+          instrument: "acoustic grand piano",
+          percussion: false,
+          notes: 40,
+        },
+      ],
+      playedTrack: 0,
+      lowestPitch: 48,
+      highestPitch: 72,
+      density: 3.2,
+    };
+  }),
+}));
+
 vi.mock("@/server/midi/search", () => ({
   searchMidi: vi.fn(async () => [
     {
@@ -178,5 +204,37 @@ describe("player_link", () => {
       focus: true,
     });
     expect(isError).toBe(true);
+  });
+});
+
+describe("midi_info", () => {
+  it("is offered alongside the other tools", async () => {
+    const tools = (await result(await rpc("tools/list"))).tools as {
+      name: string;
+    }[];
+    expect(tools.map((entry) => entry.name)).toContain("midi_info");
+  });
+
+  it("reports the length and the tracks", async () => {
+    const response = await rpc("tools/call", {
+      name: "midi_info",
+      arguments: { url: "https://bitmidi.com/uploads/1.mid", name: "A song" },
+    });
+    const content = (await result(response)).content as { text: string }[];
+    const summary = JSON.parse(content[0]?.text ?? "{}");
+
+    expect(summary.duration).toBe(12.5);
+    expect(summary.tracks[0].name).toBe("piano");
+    expect(summary.playedTrack).toBe(0);
+  });
+
+  it("says so when the file cannot be read", async () => {
+    const response = await rpc("tools/call", {
+      name: "midi_info",
+      arguments: { url: "https://bitmidi.com/uploads/missing.mid" },
+    });
+    const body = await result(response);
+    expect(body.isError).toBe(true);
+    expect((body.content as { text: string }[])[0]?.text).toContain("404");
   });
 });

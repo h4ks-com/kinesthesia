@@ -27,6 +27,7 @@ src/server/
     registry.ts               sources available to search
     bitmidi.ts                BitMidi adapter
     search.ts                 searches sources and attaches player links
+    analyse.ts                reads a .mid and reports what it holds
 src/components/
   song-row.tsx                one song with its favourite and mode links
   library-section.tsx         preview, expand and bound a saved list
@@ -163,7 +164,10 @@ every request after the first fail with `Already connected to a transport`.
 The server's `instructions` are the context an LLM client gets about what
 kinesthesia is, alongside each tool's own description.
 
-`search_midi` returns a plain link per mode. `player_link` builds one carrying
+`search_midi` knows only what a source lists. `midi_info` downloads the file and
+parses it with the player's own parser, so a caller can say how long a song runs
+and which track to play rather than guess. `search_midi` returns a plain link
+per mode. `player_link` builds one carrying
 the speed, key, tracks, simplify and focus a caller asks for, which is what
 makes those settings reachable by an agent at all: they live only in the query
 string and nothing else advertises them. It clamps through the same functions

@@ -2,6 +2,7 @@ import { MissingSong } from "@/components/missing-song";
 import { Player } from "@/components/player";
 import { parsePlayerParams } from "@/lib/player-url";
 import { type RouteSearchParams, toSearchParams } from "@/lib/search-params";
+import { currentViewer } from "@/server/auth";
 
 export default async function WatchPage({
   searchParams,
@@ -12,5 +13,6 @@ export default async function WatchPage({
   if (params === null) {
     return <MissingSong />;
   }
-  return <Player mode="watch" params={params} />;
+  const viewer = await currentViewer();
+  return <Player mode="watch" params={params} viewerId={viewer?.id ?? null} />;
 }

@@ -17,6 +17,7 @@ import { PlayerHeader } from "@/components/player-header";
 import { PlayerTransport, TransportBar } from "@/components/player-transport";
 import { clampLatency, judgedPosition } from "@/lib/audio/latency";
 import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
+import { useSongVoicing } from "@/lib/audio/use-song-voicing";
 import { reachFor } from "@/lib/input/keyboard-map";
 import { useNoteInput } from "@/lib/input/use-note-input";
 import {
@@ -63,6 +64,8 @@ import {
 type PlayerProps = {
   mode: PlayerMode;
   params: PlayerParams;
+  /** Who is signed in, so their own sound for a song wins over the newest. */
+  viewerId?: string | null;
   onScore?: (score: Score) => void;
   onHit?: (judgement: Judgement) => void;
   /** Reports the part being played, so a match can mirror it on the other side
@@ -98,6 +101,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   {
     mode,
     params,
+    viewerId = null,
     onScore,
     onHit,
     onConfig,
@@ -111,6 +115,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   },
   ref,
 ) {
+  const sound = useSongVoicing(params, viewerId);
   const load = useSong(params);
   const original = load.status === "ready" ? load.song : null;
   const interactive = mode !== "watch";
@@ -389,6 +394,10 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     speed,
     onRestart: resetGates,
   });
+
+  useEffect(() => {
+    playback.setVoicing(sound.voicing);
+  }, [playback.setVoicing, sound.voicing]);
 
   const gates = useGates({
     owed,
@@ -680,6 +689,15 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
               onToggleVisible={toggleTrack}
               onToggleMine={togglePlayerTrack}
               onSolo={soloTrack}
+              voicing={sound.voicing}
+              onVoicing={sound.change}
+              sound={{
+                playing: sound.playing,
+                dirty: sound.dirty,
+                canSave: viewerId !== null,
+                onSave: () => void sound.save(),
+                onReset: sound.reset,
+              }}
               onFocus={focusable ? () => changeFocus(true) : null}
             />
           )}

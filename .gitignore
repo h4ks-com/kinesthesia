@@ -45,6 +45,7 @@ next-env.d.ts
 
 # playwright
 /playwright-report
+/.playwright-mcp
 /test-results
 
 # local score file

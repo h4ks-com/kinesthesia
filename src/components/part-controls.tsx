@@ -1,9 +1,10 @@
 "use client";
 
 import { Music2 } from "lucide-react";
-import { TrackMenu } from "@/components/track-menu";
+import { type SoundSharing, TrackMenu } from "@/components/track-menu";
 import { Popover } from "@/components/ui/popover";
 import { SliderRow } from "@/components/ui/slider-row";
+import type { SongVoicing, Voicing } from "@/lib/audio/voicing";
 import { type MelodyRate, melodyRateRange } from "@/lib/midi/melody";
 import type { SongTrack } from "@/lib/midi/song";
 
@@ -13,6 +14,9 @@ type PartControlsProps = {
   mine: ReadonlySet<number>;
   onToggleVisible: (index: number) => void;
   onSolo: (index: number) => void;
+  voicing: SongVoicing;
+  onVoicing: ((track: number, voicing: Voicing) => void) | null;
+  sound: SoundSharing | null;
   /** Null once the part is fixed, which leaves the control disabled in place so
    * both halves keep the same shape. */
   onClaim: ((index: number) => void) | null;
@@ -32,6 +36,9 @@ export function PartControls({
   mine,
   onToggleVisible,
   onSolo,
+  voicing,
+  onVoicing,
+  sound,
   onClaim,
   simplified,
   onSimplified,
@@ -57,6 +64,9 @@ export function PartControls({
         mine={mine}
         interactive
         canClaim={onClaim !== null}
+        voicing={voicing}
+        onVoicing={onVoicing}
+        sound={sound}
         onToggleVisible={onToggleVisible}
         onToggleMine={(index) => onClaim?.(index)}
         onSolo={onSolo}

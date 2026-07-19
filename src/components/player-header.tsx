@@ -3,8 +3,9 @@
 import { Eye, GraduationCap, Maximize, Piano, Swords } from "lucide-react";
 import Link from "next/link";
 import { PartControls } from "@/components/part-controls";
-import { TrackMenu } from "@/components/track-menu";
+import { type SoundSharing, TrackMenu } from "@/components/track-menu";
 import { ScoreReadout } from "@/components/ui/score-readout";
+import type { SongVoicing, Voicing } from "@/lib/audio/voicing";
 import type { MelodyRate } from "@/lib/midi/melody";
 import type { SongTrack } from "@/lib/midi/song";
 import {
@@ -41,6 +42,9 @@ type PlayerHeaderProps = {
   onToggleVisible: (index: number) => void;
   onToggleMine: (index: number) => void;
   onSolo: (index: number) => void;
+  voicing: SongVoicing;
+  onVoicing: ((track: number, voicing: Voicing) => void) | null;
+  sound: SoundSharing | null;
   /** Null outside watch, the one mode with no scoring chrome to hide. */
   onFocus: (() => void) | null;
 };
@@ -59,6 +63,9 @@ export function PlayerHeader({
   editable,
   score,
   opponent,
+  voicing,
+  onVoicing,
+  sound,
   onFocus,
   onToggleVisible,
   onToggleMine,
@@ -106,6 +113,9 @@ export function PlayerHeader({
           mine={playerTracks}
           onToggleVisible={onToggleVisible}
           onSolo={onSolo}
+          voicing={voicing}
+          onVoicing={onVoicing}
+          sound={sound}
           onClaim={editable ? onToggleMine : null}
           simplified={simplified}
           onSimplified={editable ? onSimplified : null}
@@ -123,6 +133,9 @@ export function PlayerHeader({
           onToggleVisible={onToggleVisible}
           onToggleMine={onToggleMine}
           onSolo={onSolo}
+          voicing={voicing}
+          onVoicing={onVoicing}
+          sound={sound}
         />
       )}
 

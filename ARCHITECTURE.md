@@ -36,7 +36,12 @@ src/components/
   player-transport.tsx        play, clock, scrubber, speed, key and settings
   settings-menu.tsx           key size, octave, timing and input
   piano-roll-view.tsx         canvas, the frame loop, touch input and panning
-  track-menu.tsx              show, hide, solo and claim tracks
+  track-menu.tsx              show, hide, solo and claim tracks, and the way
+                              into how each one sounds
+  sound-view.tsx              one track's instrument and shaping, in place of
+                              the track list
+  instrument-picker.tsx       the 128 General MIDI programs, grouped and searchable
+  envelope-editor.tsx         attack, volume and release as a curve you drag
   hit-flag.tsx                the per-note perfect, good or miss verdict
   multiplayer.tsx             set up, invite, then the split view
   multiplayer-invite.tsx      the invite, at the end of the shared bar
@@ -55,6 +60,7 @@ src/lib/
   audio/engine.ts             instruments and the look ahead scheduler
   audio/instruments.ts        one voice per General MIDI program
   audio/voicing.ts            the instrument and shaping a track sounds with
+  audio/use-song-voicing.ts   whose sound is playing, and saving your own
   audio/general-midi.ts       program number to soundfont name
   audio/percussion.ts         drum note number to kit sample
   audio/use-playback-engine.ts  engine lifecycle, transport and speed

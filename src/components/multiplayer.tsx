@@ -54,6 +54,7 @@ type MultiplayerProps = {
   playerName: string;
   ice: readonly IceServer[];
   joinCode: string | null;
+  viewerId?: string | null;
 };
 
 type RoomReply = {
@@ -96,6 +97,7 @@ export function Multiplayer({
   playerName,
   ice,
   joinCode,
+  viewerId = null,
 }: MultiplayerProps) {
   const isHost = joinCode === null;
   const [connection, setConnection] = useState<Connection>(
@@ -604,6 +606,7 @@ export function Multiplayer({
         key={matchKey(match)}
         mode="multiplayer"
         params={match}
+        viewerId={viewerId}
         onScore={onScore}
         onHit={onHit}
         onConfig={setHostPart}

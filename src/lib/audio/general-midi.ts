@@ -134,3 +134,38 @@ export const defaultProgram = "acoustic_grand_piano";
 export function soundfontFor(program: number): string {
   return programs[program] ?? defaultProgram;
 }
+
+/** General MIDI orders its 128 programs in sixteen families of eight, which is
+ * the only structure a list this long can be scanned by. */
+export const instrumentFamilies = [
+  "Piano",
+  "Chromatic percussion",
+  "Organ",
+  "Guitar",
+  "Bass",
+  "Strings",
+  "Ensemble",
+  "Brass",
+  "Reed",
+  "Pipe",
+  "Synth lead",
+  "Synth pad",
+  "Synth effects",
+  "Ethnic",
+  "Percussive",
+  "Sound effects",
+] as const;
+
+export type InstrumentFamily = (typeof instrumentFamilies)[number];
+
+export function familyOf(program: number): InstrumentFamily {
+  return instrumentFamilies[Math.floor(program / 8)] ?? "Piano";
+}
+
+export function instrumentName(program: number): string {
+  const raw = programs[program] ?? defaultProgram;
+  const spaced = raw.replaceAll("_", " ");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+export const programCount = programs.length;

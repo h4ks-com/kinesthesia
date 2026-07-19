@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PlaybackEngine } from "@/lib/audio/engine";
+import type { SongVoicing } from "@/lib/audio/voicing";
 import type { Song } from "@/lib/midi/song";
 
 export type Playback = {
@@ -16,6 +17,7 @@ export type Playback = {
   restart: () => Promise<void>;
   latency: () => number;
   getPosition: () => number;
+  setVoicing: (voicing: SongVoicing) => void;
   isPlaying: () => boolean;
   pause: () => void;
   resume: () => void;
@@ -98,6 +100,10 @@ export function usePlaybackEngine({
     return () => clearInterval(timer);
   }, [song]);
 
+  const setVoicing = useCallback((voicing: SongVoicing) => {
+    engineRef.current?.setVoicing(voicing);
+  }, []);
+
   const seek = useCallback((position: number) => {
     engineRef.current?.seek(position);
     setElapsed(position);
@@ -165,6 +171,7 @@ export function usePlaybackEngine({
     soundReady,
     toggle,
     seek,
+    setVoicing,
     strike,
     release,
     prepare,

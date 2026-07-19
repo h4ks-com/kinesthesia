@@ -3,6 +3,7 @@ import { Multiplayer } from "@/components/multiplayer";
 import { iceServers } from "@/lib/multiplayer/ice";
 import { parsePlayerParams } from "@/lib/player-url";
 import { type RouteSearchParams, toSearchParams } from "@/lib/search-params";
+import { currentViewer } from "@/server/auth";
 import { config } from "@/server/config";
 
 export default async function MultiplayerPage({
@@ -16,9 +17,11 @@ export default async function MultiplayerPage({
   if (params === null && joinCode === null) {
     return <MissingSong />;
   }
+  const viewer = await currentViewer();
   return (
     <Multiplayer
       params={params}
+      viewerId={viewer?.id ?? null}
       playerName={query.get("player") ?? "Player"}
       joinCode={joinCode}
       ice={iceServers(

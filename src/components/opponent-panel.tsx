@@ -130,6 +130,9 @@ export function OpponentPanel({
               : (rate) => change({ melodyRate: clampMelodyRate(rate) })
           }
           whose="theirs"
+          voicing={new Map()}
+          onVoicing={null}
+          sound={null}
           lockedNote={
             coop ? "Set by the host" : "A battle: they play your part"
           }

@@ -607,6 +607,7 @@ export function Multiplayer({
         mode="multiplayer"
         params={match}
         viewerId={viewerId}
+        tourAuto={isHost}
         onScore={onScore}
         onHit={onHit}
         onConfig={setHostPart}

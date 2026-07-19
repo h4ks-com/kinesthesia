@@ -86,6 +86,7 @@ export function TrackMenu({
       label="Tracks"
       trigger={(open) => (
         <span
+          data-tour="tracks"
           data-tip="Show or hide tracks"
           className={`inline-flex items-center gap-1.5 rounded-lg border py-2 pr-2 pl-2 transition-colors ${
             open

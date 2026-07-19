@@ -78,7 +78,10 @@ export function OpponentPanel({
       aria-label="Other player"
       className="relative flex min-h-0 min-w-0 flex-1 flex-col border-line max-lg:border-t lg:border-l"
     >
-      <header className="flex h-14 shrink-0 items-center gap-2 border-line border-b bg-panel/70 px-3">
+      <header
+        data-tour="opponent"
+        className="flex h-14 shrink-0 items-center gap-2 border-line border-b bg-panel/70 px-3"
+      >
         {onCoop === null ? null : (
           <MatchType coop={coop} onCoop={onCoop} locked={locked} />
         )}

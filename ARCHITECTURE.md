@@ -45,6 +45,7 @@ src/components/
   instrument-picker.tsx       the 128 General MIDI programs, grouped and searchable
   envelope-editor.tsx         attack, volume and release as a curve you drag
   hit-flag.tsx                the per-note perfect, good or miss verdict
+  walkthrough.tsx             the first-run tour: spotlight, dialog, nav
   multiplayer.tsx             set up, invite, then the split view
   multiplayer-invite.tsx      the invite, at the end of the shared bar
   opponent-panel.tsx          the other side: match type, their part, their
@@ -67,6 +68,8 @@ src/lib/
   audio/percussion.ts         drum note number to kit sample
   audio/use-playback-engine.ts  engine lifecycle, transport and speed
   midi/use-song.ts            loads and remembers a song
+  tour/steps.ts               what the walkthrough points at, per mode
+  tour/use-walkthrough.ts     first-run auto play and the replay it hands back
   render/keyboard.ts          key geometry, sizing and the pitch under a point
   render/piano-roll.ts        draws notes, keyboard, glow and sparks
   input/keyboard-map.ts       computer keyboard to pitch
@@ -175,6 +178,12 @@ the player parses with, so a link it hands back cannot ask for a value the
 player would refuse. A setting the caller names is written down even at its
 default, since leaving it out would hand it to whatever the listener's device
 remembers for that song.
+
+A first visit to watch, learn, or a match a person is hosting runs a
+walkthrough: it darkens the page and spotlights one control at a time from a
+per mode list of `data-tour` anchors. It is client only, remembered per mode in
+localStorage so it runs once, and replayed any time from the header's help
+button. A match joiner is never auto shown it.
 
 ## Adding a MIDI source
 

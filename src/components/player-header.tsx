@@ -1,6 +1,13 @@
 "use client";
 
-import { Eye, GraduationCap, Maximize, Piano, Swords } from "lucide-react";
+import {
+  CircleHelp,
+  Eye,
+  GraduationCap,
+  Maximize,
+  Piano,
+  Swords,
+} from "lucide-react";
 import Link from "next/link";
 import { PartControls } from "@/components/part-controls";
 import { type SoundSharing, TrackMenu } from "@/components/track-menu";
@@ -47,6 +54,7 @@ type PlayerHeaderProps = {
   sound: SoundSharing | null;
   /** Null outside watch, the one mode with no scoring chrome to hide. */
   onFocus: (() => void) | null;
+  onHelp: () => void;
 };
 
 export function PlayerHeader({
@@ -67,6 +75,7 @@ export function PlayerHeader({
   onVoicing,
   sound,
   onFocus,
+  onHelp,
   onToggleVisible,
   onToggleMine,
   onSolo,
@@ -92,11 +101,13 @@ export function PlayerHeader({
       </span>
 
       {interactive ? (
-        <ScoreReadout
-          points={scorePoints(score)}
-          accuracy={accuracy(score)}
-          combo={score.combo}
-        />
+        <div className="hidden shrink-0 sm:flex">
+          <ScoreReadout
+            points={scorePoints(score)}
+            accuracy={accuracy(score)}
+            combo={score.combo}
+          />
+        </div>
       ) : null}
 
       {opponent === null ? null : (
@@ -142,6 +153,7 @@ export function PlayerHeader({
       {onFocus === null ? null : (
         <button
           type="button"
+          data-tour="focus"
           onClick={onFocus}
           data-tip="Just the keys and the notes (esc to leave)"
           aria-label="Focus mode"
@@ -151,17 +163,31 @@ export function PlayerHeader({
         </button>
       )}
 
-      {switchable.map(({ mode: target, label, icon: Icon }) => (
-        <Link
-          key={target}
-          href={playerPath(target, params)}
-          data-tip={`Switch to ${label.toLowerCase()}`}
-          aria-label={`Switch to ${label}`}
-          className="shrink-0 rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"
-        >
-          <Icon className="size-4" aria-hidden="true" />
-        </Link>
-      ))}
+      {switchable.length === 0 ? null : (
+        <div data-tour="modes" className="flex shrink-0 items-center gap-2">
+          {switchable.map(({ mode: target, label, icon: Icon }) => (
+            <Link
+              key={target}
+              href={playerPath(target, params)}
+              data-tip={`Switch to ${label.toLowerCase()}`}
+              aria-label={`Switch to ${label}`}
+              className="rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"
+            >
+              <Icon className="size-4" aria-hidden="true" />
+            </Link>
+          ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={onHelp}
+        data-tip="Walk me through it"
+        aria-label="Tutorial"
+        className="shrink-0 rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"
+      >
+        <CircleHelp className="size-4" aria-hidden="true" />
+      </button>
     </header>
   );
 }

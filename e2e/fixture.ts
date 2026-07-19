@@ -30,7 +30,19 @@ function buildMidi(): Uint8Array {
   return new Uint8Array(midi.toArray());
 }
 
-export async function serveFixture(page: Page): Promise<void> {
+/** Serves the fixture MIDI, and marks the walkthrough seen so a test reads as a
+ * returning visitor. A test that wants the first-run tour passes `tour: true`. */
+export async function serveFixture(
+  page: Page,
+  options: { tour?: boolean } = {},
+): Promise<void> {
+  if (options.tour !== true) {
+    await page.addInitScript(() => {
+      for (const mode of ["watch", "learn", "multiplayer"]) {
+        localStorage.setItem(`kinesthesia:tour:${mode}`, "1");
+      }
+    });
+  }
   const body = Buffer.from(buildMidi());
   await page.route(songUrl, (route) =>
     route.fulfill({ status: 200, contentType: "audio/midi", body }),

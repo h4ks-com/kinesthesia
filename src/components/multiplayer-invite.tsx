@@ -90,6 +90,7 @@ export function MultiplayerInvite({
       </span>
       <button
         type="button"
+        data-tour="invite"
         onClick={onInvite}
         className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 font-medium text-void text-xs transition-colors hover:bg-accent-glow"
       >

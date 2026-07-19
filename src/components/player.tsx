@@ -15,6 +15,7 @@ import { HitFlag } from "@/components/hit-flag";
 import { PianoRollView } from "@/components/piano-roll-view";
 import { PlayerHeader } from "@/components/player-header";
 import { PlayerTransport, TransportBar } from "@/components/player-transport";
+import { Walkthrough } from "@/components/walkthrough";
 import { clampLatency, judgedPosition } from "@/lib/audio/latency";
 import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
 import { useSongVoicing } from "@/lib/audio/use-song-voicing";
@@ -60,12 +61,17 @@ import {
   saveSongSettings,
   songSettingsKey,
 } from "@/lib/storage/settings";
+import { tourFor } from "@/lib/tour/steps";
+import { useWalkthrough } from "@/lib/tour/use-walkthrough";
 
 type PlayerProps = {
   mode: PlayerMode;
   params: PlayerParams;
   /** Who is signed in, so their own sound for a song wins over the newest. */
   viewerId?: string | null;
+  /** Whether the walkthrough may run on its own here. A match joiner never sees
+   * it; the host does. */
+  tourAuto?: boolean;
   onScore?: (score: Score) => void;
   onHit?: (judgement: Judgement) => void;
   /** Reports the part being played, so a match can mirror it on the other side
@@ -102,6 +108,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     mode,
     params,
     viewerId = null,
+    tourAuto = true,
     onScore,
     onHit,
     onConfig,
@@ -143,6 +150,11 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     () => (original === null ? null : transposeSong(original, transpose)),
     [original, transpose],
   );
+
+  // The chrome the tour points at is up only once the song is and the page is
+  // not stripped for recording.
+  const tour = useWalkthrough(mode, tourAuto && song !== null && !focus);
+
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const globalTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -704,6 +716,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                 onReset: sound.reset,
               }}
               onFocus={focusable ? () => changeFocus(true) : null}
+              onHelp={tour.start}
             />
           )}
 
@@ -777,6 +790,10 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
           {footerExtra}
         </TransportBar>
       )}
+
+      {tour.open ? (
+        <Walkthrough steps={tourFor(mode)} onClose={tour.close} />
+      ) : null}
     </div>
   );
 });

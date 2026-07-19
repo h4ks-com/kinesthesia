@@ -74,6 +74,7 @@ export function PartControls({
 
       <button
         type="button"
+        data-tour="simplify"
         disabled={onSimplified === null}
         onClick={() => onSimplified?.(!simplified)}
         aria-pressed={simplified}

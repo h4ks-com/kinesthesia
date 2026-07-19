@@ -64,6 +64,7 @@ export function PlayerTransport({
       {onToggle === null ? null : (
         <button
           type="button"
+          data-tour="play"
           onClick={onToggle}
           data-tip={playing ? "Pause (space)" : "Play (space)"}
           data-tip-side="top"
@@ -104,7 +105,7 @@ export function PlayerTransport({
       />
 
       {onSpeed === null ? null : (
-        <div className="shrink-0">
+        <div className="shrink-0" data-tour="speed">
           <Popover
             label={`Speed, ${speed}x`}
             side="top"
@@ -160,7 +161,7 @@ export function PlayerTransport({
           </span>
         )
       ) : (
-        <div className="shrink-0">
+        <div className="shrink-0" data-tour="transpose">
           <Popover
             label={`Transpose, ${formatTranspose(transpose)} semitones`}
             side="top"

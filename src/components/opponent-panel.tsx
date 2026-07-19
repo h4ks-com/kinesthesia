@@ -1,14 +1,11 @@
 "use client";
 
-import { Music2 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { HitFlag } from "@/components/hit-flag";
+import { PartControls } from "@/components/part-controls";
 import { PianoRollView } from "@/components/piano-roll-view";
-import { TrackMenu } from "@/components/track-menu";
-import { Popover } from "@/components/ui/popover";
 import { ScoreReadout } from "@/components/ui/score-readout";
-import { SliderRow } from "@/components/ui/slider-row";
-import { clampMelodyRate, melodyRateRange } from "@/lib/midi/melody";
+import { clampMelodyRate, defaultMelodyRate } from "@/lib/midi/melody";
 import {
   type Part,
   soloHidden,
@@ -39,14 +36,9 @@ type OpponentPanelProps = {
   getPosition: () => number;
   hit: Hit | null;
   state: "waiting" | "playing" | "gone";
-  /** The invite is the last step of setting them up, so it sits under them. */
-  footer: ReactNode;
 };
 
 const nothingHidden: ReadonlySet<number> = new Set();
-
-// Only a running round follows the clock; before and after, the roll holds.
-const frozen = (): number => 0;
 
 export function OpponentPanel({
   song,
@@ -59,11 +51,10 @@ export function OpponentPanel({
   getPosition,
   hit,
   state,
-  footer,
 }: OpponentPanelProps) {
   const [hidden, setHidden] = useState<ReadonlySet<number>>(nothingHidden);
-  const clock = state === "playing" ? getPosition : frozen;
-  const roll = usePartRoll(song, part, clock);
+  // Their roll rides the shared timeline, so scrubbing reads ahead on both.
+  const roll = usePartRoll(song, part, getPosition);
   const theirs = part?.tracks ?? [];
   const simplified = part?.simplified ?? false;
 
@@ -102,21 +93,12 @@ export function OpponentPanel({
           combo={opponent.combo}
         />
 
-        <TrackMenu
+        <PartControls
           tracks={song.tracks}
           hidden={hidden}
           mine={new Set(theirs)}
-          interactive
-          canClaim={onPart !== null}
           onToggleVisible={(index) =>
             setHidden((current) => toggleHidden(current, index))
-          }
-          onToggleMine={(index) =>
-            change({
-              tracks: [...toggleHidden(new Set(theirs), index)].sort(
-                (left, right) => left - right,
-              ),
-            })
           }
           onSolo={(index) =>
             setHidden((current) =>
@@ -127,57 +109,31 @@ export function OpponentPanel({
               ),
             )
           }
+          onClaim={
+            onPart === null
+              ? null
+              : (index) =>
+                  change({
+                    tracks: [...toggleHidden(new Set(theirs), index)].sort(
+                      (left, right) => left - right,
+                    ),
+                  })
+          }
+          simplified={simplified}
+          onSimplified={
+            onPart === null ? null : (next) => change({ simplified: next })
+          }
+          melodyRate={part?.melodyRate ?? defaultMelodyRate}
+          onMelodyRate={
+            onPart === null
+              ? null
+              : (rate) => change({ melodyRate: clampMelodyRate(rate) })
+          }
+          whose="theirs"
+          lockedNote={
+            coop ? "Set by the host" : "A battle: they play your part"
+          }
         />
-
-        <button
-          type="button"
-          disabled={onPart === null}
-          onClick={() => change({ simplified: !simplified })}
-          aria-pressed={simplified}
-          aria-label="Simplify their part to one note at a time"
-          data-tip={coop ? "One note at a time" : "Battle: they play your part"}
-          className={`shrink-0 rounded-lg border p-2 transition-colors disabled:opacity-50 ${
-            simplified
-              ? "border-accent bg-accent-soft text-accent"
-              : "border-line-strong text-muted"
-          }`}
-        >
-          <Music2 className="size-4" aria-hidden="true" />
-        </button>
-
-        {onPart !== null && simplified ? (
-          <Popover
-            label="Their note density"
-            align="right"
-            trigger={(open) => (
-              <span
-                data-tip="Their note density"
-                className={`inline-flex items-center rounded-lg border p-2 font-mono text-xs transition-colors ${
-                  open
-                    ? "border-accent text-accent"
-                    : "border-line-strong text-muted hover:border-accent hover:text-accent"
-                }`}
-              >
-                {part?.melodyRate}/s
-              </span>
-            )}
-          >
-            <div className="w-52 p-1 max-sm:w-full">
-              <h3 className="label px-2">Their note density</h3>
-              <SliderRow
-                ariaLabel="Their maximum notes per second"
-                min={melodyRateRange.min}
-                max={melodyRateRange.max}
-                step={1}
-                value={part?.melodyRate ?? melodyRateRange.min}
-                valueText={`${part?.melodyRate}/sec`}
-                onChange={(rate) =>
-                  change({ melodyRate: clampMelodyRate(rate) })
-                }
-              />
-            </div>
-          </Popover>
-        ) : null}
       </header>
 
       <div className="relative min-h-0 flex-1">
@@ -186,7 +142,7 @@ export function OpponentPanel({
           hiddenTracks={hidden}
           keyWidth={defaultKeyWidth}
           focusPitch={roll.focusPitch}
-          getPosition={clock}
+          getPosition={getPosition}
           getPressed={roll.getPressed}
           getOwed={roll.getOwed}
           getYours={roll.getYours}
@@ -197,10 +153,6 @@ export function OpponentPanel({
             they left
           </p>
         ) : null}
-      </div>
-
-      <div className="flex h-16 shrink-0 items-center gap-2 border-line border-t bg-panel px-3">
-        {footer}
       </div>
     </section>
   );

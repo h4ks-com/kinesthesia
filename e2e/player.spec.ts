@@ -133,12 +133,14 @@ test("the note density slider follows the simplify toggle", async ({
   await page.goto(`/learn?${playerQuery()}`);
   await expect(page.locator("canvas")).toBeVisible();
 
-  await page.getByRole("button", { name: "Settings" }).click();
-  await expect(page.getByLabel("Maximum notes per second")).toHaveCount(0);
-  await page.keyboard.press("Escape");
+  // The density only means anything once the part is reduced, so it appears
+  // beside Simplify rather than in the settings menu.
+  await expect(page.getByRole("button", { name: "Note density" })).toHaveCount(
+    0,
+  );
 
   await page.getByRole("button", { name: "Simplify" }).click();
-  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Note density" }).click();
   const rate = page.getByLabel("Maximum notes per second");
   await expect(rate).toBeVisible();
   await rate.fill("3");
@@ -163,7 +165,7 @@ test("a song remembers its settings across modes", async ({ page }) => {
   await page.goto(`/learn?${playerQuery()}`);
   await expect(page.locator("canvas")).toBeVisible();
 
-  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Speed" }).click();
   await page.getByLabel("Playback speed").fill("1");
   await expect(page).toHaveURL(/speed=0.5/);
   await page.keyboard.press("Escape");

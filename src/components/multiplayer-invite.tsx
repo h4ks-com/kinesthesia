@@ -57,12 +57,14 @@ export function MultiplayerInvite({
         <span className="shrink-0 text-muted text-xs">
           {copyState === "denied" ? "Copy this link" : "Sent, waiting"}
         </span>
+        {/* The bar also carries the timeline, so on a phone the link keeps to
+            the copy button rather than squeezing the scrubber out. */}
         <input
           readOnly
           value={connection.link}
           aria-label="Invite link"
           onFocus={(event) => event.currentTarget.select()}
-          className="min-w-0 flex-1 truncate bg-transparent font-mono text-accent text-xs outline-none"
+          className="hidden min-w-0 flex-1 truncate bg-transparent font-mono text-accent text-xs outline-none sm:block"
         />
         <button
           ref={copyRef}

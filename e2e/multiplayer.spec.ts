@@ -16,15 +16,15 @@ test("a match is set up and previewed before anyone is invited", async ({
     page.getByRole("button", { name: "Simplify to one note at a time" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Settings" }).click();
+  // One tempo for the whole match, so it sits on the shared timeline.
+  await page.getByRole("button", { name: "Speed" }).click();
   await expect(page.getByLabel("Playback speed")).toBeVisible();
   await page.keyboard.press("Escape");
 
-  // Sending the invite is the last step, and it lives under the other player.
+  // Sending the invite is the last step, so it sits at the far end of the
+  // shared bar, under the other player's half.
   await expect(
-    page
-      .getByRole("region", { name: "Other player" })
-      .getByRole("button", { name: "Invite a player" }),
+    page.locator("footer").getByRole("button", { name: "Invite a player" }),
   ).toBeVisible();
 });
 
@@ -118,10 +118,16 @@ test("confirming the invite freezes the settings", async ({ page }) => {
     page.getByRole("button", { name: "Copy the invite link" }),
   ).toBeVisible({ timeout: 20_000 });
 
-  // The invite ends setup: the part is fixed and neither side is played again.
+  // The invite ends setup: the part is fixed on both halves and neither side
+  // is played again, but the controls stay put so the two still read alike.
   await expect(
     page.getByRole("button", { name: "Simplify to one note at a time" }),
-  ).toHaveCount(0);
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", {
+      name: "Simplify their part to one note at a time",
+    }),
+  ).toBeDisabled();
   await expect(
     page.getByRole("button", { name: "Play", exact: true }),
   ).toHaveCount(0);

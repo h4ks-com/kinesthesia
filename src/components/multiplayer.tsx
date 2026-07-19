@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MultiplayerInvite } from "@/components/multiplayer-invite";
 import { OpponentPanel } from "@/components/opponent-panel";
 import { Player, type PlayerHandle } from "@/components/player";
+import { TransportBar } from "@/components/player-transport";
 import { clampMelodyRate, defaultMelodyRate } from "@/lib/midi/melody";
 import type { Part } from "@/lib/midi/part";
 import { useSong } from "@/lib/midi/use-song";
@@ -540,87 +541,101 @@ export function Multiplayer({
       ? `${outcomeTitle(myPoints, theirPoints)}. You ${myPoints}, them ${theirPoints}.`
       : "";
 
+  const inviteBar = (
+    <MultiplayerInvite
+      connection={connection}
+      copyState={copyState}
+      onInvite={() => {
+        if (isHost) {
+          void invite();
+          return;
+        }
+        joining.current = false;
+        setConnection({ status: "joining" });
+        void joinRoom(joinCode);
+      }}
+      onCopy={() => {
+        if (connection.status === "waiting") {
+          void copy(connection.link);
+        }
+      }}
+    />
+  );
+
+  // A join link carries no song, so until the room answers there is nothing to
+  // draw but the bar, which is also where an expired invite offers another go.
+  if (match === null) {
+    return (
+      <div className="flex h-dvh flex-col overflow-hidden bg-void">
+        <p className="flex flex-1 items-center justify-center text-muted text-sm">
+          {connection.status === "failed" ? "" : "Joining the match"}
+        </p>
+        <TransportBar>
+          <span className="min-w-0 flex-1" />
+          {inviteBar}
+        </TransportBar>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-dvh flex-col lg:flex-row">
+    <>
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        {match === null ? (
-          <div className="flex flex-1 items-center justify-center bg-void" />
-        ) : (
-          <Player
-            ref={playerRef}
-            key={matchKey(match)}
-            mode="multiplayer"
-            params={match}
-            onScore={onScore}
-            onHit={onHit}
-            onConfig={setHostPart}
-            opponent={null}
-            locked={settled}
-            matchActive={setupDone}
-            onEnd={onEnd}
-          />
-        )}
-
-        {live ? (
-          <MatchOverlay
-            phase={phase}
-            count={count}
-            songReady={song.status === "ready"}
-            myReady={myReady}
-            myPoints={myPoints}
-            theirPoints={theirPoints}
-            opponentReady={theirReady}
-            opponentDone={opponentFinished}
-            opponentGone={opponentGone}
-            myRematch={myRematch}
-            onReady={() => void ready()}
-            onRematch={rematch}
-          />
-        ) : null}
-      </div>
-
-      {song.status !== "ready" ? (
-        <section className="flex min-h-0 min-w-0 flex-1 items-center justify-center border-line bg-void text-muted text-sm max-lg:border-t lg:border-l">
-          waiting for a player
-        </section>
-      ) : (
-        <OpponentPanel
-          song={song.song}
-          part={theirSide}
-          onPart={canBuildTheirSide ? setOpponentPart : null}
-          coop={coop}
-          onCoop={isHost ? setCoop : null}
-          locked={setupDone}
-          opponent={opponent ?? noOpponent}
-          getPosition={opponentPosition}
-          hit={theirHit}
-          state={live ? "playing" : opponent !== null ? "gone" : "waiting"}
-          footer={
-            <MultiplayerInvite
-              connection={connection}
-              copyState={copyState}
-              onInvite={() => {
-                if (isHost) {
-                  void invite();
-                  return;
-                }
-                joining.current = false;
-                setConnection({ status: "joining" });
-                void joinRoom(joinCode);
-              }}
-              onCopy={() => {
-                if (connection.status === "waiting") {
-                  void copy(connection.link);
-                }
-              }}
+      <Player
+        ref={playerRef}
+        key={matchKey(match)}
+        mode="multiplayer"
+        params={match}
+        onScore={onScore}
+        onHit={onHit}
+        onConfig={setHostPart}
+        opponent={null}
+        locked={settled}
+        matchActive={setupDone}
+        onEnd={onEnd}
+        overlay={
+          live ? (
+            <MatchOverlay
+              phase={phase}
+              count={count}
+              songReady={song.status === "ready"}
+              myReady={myReady}
+              myPoints={myPoints}
+              theirPoints={theirPoints}
+              opponentReady={theirReady}
+              opponentDone={opponentFinished}
+              opponentGone={opponentGone}
+              myRematch={myRematch}
+              onReady={() => void ready()}
+              onRematch={rematch}
             />
-          }
-        />
-      )}
-    </div>
+          ) : null
+        }
+        aside={
+          song.status === "ready" ? (
+            <OpponentPanel
+              song={song.song}
+              part={theirSide}
+              onPart={canBuildTheirSide ? setOpponentPart : null}
+              coop={coop}
+              onCoop={isHost ? setCoop : null}
+              locked={setupDone}
+              opponent={opponent ?? noOpponent}
+              getPosition={opponentPosition}
+              hit={theirHit}
+              state={live ? "playing" : opponent !== null ? "gone" : "waiting"}
+            />
+          ) : (
+            <section className="flex min-h-0 min-w-0 flex-1 items-center justify-center border-line bg-void text-muted text-sm max-lg:border-t lg:border-l">
+              waiting for a player
+            </section>
+          )
+        }
+        footerExtra={inviteBar}
+      />
+    </>
   );
 }
 

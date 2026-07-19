@@ -28,15 +28,17 @@ src/server/
 src/components/
   song-row.tsx                one song with its favourite and mode links
   library-section.tsx         preview, expand and bound a saved list
-  player.tsx                  composes the hooks below into a mode
-  player-header.tsx           title, score, tracks and mode switching
-  player-transport.tsx        play, clock, scrubber and settings
-  settings-menu.tsx           speed and octave in one place
+  player.tsx                  composes the hooks below into a mode, and hosts a
+                              match through its aside, overlay and footer slots
+  player-header.tsx           title, score and mode switching
+  part-controls.tsx           tracks, simplify and note density for one side
+  player-transport.tsx        play, clock, scrubber, speed and settings
+  settings-menu.tsx           key size, octave, timing and input
   piano-roll-view.tsx         canvas, the frame loop, touch input and panning
   track-menu.tsx              show, hide, solo and claim tracks
   hit-flag.tsx                the per-note perfect, good or miss verdict
   multiplayer.tsx             set up, invite, then the split view
-  multiplayer-invite.tsx      the invite bar under the other player
+  multiplayer-invite.tsx      the invite, at the end of the shared bar
   opponent-panel.tsx          the other side: match type, their part, their
                               score and roll, silent by design
 src/lib/
@@ -95,17 +97,25 @@ green, gold or red, high on the roll clear of the keys.
 
 `multiplayer` opens on the song itself and the host prepares the whole match.
 Their own half is the player they already know; the other half is
-`opponent-panel`, which reads the same way and is where the other player is set
-up, in order: the match type, then the part they get, then the invite under
-them. A **battle** mirrors the host's own line onto their side and locks it; a
-**co-op** hands their part over to the host to build, with the same track menu
-and simplify controls as the player. Speed is always shared, so the two rolls
-stay in step, and each side frames the line it owes so the halves read alike.
+`opponent-panel`, which is where the other player is set up, in order: the match
+type, then the part they get. Both halves draw the same `part-controls` — tracks,
+simplify, note density — so the two read as one instrument, and a side that is
+not yours to set shows them disabled rather than missing. A **battle** mirrors
+the host's own line onto their side and locks it; a **co-op** hands their part
+over to the host to build.
 
-Sending the invite ends setup. It opens a room, freezes both parts and hides the
-transport, so from then on neither side is played or edited, only watched.
-Opening the invite link joins straight away and adopts what the host prepared,
-so nobody types a code.
+The match hangs off the player through its `aside`, `overlay` and footer slots,
+which puts one transport under both halves rather than one per side. That bar
+carries the clock, the timeline, the shared speed and the invite, and because the
+other half draws off the player's own clock, scrubbing walks both rolls together
+and reads ahead on what each side is about to play. Speed is global to a match,
+so it sits on that bar; what the settings menu keeps is only what this device
+does with the song: key size, octave, timing and input.
+
+Sending the invite is the last step and ends setup. It opens a room, freezes both
+parts and takes the play and seek controls away, so from then on neither side is
+played or edited, only watched. Opening the invite link joins straight away and
+adopts what the host prepared, so nobody types a code.
 
 Once connected it shows both players side by side, stacked on a narrow screen.
 Each side hears only itself and rolls from its own clock; because both start

@@ -7,19 +7,13 @@ import { Popover } from "@/components/ui/popover";
 import { SliderRow } from "@/components/ui/slider-row";
 import { latencyAdvice, latencyRange } from "@/lib/audio/latency";
 import type { InputStatus } from "@/lib/input/use-note-input";
-import { melodyRateRange } from "@/lib/midi/melody";
-import { defaultSpeed, type Speed, speeds } from "@/lib/player-url";
 import { keyWidthRange } from "@/lib/render/keyboard";
 
+/** What this device does with the song, not what the song is: the part itself
+ * lives in the header, where both sides of a match show it the same way. */
 type SettingsMenuProps = {
-  speed: Speed;
-  onSpeed: (speed: Speed) => void;
-  showSpeed: boolean;
   keyWidth: number;
   onKeyWidth: (width: number) => void;
-  melodyRate: number;
-  onMelodyRate: (rate: number) => void;
-  showMelodyRate: boolean;
   octave: number | null;
   onOctave: (octave: number) => void;
   inputStatus: InputStatus;
@@ -30,14 +24,8 @@ type SettingsMenuProps = {
 };
 
 export function SettingsMenu({
-  speed,
-  onSpeed,
-  showSpeed,
   keyWidth,
   onKeyWidth,
-  melodyRate,
-  onMelodyRate,
-  showMelodyRate,
   octave,
   onOctave,
   inputStatus,
@@ -46,9 +34,7 @@ export function SettingsMenu({
   measuredLatency,
   showLatency,
 }: SettingsMenuProps) {
-  const tweaked = speed !== defaultSpeed;
   const advice = latencyAdvice(measuredLatency);
-  const speedIndex = speeds.indexOf(speed);
 
   return (
     <Popover
@@ -61,32 +47,17 @@ export function SettingsMenu({
           data-tip="Settings"
           data-tip-side="top"
           data-tip-align="right"
-          className={`inline-flex items-center gap-1.5 rounded-lg border p-2 font-mono text-xs transition-colors ${
-            open || tweaked
+          className={`inline-flex items-center rounded-lg border p-2 transition-colors ${
+            open
               ? "border-accent text-accent"
               : "border-line-strong text-muted hover:border-accent hover:text-accent"
           }`}
         >
           <Settings2 className="size-3.5" aria-hidden="true" />
-          {tweaked ? `${speed}x` : null}
         </span>
       )}
     >
       <div className="flex w-56 flex-col gap-2 p-1 max-sm:w-full">
-        {showSpeed ? (
-          <Section title="Speed">
-            <SliderRow
-              ariaLabel="Playback speed"
-              min={0}
-              max={speeds.length - 1}
-              step={1}
-              value={speedIndex}
-              valueText={`${speed}x`}
-              onChange={(index) => onSpeed(speeds[index] ?? defaultSpeed)}
-            />
-          </Section>
-        ) : null}
-
         <Section title="Key size">
           <SliderRow
             ariaLabel="Piano key width"
@@ -99,21 +70,6 @@ export function SettingsMenu({
           />
           <Note>Widen the keys to tap them, then drag the roll sideways.</Note>
         </Section>
-
-        {showMelodyRate ? (
-          <Section title="Note density">
-            <SliderRow
-              ariaLabel="Maximum notes per second"
-              min={melodyRateRange.min}
-              max={melodyRateRange.max}
-              step={1}
-              value={melodyRate}
-              valueText={`${melodyRate}/sec`}
-              onChange={onMelodyRate}
-            />
-            <Note>Lower keeps the peaks of the tune and drops the rest.</Note>
-          </Section>
-        ) : null}
 
         {octave === null ? null : (
           <Section title="Octave">

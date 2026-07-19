@@ -3,6 +3,7 @@
 import { Volume2 } from "lucide-react";
 import {
   forwardRef,
+  type ReactNode,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -13,10 +14,9 @@ import {
 import { HitFlag } from "@/components/hit-flag";
 import { PianoRollView } from "@/components/piano-roll-view";
 import { PlayerHeader } from "@/components/player-header";
-import { PlayerTransport } from "@/components/player-transport";
+import { PlayerTransport, TransportBar } from "@/components/player-transport";
 import { clampLatency, judgedPosition } from "@/lib/audio/latency";
 import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
-import { formatClock } from "@/lib/format/clock";
 import { useNoteInput } from "@/lib/input/use-note-input";
 import {
   clampMelodyRate,
@@ -68,6 +68,11 @@ type PlayerProps = {
   /** A running match round hides the transport, so no one can pause, seek or
    * start on their own; the handle drives playback. */
   matchActive?: boolean;
+  /** A match hangs its other half, its overlay and its invite off the player,
+   * so one timeline spans both sides and stays on the clock that drives them. */
+  aside?: ReactNode;
+  overlay?: ReactNode;
+  footerExtra?: ReactNode;
   onEnd?: (score: Score) => void;
 };
 
@@ -77,6 +82,8 @@ export type PlayerHandle = {
   prepare: () => Promise<void>;
   startRound: () => void;
   stop: () => void;
+  /** The other half of a match draws off this clock, which is what keeps one
+   * timeline walking both rolls. */
   getPosition: () => number;
 };
 
@@ -90,6 +97,9 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     opponent = null,
     locked = false,
     matchActive = false,
+    aside = null,
+    overlay = null,
+    footerExtra = null,
     onEnd,
   },
   ref,
@@ -325,6 +335,15 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const startedRef = useRef(false);
   const endedRef = useRef(false);
 
+  const seekPlayback = playback.seek;
+  const seek = useCallback(
+    (position: number) => {
+      seekPlayback(position);
+      gatesRef.current.moveTo(position);
+    },
+    [seekPlayback],
+  );
+
   const offsetRef = useRef(latencyOffset);
   offsetRef.current = latencyOffset;
   const ownedTrack = [...playerTracks][0] ?? 0;
@@ -457,11 +476,6 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     endRef.current?.(gates.score);
   }, [matchActive, song, playback.elapsed, gates.score]);
 
-  function seek(position: number) {
-    playback.seek(position);
-    gates.moveTo(position);
-  }
-
   // A write per slider step trips Safari's replaceState limit, so the write
   // settles a moment after the last change while state tracks it live.
   function settleCommit(next: UrlChange) {
@@ -535,105 +549,112 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     });
   }
 
-  if (load.status === "loading") {
-    return <Centered>Loading the song</Centered>;
-  }
-  if (load.status === "failed") {
-    return <Centered>{load.message}</Centered>;
-  }
+  // The frame stays up while the song loads or fails, because a match hangs its
+  // other half, its overlay and its invite off it and would go dark with it.
   if (song === null) {
-    return null;
+    return (
+      <div className="flex h-dvh flex-col overflow-hidden bg-void">
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+            <p className="flex flex-1 items-center justify-center px-6 text-center text-muted text-sm">
+              {load.status === "failed" ? load.message : "Loading the song"}
+            </p>
+            {overlay}
+          </div>
+          {aside}
+        </div>
+        {footerExtra === null ? null : (
+          <TransportBar>
+            <span className="min-w-0 flex-1" />
+            {footerExtra}
+          </TransportBar>
+        )}
+      </div>
+    );
   }
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-void">
-      <PlayerHeader
-        mode={mode}
-        params={{
-          ...params,
-          tracks: [...playerTracks],
-          speed,
-          simplified,
-          melodyRate,
-        }}
-        tracks={song.tracks}
-        hiddenTracks={hiddenTracks}
-        playerTracks={playerTracks}
-        interactive={interactive}
-        simplified={simplified}
-        onSimplified={changeSimplified}
-        editable={!locked}
-        score={gates.score}
-        opponent={opponent}
-        onToggleVisible={toggleTrack}
-        onToggleMine={togglePlayerTrack}
-        onSolo={soloTrack}
-      />
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <PlayerHeader
+            mode={mode}
+            params={{
+              ...params,
+              tracks: [...playerTracks],
+              speed,
+              simplified,
+              melodyRate,
+            }}
+            tracks={song.tracks}
+            hiddenTracks={hiddenTracks}
+            playerTracks={playerTracks}
+            interactive={interactive}
+            simplified={simplified}
+            onSimplified={changeSimplified}
+            melodyRate={melodyRate}
+            onMelodyRate={changeMelodyRate}
+            editable={!locked}
+            score={gates.score}
+            opponent={opponent}
+            onToggleVisible={toggleTrack}
+            onToggleMine={togglePlayerTrack}
+            onSolo={soloTrack}
+          />
 
-      <div className="relative min-h-0 flex-1">
-        <PianoRollView
-          song={song}
-          hiddenTracks={hiddenTracks}
-          keyWidth={keyWidth}
-          focusPitch={focusPitch}
-          getPosition={playback.getPosition}
-          getPressed={input.pressed}
-          getOwed={gates.owed}
-          getYours={yours}
-          onStrike={(pitch) => input.press(pitch, 0.8)}
-          onRelease={input.release}
-        />
-        {interactive ? <HitFlag hit={gates.lastHit} /> : null}
-        {gates.waiting ? (
-          <p className="rise -translate-x-1/2 absolute top-6 left-1/2 rounded-full border border-accent/40 bg-panel/90 px-4 py-1.5 font-mono text-accent text-xs backdrop-blur">
-            waiting for you
-          </p>
-        ) : null}
-        {playback.soundReady || mode === "multiplayer" ? null : (
-          <p className="-translate-x-1/2 absolute top-6 left-1/2 flex items-center gap-2 whitespace-nowrap rounded-full border border-line-strong bg-panel/90 px-4 py-1.5 text-muted text-xs backdrop-blur">
-            <Volume2 className="size-3.5 shrink-0" aria-hidden="true" />
-            press play to start the sound
-          </p>
-        )}
+          <div className="relative min-h-0 flex-1">
+            <PianoRollView
+              song={song}
+              hiddenTracks={hiddenTracks}
+              keyWidth={keyWidth}
+              focusPitch={focusPitch}
+              getPosition={playback.getPosition}
+              getPressed={input.pressed}
+              getOwed={gates.owed}
+              getYours={yours}
+              onStrike={(pitch) => input.press(pitch, 0.8)}
+              onRelease={input.release}
+            />
+            {interactive ? <HitFlag hit={gates.lastHit} /> : null}
+            {gates.waiting ? (
+              <p className="rise -translate-x-1/2 absolute top-6 left-1/2 rounded-full border border-accent/40 bg-panel/90 px-4 py-1.5 font-mono text-accent text-xs backdrop-blur">
+                waiting for you
+              </p>
+            ) : null}
+            {playback.soundReady || mode === "multiplayer" ? null : (
+              <p className="-translate-x-1/2 absolute top-6 left-1/2 flex items-center gap-2 whitespace-nowrap rounded-full border border-line-strong bg-panel/90 px-4 py-1.5 text-muted text-xs backdrop-blur">
+                <Volume2 className="size-3.5 shrink-0" aria-hidden="true" />
+                press play to start the sound
+              </p>
+            )}
+          </div>
+          {overlay}
+        </div>
+        {aside}
       </div>
 
-      {matchActive ? (
-        <footer className="flex h-16 shrink-0 items-center gap-3 border-line border-t bg-panel px-3 font-mono text-muted text-xs tabular-nums sm:px-4">
-          {formatClock(playback.elapsed)}
-          <span className="text-faint"> / {formatClock(song.duration)}</span>
-        </footer>
-      ) : (
+      <TransportBar>
         <PlayerTransport
           playing={playback.playing}
           elapsed={playback.elapsed}
           duration={song.duration}
           speed={speed}
-          showSpeed={!locked}
+          onSpeed={locked ? null : changeSpeed}
           keyWidth={keyWidth}
           onKeyWidth={(next) => changeKeyWidth(next)}
-          melodyRate={melodyRate}
-          onMelodyRate={changeMelodyRate}
-          showMelodyRate={interactive && simplified && !locked}
           octave={interactive ? input.octave : null}
           latencyOffset={latencyOffset}
           onLatencyOffset={(next) => changeLatency(next)}
           measuredLatency={playback.latency()}
           showLatency={interactive}
           inputStatus={input.status}
-          onToggle={() => void playback.toggle()}
-          onSeek={seek}
-          onSpeed={changeSpeed}
+          // A running match owns the clock, so nobody plays or seeks by hand.
+          onToggle={matchActive ? null : () => void playback.toggle()}
+          onSeek={matchActive ? null : seek}
           onOctave={input.setOctave}
         />
-      )}
+        {footerExtra}
+      </TransportBar>
     </div>
   );
 });
-
-function Centered({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex min-h-dvh items-center justify-center bg-void px-6 text-center text-muted">
-      {children}
-    </div>
-  );
-}

@@ -19,12 +19,10 @@ test("the settings menu fits a phone and stacks the controls", async ({
 
   await page.getByRole("button", { name: "Settings" }).click();
 
-  const speed = page.getByLabel("Playback speed");
   const keys = page.getByLabel("Piano key width");
-  await expect(speed).toBeVisible();
   await expect(keys).toBeVisible();
 
-  for (const slider of [speed, keys, page.getByLabel("Song position")]) {
+  for (const slider of [keys, page.getByLabel("Song position")]) {
     const box = await slider.boundingBox();
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(24);
   }
@@ -49,11 +47,15 @@ test("the input row sits at the bottom of the menu with a status light", async (
 test("the speed slider replaces the speed buttons", async ({ page }) => {
   await serveFixture(page);
   await page.goto(`/watch?${playerQuery()}`);
-  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Speed" }).click();
 
   await expect(page.getByRole("button", { name: "1.5x" })).toHaveCount(0);
 
   const speed = page.getByLabel("Playback speed");
+  // It sits over the keyboard band on a phone, so it has to stay tappable.
+  const box = await speed.boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(24);
+
   await speed.fill("5");
   await expect(page.getByText("1.5x").first()).toBeVisible();
   await expect(page).toHaveURL(/speed=1.5/);

@@ -1,9 +1,11 @@
 "use client";
 
-import { Eye, GraduationCap, Music2, Piano, Swords } from "lucide-react";
+import { Eye, GraduationCap, Piano, Swords } from "lucide-react";
 import Link from "next/link";
+import { PartControls } from "@/components/part-controls";
 import { TrackMenu } from "@/components/track-menu";
 import { ScoreReadout } from "@/components/ui/score-readout";
+import type { MelodyRate } from "@/lib/midi/melody";
 import type { SongTrack } from "@/lib/midi/song";
 import {
   type PlayerMode,
@@ -31,6 +33,8 @@ type PlayerHeaderProps = {
   interactive: boolean;
   simplified: boolean;
   onSimplified: (simplified: boolean) => void;
+  melodyRate: MelodyRate;
+  onMelodyRate: (rate: number) => void;
   editable: boolean;
   score: Score;
   opponent: { name: string; points: number; accuracy: number } | null;
@@ -48,6 +52,8 @@ export function PlayerHeader({
   interactive,
   simplified,
   onSimplified,
+  melodyRate,
+  onMelodyRate,
   editable,
   score,
   opponent,
@@ -90,35 +96,32 @@ export function PlayerHeader({
         </span>
       )}
 
-      <TrackMenu
-        tracks={tracks}
-        hidden={hiddenTracks}
-        mine={playerTracks}
-        interactive={interactive}
-        canClaim={editable}
-        onToggleVisible={onToggleVisible}
-        onToggleMine={onToggleMine}
-        onSolo={onSolo}
-      />
-
-      {interactive && editable ? (
-        <button
-          type="button"
-          onClick={() => onSimplified(!simplified)}
-          aria-pressed={simplified}
-          data-tip={
-            simplified ? "Play the full part" : "Play one note at a time"
-          }
-          aria-label="Simplify to one note at a time"
-          className={`shrink-0 rounded-lg border p-2 transition-colors ${
-            simplified
-              ? "border-accent bg-accent-soft text-accent"
-              : "border-line-strong text-muted hover:border-accent hover:text-accent"
-          }`}
-        >
-          <Music2 className="size-4" aria-hidden="true" />
-        </button>
-      ) : null}
+      {interactive ? (
+        <PartControls
+          tracks={tracks}
+          hidden={hiddenTracks}
+          mine={playerTracks}
+          onToggleVisible={onToggleVisible}
+          onSolo={onSolo}
+          onClaim={editable ? onToggleMine : null}
+          simplified={simplified}
+          onSimplified={editable ? onSimplified : null}
+          melodyRate={melodyRate}
+          onMelodyRate={editable ? onMelodyRate : null}
+          whose="yours"
+        />
+      ) : (
+        <TrackMenu
+          tracks={tracks}
+          hidden={hiddenTracks}
+          mine={playerTracks}
+          interactive={false}
+          canClaim={false}
+          onToggleVisible={onToggleVisible}
+          onToggleMine={onToggleMine}
+          onSolo={onSolo}
+        />
+      )}
 
       {switchable.map(({ mode: target, label, icon: Icon }) => (
         <Link

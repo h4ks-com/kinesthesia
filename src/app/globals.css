@@ -176,6 +176,20 @@ body {
   animation: rise 0.18s ease both;
 }
 
+@keyframes fade-out {
+  0%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.fade-out {
+  animation: fade-out 4s ease both;
+}
+
 @keyframes pop {
   0% {
     opacity: 0;

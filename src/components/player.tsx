@@ -128,6 +128,11 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const [simplified, setSimplified] = useState(params.simplified);
   const [melodyRate, setMelodyRate] = useState(params.melodyRate);
   const [transpose, setTranspose] = useState(params.transpose);
+  // Only watch has nothing to report, so no mode can hide its own scoring.
+  const focusable = mode === "watch";
+  const [focus, setFocus] = useState(focusable && params.focus);
+  const focusRef = useRef(focus);
+  focusRef.current = focus;
 
   const song = useMemo(
     () => (original === null ? null : transposeSong(original, transpose)),
@@ -192,7 +197,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
         buildPlayerUrl(
           window.location.origin,
           mode,
-          { ...params, ...merge(next) },
+          { ...params, focus: focusRef.current, ...merge(next) },
           { explicit: true },
         ),
       );
@@ -214,6 +219,45 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     },
     [params, locked, updateUrl, merge],
   );
+
+  const changeFocus = useCallback(
+    (next: boolean) => {
+      setFocus(next);
+      focusRef.current = next;
+      updateUrl({});
+    },
+    [updateUrl],
+  );
+
+  useEffect(() => {
+    if (!focus) {
+      return;
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        changeFocus(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [focus, changeFocus]);
+
+  // Focus mode leaves nothing on screen to click and nothing to tab to, so
+  // arriving on a focused link has to say how to get back out. It fades so a
+  // recording started a moment later is clean.
+  const stage = useRef<HTMLDivElement | null>(null);
+  const [wayOut, setWayOut] = useState(false);
+  const rollUp = song !== null;
+  useEffect(() => {
+    if (!focus || !rollUp) {
+      setWayOut(false);
+      return;
+    }
+    setWayOut(true);
+    stage.current?.focus();
+    const timer = setTimeout(() => setWayOut(false), 4000);
+    return () => clearTimeout(timer);
+  }, [focus, rollUp]);
 
   const bootstrapped = useRef(false);
   const [hydrated, setHydrated] = useState(false);
@@ -610,33 +654,41 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     <div className="flex h-dvh flex-col overflow-hidden bg-void">
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-          <PlayerHeader
-            mode={mode}
-            params={{
-              ...params,
-              tracks: [...playerTracks],
-              speed,
-              simplified,
-              melodyRate,
-              transpose,
-            }}
-            tracks={song.tracks}
-            hiddenTracks={hiddenTracks}
-            playerTracks={playerTracks}
-            interactive={interactive}
-            simplified={simplified}
-            onSimplified={changeSimplified}
-            melodyRate={melodyRate}
-            onMelodyRate={changeMelodyRate}
-            editable={!locked}
-            score={gates.score}
-            opponent={opponent}
-            onToggleVisible={toggleTrack}
-            onToggleMine={togglePlayerTrack}
-            onSolo={soloTrack}
-          />
+          {focus ? null : (
+            <PlayerHeader
+              mode={mode}
+              params={{
+                ...params,
+                tracks: [...playerTracks],
+                speed,
+                simplified,
+                melodyRate,
+                transpose,
+                focus: focusable && focus,
+              }}
+              tracks={song.tracks}
+              hiddenTracks={hiddenTracks}
+              playerTracks={playerTracks}
+              interactive={interactive}
+              simplified={simplified}
+              onSimplified={changeSimplified}
+              melodyRate={melodyRate}
+              onMelodyRate={changeMelodyRate}
+              editable={!locked}
+              score={gates.score}
+              opponent={opponent}
+              onToggleVisible={toggleTrack}
+              onToggleMine={togglePlayerTrack}
+              onSolo={soloTrack}
+              onFocus={focusable ? () => changeFocus(true) : null}
+            />
+          )}
 
-          <div className="relative min-h-0 flex-1">
+          <div
+            ref={stage}
+            tabIndex={-1}
+            className="relative min-h-0 flex-1 outline-none"
+          >
             <PianoRollView
               song={song}
               hiddenTracks={hiddenTracks}
@@ -656,6 +708,14 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                 waiting for you
               </p>
             ) : null}
+            {wayOut ? (
+              <p
+                aria-live="polite"
+                className="fade-out -translate-x-1/2 absolute bottom-[22%] left-1/2 rounded-full border border-line-strong bg-panel/90 px-4 py-1.5 font-mono text-muted text-xs backdrop-blur"
+              >
+                esc to leave focus
+              </p>
+            ) : null}
             {playback.soundReady || mode === "multiplayer" ? null : (
               <p className="-translate-x-1/2 absolute top-6 left-1/2 flex items-center gap-2 whitespace-nowrap rounded-full border border-line-strong bg-panel/90 px-4 py-1.5 text-muted text-xs backdrop-blur">
                 <Volume2 className="size-3.5 shrink-0" aria-hidden="true" />
@@ -668,30 +728,32 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
         {aside}
       </div>
 
-      <TransportBar>
-        <PlayerTransport
-          playing={playback.playing}
-          elapsed={playback.elapsed}
-          duration={song.duration}
-          speed={speed}
-          onSpeed={locked ? null : changeSpeed}
-          transpose={transpose}
-          onTranspose={locked ? null : changeTranspose}
-          keyWidth={keyWidth}
-          onKeyWidth={(next) => changeKeyWidth(next)}
-          octave={interactive ? input.octave : null}
-          latencyOffset={latencyOffset}
-          onLatencyOffset={(next) => changeLatency(next)}
-          measuredLatency={playback.latency()}
-          showLatency={interactive}
-          inputStatus={input.status}
-          // A running match owns the clock, so nobody plays or seeks by hand.
-          onToggle={matchActive ? null : () => void playback.toggle()}
-          onSeek={matchActive ? null : seek}
-          onOctave={input.setOctave}
-        />
-        {footerExtra}
-      </TransportBar>
+      {focus ? null : (
+        <TransportBar>
+          <PlayerTransport
+            playing={playback.playing}
+            elapsed={playback.elapsed}
+            duration={song.duration}
+            speed={speed}
+            onSpeed={locked ? null : changeSpeed}
+            transpose={transpose}
+            onTranspose={locked ? null : changeTranspose}
+            keyWidth={keyWidth}
+            onKeyWidth={(next) => changeKeyWidth(next)}
+            octave={interactive ? input.octave : null}
+            latencyOffset={latencyOffset}
+            onLatencyOffset={(next) => changeLatency(next)}
+            measuredLatency={playback.latency()}
+            showLatency={interactive}
+            inputStatus={input.status}
+            // A running match owns the clock, so nobody plays or seeks by hand.
+            onToggle={matchActive ? null : () => void playback.toggle()}
+            onSeek={matchActive ? null : seek}
+            onOctave={input.setOctave}
+          />
+          {footerExtra}
+        </TransportBar>
+      )}
     </div>
   );
 });

@@ -30,6 +30,8 @@ export type PlayerParams = {
   readonly melodyRate: MelodyRate;
   /** Semitones the song is moved by, so a part can sit where the hands are. */
   readonly transpose: Transpose;
+  /** Strips the page back to the keys and the falling notes, for recording. */
+  readonly focus: boolean;
 };
 
 function isSpeed(value: number): value is Speed {
@@ -114,6 +116,9 @@ export function buildPlayerUrl(
   if (explicit || params.transpose !== defaultTranspose) {
     target.searchParams.set("transpose", String(params.transpose));
   }
+  if (params.focus) {
+    target.searchParams.set("focus", "1");
+  }
   return target.toString();
 }
 
@@ -152,8 +157,7 @@ export function parsePlayerParams(
     speed: isSpeed(speed) ? speed : defaultSpeed,
     simplified: searchParams.get("simple") === "1",
     melodyRate: readRate(searchParams.get("rate")),
-    transpose: Number.isFinite(transpose)
-      ? clampTranspose(transpose)
-      : defaultTranspose,
+    transpose: clampTranspose(transpose),
+    focus: searchParams.get("focus") === "1",
   };
 }

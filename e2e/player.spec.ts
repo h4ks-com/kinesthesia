@@ -271,3 +271,79 @@ test("moving the song to another key holds your place in it", async ({
   await expect(page.getByText("0:03")).toBeVisible();
   await expect(page).toHaveURL(/transpose=7/);
 });
+
+test("focus mode leaves only the keys and the notes", async ({ page }) => {
+  await serveFixture(page);
+  await page.goto(`/watch?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+  const framed = (await page.locator("canvas").boundingBox())?.height ?? 0;
+
+  await page.getByRole("button", { name: "Focus mode" }).click();
+  await expect(page.locator("header")).toHaveCount(0);
+  await expect(page.locator("footer")).toHaveCount(0);
+  await expect(page).toHaveURL(/focus=1/);
+  expect(
+    (await page.locator("canvas").boundingBox())?.height ?? 0,
+  ).toBeGreaterThan(framed);
+
+  // The shortcuts are the whole point of a recording view, so they outlive the
+  // buttons that also drive them. The clock is hidden here, so it is read back
+  // once the chrome returns.
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(1200);
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator("header")).toHaveCount(1);
+  await expect(page.locator("footer")).toHaveCount(1);
+  await expect(page).not.toHaveURL(/focus=1/);
+  await expect(page.locator("footer span").first()).not.toContainText("0:00");
+});
+
+test("a focused link says how to get back out", async ({ page }) => {
+  await serveFixture(page);
+  await page.goto(`/watch?${playerQuery()}&focus=1`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  // Nothing is on screen to click and nothing is tabbable, so the way out has
+  // to be stated. It fades, leaving a clean recording.
+  await expect(page.getByText("esc to leave focus")).toBeVisible();
+  await expect(page.getByText("esc to leave focus")).toHaveCount(0, {
+    timeout: 8000,
+  });
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator("header")).toHaveCount(1);
+});
+
+test("a settled write does not undo focus mode", async ({ page }) => {
+  await serveFixture(page);
+  await page.goto(`/watch?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  // Settings write on a delay. One in flight must not carry the focus it read
+  // when it was scheduled, or the link stops reproducing the view.
+  await page.getByRole("button", { name: "Speed" }).click();
+  await page.getByLabel("Playback speed").fill("1");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Focus mode" }).click();
+
+  await expect(page).toHaveURL(/focus=1/);
+  await page.waitForTimeout(600);
+  await expect(page).toHaveURL(/focus=1/);
+  await expect(page).toHaveURL(/speed=0.5/);
+});
+
+test("a mode that scores cannot hide its own chrome", async ({ page }) => {
+  await serveFixture(page);
+  await page.goto(`/learn?${playerQuery()}&focus=1`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  await expect(page.locator("header")).toHaveCount(1);
+  await expect(page.locator("footer")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Focus mode" })).toHaveCount(0);
+
+  // The guard would be worth nothing if the mode switch handed focus on.
+  await expect(
+    page.getByRole("link", { name: "Switch to Watch" }),
+  ).not.toHaveAttribute("href", /focus=1/);
+});

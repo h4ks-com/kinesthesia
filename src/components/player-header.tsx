@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, GraduationCap, Piano, Swords } from "lucide-react";
+import { Eye, GraduationCap, Maximize, Piano, Swords } from "lucide-react";
 import Link from "next/link";
 import { PartControls } from "@/components/part-controls";
 import { TrackMenu } from "@/components/track-menu";
@@ -41,6 +41,8 @@ type PlayerHeaderProps = {
   onToggleVisible: (index: number) => void;
   onToggleMine: (index: number) => void;
   onSolo: (index: number) => void;
+  /** Null outside watch, the one mode with no scoring chrome to hide. */
+  onFocus: (() => void) | null;
 };
 
 export function PlayerHeader({
@@ -57,6 +59,7 @@ export function PlayerHeader({
   editable,
   score,
   opponent,
+  onFocus,
   onToggleVisible,
   onToggleMine,
   onSolo,
@@ -121,6 +124,18 @@ export function PlayerHeader({
           onToggleMine={onToggleMine}
           onSolo={onSolo}
         />
+      )}
+
+      {onFocus === null ? null : (
+        <button
+          type="button"
+          onClick={onFocus}
+          data-tip="Just the keys and the notes (esc to leave)"
+          aria-label="Focus mode"
+          className="shrink-0 rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"
+        >
+          <Maximize className="size-4" aria-hidden="true" />
+        </button>
       )}
 
       {switchable.map(({ mode: target, label, icon: Icon }) => (

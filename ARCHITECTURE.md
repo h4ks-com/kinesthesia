@@ -30,7 +30,7 @@ src/components/
   library-section.tsx         preview, expand and bound a saved list
   player.tsx                  composes the hooks below into a mode, and hosts a
                               match through its aside, overlay and footer slots
-  player-header.tsx           title, score and mode switching
+  player-header.tsx           title, score, focus mode and mode switching
   part-controls.tsx           tracks, simplify and note density for one side
   player-transport.tsx        play, clock, scrubber, speed, key and settings
   settings-menu.tsx           key size, octave, timing and input
@@ -178,6 +178,11 @@ simplify and its note rate, key) come back when the song opens in any mode; glob
 settings (key width, timing offset) hold across every song. A link that states
 a song setting outright still wins, so a shared view reproduces itself. A locked
 match neither reads nor writes this memory, since its part is the prepared one.
+
+Focus mode strips watch back to the keys and the falling notes, for recording.
+It rides in the link so a focused view reproduces itself, and stays out of that
+per song memory because it belongs to the recording rather than to the song.
+Only watch offers it, so no mode that scores can hide what it is scoring.
 
 A finished run is recorded with the settings that made it easier or harder, so
 a leaderboard can say what a score was worth: speed, whether the part was

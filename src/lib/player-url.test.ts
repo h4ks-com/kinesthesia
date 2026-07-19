@@ -15,6 +15,7 @@ const song: PlayerParams = {
   simplified: false,
   melodyRate: 6,
   transpose: 0,
+  focus: false,
 };
 
 describe("buildPlayerUrl", () => {
@@ -88,5 +89,20 @@ describe("parsePlayerParams", () => {
   it("drops track entries that are not positive integers", () => {
     const params = new URLSearchParams({ url: song.url, tracks: "0,abc,-2,3" });
     expect(parsePlayerParams(params)?.tracks).toEqual([0, 3]);
+  });
+});
+
+describe("focus", () => {
+  it("rides in the link only while it is on", () => {
+    expect(playerPath("watch", song)).not.toContain("focus");
+    expect(playerPath("watch", { ...song, focus: true })).toContain("focus=1");
+  });
+
+  it("is read back off the link", () => {
+    const path = playerPath("watch", { ...song, focus: true });
+    const params = parsePlayerParams(
+      new URLSearchParams(path.slice(path.indexOf("?"))),
+    );
+    expect(params?.focus).toBe(true);
   });
 });

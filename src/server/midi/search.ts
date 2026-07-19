@@ -42,6 +42,7 @@ export async function searchMidi({
           simplified: false,
           melodyRate: defaultMelodyRate,
           transpose: defaultTranspose,
+          focus: false,
         });
       return {
         ...result,

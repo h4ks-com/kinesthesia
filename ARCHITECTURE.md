@@ -20,6 +20,7 @@ src/server/
   db/schema.ts                Drizzle tables
   db/client.ts                libSQL connection and migration runner
   scores/store.ts             leaderboard queries
+  voicings/store.ts           how people made a song sound, one save each
   midi/
     types.ts                  MidiSource contract and result shapes
     registry.ts               sources available to search

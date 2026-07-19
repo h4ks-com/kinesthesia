@@ -5,6 +5,7 @@ import {
   real,
   sqliteTable,
   text,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
 export const scores = sqliteTable(
@@ -42,3 +43,35 @@ export const scores = sqliteTable(
 
 export type Score = typeof scores.$inferSelect;
 export type NewScore = typeof scores.$inferInsert;
+
+/** How a song is made to sound, as one document per person per song: it is
+ * always read and written whole, and the unique index is what keeps a person
+ * to a single saved version they can come back to. */
+export const songVoicings = sqliteTable(
+  "song_voicings",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    authorId: text("author_id").notNull(),
+    authorName: text("author_name").notNull(),
+    /** Empty for a bare URL: SQLite counts NULLs as distinct, so a nullable
+     * column here would let one person keep several rows for one song. */
+    source: text("source").notNull().default(""),
+    url: text("url").notNull(),
+    /** A voicing per track index, as JSON. */
+    tracks: text("tracks").notNull(),
+    updatedAt: integer("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (table) => [
+    uniqueIndex("song_voicings_author_song_idx").on(
+      table.authorId,
+      table.source,
+      table.url,
+    ),
+    index("song_voicings_song_idx").on(table.source, table.url),
+  ],
+);
+
+export type SongVoicingRow = typeof songVoicings.$inferSelect;
+export type NewSongVoicingRow = typeof songVoicings.$inferInsert;

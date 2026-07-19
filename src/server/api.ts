@@ -13,6 +13,11 @@ import {
   type MultiplayerRoom,
 } from "@/server/multiplayer/rooms";
 import { saveScore, statsFor, topScores } from "@/server/scores/store";
+import {
+  deleteVoicing,
+  saveVoicing,
+  voicingsFor,
+} from "@/server/voicings/store";
 
 const searchInputShape = {
   q: z.string().min(1).describe("Song or file name to look for"),
@@ -348,6 +353,151 @@ api.openapi(submitScoreRoute, async (c) => {
     playerName: viewer.name,
   });
   return c.json(publicScore(stored), 200);
+});
+
+const voicingShape = z.object({
+  program: z.number().int().min(0).max(127),
+  attack: z.number().int().min(0).max(1000),
+  release: z.number().int().min(0).max(4000),
+  brightness: z.number().int().min(200).max(20000),
+  volume: z.number().int().min(0).max(150),
+});
+
+const songVoicingShape = z.record(z.string(), voicingShape);
+
+const savedVoicingSchema = z.object({
+  authorId: z.string(),
+  authorName: z.string(),
+  tracks: songVoicingShape,
+  updatedAt: z.number(),
+});
+
+const songQuery = {
+  url: z.string().url().describe("The .mid the voicing belongs to"),
+  source: z.string().default("").describe("Provider, empty for a bare URL"),
+};
+
+const listVoicingsRoute = createRoute({
+  method: "get",
+  path: "/voicings",
+  summary: "How people made a song sound",
+  description:
+    "Every saved instrument and shaping for a song, newest first. One per person.",
+  request: { query: z.object(songQuery) },
+  responses: {
+    200: {
+      description: "Saved voicings for the song",
+      content: {
+        "application/json": {
+          schema: z.object({ voicings: z.array(savedVoicingSchema) }),
+        },
+      },
+    },
+  },
+});
+
+const saveVoicingRoute = createRoute({
+  method: "put",
+  path: "/voicings",
+  summary: "Save how a song sounds",
+  description:
+    "Stores the signed in player's instrument and shaping for a song, replacing the one they had.",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({ ...songQuery, tracks: songVoicingShape }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The voicing that was stored",
+      content: { "application/json": { schema: savedVoicingSchema } },
+    },
+    401: {
+      description: "Nobody is signed in, or sign in is not configured",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+  },
+});
+
+const deleteVoicingRoute = createRoute({
+  method: "delete",
+  path: "/voicings",
+  summary: "Drop how you made a song sound",
+  description:
+    "Removes the signed in player's voicing, back to the file's own.",
+  request: { query: z.object(songQuery) },
+  responses: {
+    200: {
+      description: "The voicing is gone",
+      content: {
+        "application/json": { schema: z.object({ deleted: z.boolean() }) },
+      },
+    },
+    401: {
+      description: "Nobody is signed in, or sign in is not configured",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+  },
+});
+
+/** A stored row is only ever written through the schema above, but it outlives
+ * the code that wrote it, so it is read back through the same schema. */
+function readTracks(raw: string): z.infer<typeof songVoicingShape> {
+  try {
+    const parsed = songVoicingShape.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : {};
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return {};
+    }
+    throw error;
+  }
+}
+
+api.openapi(listVoicingsRoute, async (c) => {
+  const song = c.req.valid("query");
+  const saved = await voicingsFor(song);
+  return c.json(
+    {
+      voicings: saved.map((entry) => ({
+        ...entry,
+        tracks: readTracks(entry.tracks),
+      })),
+    },
+    200,
+  );
+});
+
+api.openapi(saveVoicingRoute, async (c) => {
+  const viewer = await currentViewer();
+  if (viewer === null) {
+    return c.json({ error: "Sign in to save how a song sounds" }, 401);
+  }
+  const { tracks, ...song } = c.req.valid("json");
+  const saved = await saveVoicing({
+    authorId: viewer.id,
+    authorName: viewer.name,
+    song,
+    tracks: JSON.stringify(tracks),
+  });
+  return c.json({ ...saved, tracks: readTracks(saved.tracks) }, 200);
+});
+
+api.openapi(deleteVoicingRoute, async (c) => {
+  const viewer = await currentViewer();
+  if (viewer === null) {
+    return c.json({ error: "Sign in to change how a song sounds" }, 401);
+  }
+  await deleteVoicing(viewer.id, c.req.valid("query"));
+  return c.json({ deleted: true }, 200);
 });
 
 api.doc31("/openapi.json", {

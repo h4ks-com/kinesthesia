@@ -1,12 +1,21 @@
 "use client";
 
 import { Volume2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { PianoRollView } from "@/components/piano-roll-view";
 import { PlayerHeader } from "@/components/player-header";
 import { PlayerTransport } from "@/components/player-transport";
 import { clampLatency, judgedPosition } from "@/lib/audio/latency";
 import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
+import { formatClock } from "@/lib/format/clock";
 import { useNoteInput } from "@/lib/input/use-note-input";
 import {
   clampMelodyRate,
@@ -46,17 +55,34 @@ type PlayerProps = {
   /** A live match freezes the settings, since both sides derive their part
    * from them and have to keep agreeing once the scoring starts. */
   locked?: boolean;
+  /** A running battle round hides the transport, so no one can pause, seek or
+   * start on their own; the handle drives playback. */
+  matchActive?: boolean;
+  onEnd?: (score: Score) => void;
 };
 
-export function Player({
-  mode,
-  params,
-  onScore,
-  onPress,
-  onRelease,
-  opponent = null,
-  locked = false,
-}: PlayerProps) {
+/** The battle drives each side's playback through this, so one signal starts a
+ * round on both sides. */
+export type PlayerHandle = {
+  prepare: () => Promise<void>;
+  startRound: () => void;
+  stop: () => void;
+};
+
+export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
+  {
+    mode,
+    params,
+    onScore,
+    onPress,
+    onRelease,
+    opponent = null,
+    locked = false,
+    matchActive = false,
+    onEnd,
+  },
+  ref,
+) {
   const load = useSong(params);
   const song = load.status === "ready" ? load.song : null;
   const interactive = mode !== "watch";
@@ -320,7 +346,11 @@ export function Player({
       },
       [playback, ownedTrack, onRelease],
     ),
-    onToggle: useCallback(() => void playback.toggle(), [playback]),
+    onToggle: useCallback(() => {
+      if (!matchActive) {
+        void playback.toggle();
+      }
+    }, [playback, matchActive]),
   });
 
   /** Opening on the lowest keys hides the part on a phone, where only a slice
@@ -364,6 +394,46 @@ export function Player({
   useEffect(() => {
     onScore?.(gates.score, positionRef.current());
   }, [gates.score, onScore]);
+
+  // The end is only counted for a round that actually started, so a song left
+  // at its end during preview does not report a finish the moment a match opens.
+  const startedRef = useRef(false);
+  const endedRef = useRef(false);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      prepare: () => playback.prepare(),
+      startRound: () => {
+        startedRef.current = true;
+        endedRef.current = false;
+        void playback.restart();
+      },
+      stop: () => {
+        startedRef.current = false;
+        endedRef.current = true;
+        playback.pause();
+      },
+    }),
+    [playback],
+  );
+
+  const endRef = useRef(onEnd);
+  endRef.current = onEnd;
+  useEffect(() => {
+    if (
+      !matchActive ||
+      !startedRef.current ||
+      song === null ||
+      endedRef.current ||
+      playback.elapsed < song.duration
+    ) {
+      return;
+    }
+    startedRef.current = false;
+    endedRef.current = true;
+    endRef.current?.(gates.score);
+  }, [matchActive, song, playback.elapsed, gates.score]);
 
   function seek(position: number) {
     playback.seek(position);
@@ -519,31 +589,38 @@ export function Player({
         )}
       </div>
 
-      <PlayerTransport
-        playing={playback.playing}
-        elapsed={playback.elapsed}
-        duration={song.duration}
-        speed={speed}
-        showSpeed={!locked}
-        keyWidth={keyWidth}
-        onKeyWidth={(next) => changeKeyWidth(next)}
-        melodyRate={melodyRate}
-        onMelodyRate={changeMelodyRate}
-        showMelodyRate={interactive && simplified && !locked}
-        octave={interactive ? input.octave : null}
-        latencyOffset={latencyOffset}
-        onLatencyOffset={(next) => changeLatency(next)}
-        measuredLatency={playback.latency()}
-        showLatency={interactive}
-        inputStatus={input.status}
-        onToggle={() => void playback.toggle()}
-        onSeek={seek}
-        onSpeed={changeSpeed}
-        onOctave={input.setOctave}
-      />
+      {matchActive ? (
+        <footer className="flex h-16 shrink-0 items-center gap-3 border-line border-t bg-panel px-3 font-mono text-muted text-xs tabular-nums sm:px-4">
+          {formatClock(playback.elapsed)}
+          <span className="text-faint"> / {formatClock(song.duration)}</span>
+        </footer>
+      ) : (
+        <PlayerTransport
+          playing={playback.playing}
+          elapsed={playback.elapsed}
+          duration={song.duration}
+          speed={speed}
+          showSpeed={!locked}
+          keyWidth={keyWidth}
+          onKeyWidth={(next) => changeKeyWidth(next)}
+          melodyRate={melodyRate}
+          onMelodyRate={changeMelodyRate}
+          showMelodyRate={interactive && simplified && !locked}
+          octave={interactive ? input.octave : null}
+          latencyOffset={latencyOffset}
+          onLatencyOffset={(next) => changeLatency(next)}
+          measuredLatency={playback.latency()}
+          showLatency={interactive}
+          inputStatus={input.status}
+          onToggle={() => void playback.toggle()}
+          onSeek={seek}
+          onSpeed={changeSpeed}
+          onOctave={input.setOctave}
+        />
+      )}
     </div>
   );
-}
+});
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (

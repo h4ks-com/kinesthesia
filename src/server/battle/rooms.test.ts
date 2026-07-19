@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { createRoom, findRoom, type NewRoom } from "@/server/battle/rooms";
+import {
+  closeRoom,
+  createRoom,
+  findRoom,
+  type NewRoom,
+} from "@/server/battle/rooms";
 
 const host: NewRoom = {
   peerId: "peer-1",
@@ -38,5 +43,13 @@ describe("battle rooms", () => {
 
   it("returns null for a code nobody opened", () => {
     expect(findRoom("ZZZZZ")).toBeNull();
+  });
+});
+
+describe("closing a room", () => {
+  it("removes it so a later lookup finds nothing", () => {
+    const { code } = createRoom(host);
+    closeRoom(code);
+    expect(findRoom(code)).toBeNull();
   });
 });

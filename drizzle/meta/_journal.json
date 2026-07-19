@@ -15,6 +15,13 @@
       "when": 1784400967937,
       "tag": "0001_worried_paibok",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784420313027,
+      "tag": "0002_amusing_firedrake",
+      "breakpoints": true
     }
   ]
 }

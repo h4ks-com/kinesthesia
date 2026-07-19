@@ -97,6 +97,16 @@ Each side hears only itself; the opponent's roll, keys and score are drawn from
 the messages arriving over the peer connection, and their `hello` carries the
 part they are playing so their roll is drawn the way they see it.
 
+A match plays together and never pauses. Both tap Ready, which unlocks their
+audio in a gesture; the host then sends `begin` and both run one countdown and
+start from zero, so the transport is hidden and nobody can pause or seek. When
+the song ends each shows the winner by points and can agree to a rematch or
+leave. Each side beats a steady `ping`, since a closed tab fires no clean
+disconnect; a silence longer than a few beats reads as the other player gone,
+which stops the round and shows that they left. The room is closed the moment a
+player joins, so an invite pulls in nobody else. A finished battle records its
+outcome to the server for a signed in player.
+
 ## Endpoints
 
 ```
@@ -143,7 +153,8 @@ battle neither reads nor writes this memory, since its part is the agreed one.
 
 A finished run is recorded with the settings that made it easier or harder, so
 a leaderboard can say what a score was worth: speed, whether the part was
-simplified, and the note rate it was reduced to.
+simplified, and the note rate it was reduced to. A battle also records its
+outcome and the opponent's points, for a win-loss record.
 
 Scores live in SQLite through Drizzle over the libSQL driver. The driver matters:
 `bun:sqlite` exists only under Bun and `node:sqlite` only under Node, while this

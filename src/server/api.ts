@@ -3,7 +3,12 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Scalar } from "@scalar/hono-api-reference";
 import { currentViewer } from "@/server/auth";
-import { type BattleRoom, createRoom, findRoom } from "@/server/battle/rooms";
+import {
+  type BattleRoom,
+  closeRoom,
+  createRoom,
+  findRoom,
+} from "@/server/battle/rooms";
 import type { Score } from "@/server/db/schema";
 import { midiSourceIds, midiSources } from "@/server/midi/registry";
 import { searchMidi } from "@/server/midi/search";
@@ -152,6 +157,18 @@ const joinRoomRoute = createRoute({
   },
 });
 
+const closeRoomRoute = createRoute({
+  method: "delete",
+  path: "/battle/rooms/{code}",
+  summary: "Close a battle room",
+  description:
+    "The host closes the room once a player has joined, so the invite cannot pull anyone else in.",
+  request: { params: z.object({ code: z.string().length(5) }) },
+  responses: {
+    204: { description: "The room is closed" },
+  },
+});
+
 function roomResponse(room: BattleRoom) {
   return { ...room, tracks: [...room.tracks] };
 }
@@ -166,6 +183,11 @@ api.openapi(joinRoomRoute, (c) => {
     return c.json({ error: "That room is not open" }, 404);
   }
   return c.json(roomResponse(room), 200);
+});
+
+api.openapi(closeRoomRoute, (c) => {
+  closeRoom(c.req.valid("param").code);
+  return c.body(null, 204);
 });
 
 const scoreSchema = z
@@ -245,6 +267,8 @@ const submitScoreRoute = createRoute({
               .max(12)
               .nullable()
               .default(null),
+            outcome: z.enum(["win", "loss", "draw"]).nullable().default(null),
+            opponentPoints: z.number().int().min(0).nullable().default(null),
           }),
         },
       },

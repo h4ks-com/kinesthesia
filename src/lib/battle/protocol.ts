@@ -10,6 +10,12 @@ export type BattleMessage =
       readonly melodyRate?: number;
       readonly tracks?: readonly number[];
     }
+  /** Sent once a side has unlocked its audio and is set to play, since a
+   * browser only starts sound from a tap and both must be armed to stay level. */
+  | { readonly kind: "ready" }
+  /** The host owns the clock, so both sides start a round from this one
+   * message and no one can drift the match by starting on their own. */
+  | { readonly kind: "begin"; readonly round: number }
   | {
       readonly kind: "score";
       readonly score: Score;
@@ -20,7 +26,19 @@ export type BattleMessage =
   | { readonly kind: "press"; readonly pitch: number }
   | { readonly kind: "release"; readonly pitch: number }
   | { readonly kind: "finished"; readonly points: number }
-  | { readonly kind: "rematch" };
+  | { readonly kind: "rematch" }
+  /** A closed tab fires no clean disconnect, so each side beats steadily and a
+   * silence longer than a few beats is read as the other player gone. */
+  | { readonly kind: "ping" };
+
+export type Outcome = "win" | "loss" | "draw";
+
+export function battleOutcome(mine: number, theirs: number): Outcome {
+  if (mine > theirs) {
+    return "win";
+  }
+  return mine < theirs ? "loss" : "draw";
+}
 
 export type Opponent = {
   readonly name: string;
@@ -40,7 +58,17 @@ export const noOpponent: Opponent = {
   finished: false,
 };
 
-const kinds = ["hello", "score", "press", "release", "finished", "rematch"];
+const kinds = [
+  "hello",
+  "ready",
+  "begin",
+  "score",
+  "press",
+  "release",
+  "finished",
+  "rematch",
+  "ping",
+];
 
 export function isBattleMessage(value: unknown): value is BattleMessage {
   if (typeof value !== "object" || value === null) {

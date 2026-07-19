@@ -2,13 +2,9 @@
 
 import { Pause, Play } from "lucide-react";
 import { SettingsMenu } from "@/components/settings-menu";
+import { formatClock } from "@/lib/format/clock";
 import type { InputStatus } from "@/lib/input/use-note-input";
 import type { Speed } from "@/lib/player-url";
-
-function formatClock(seconds: number): string {
-  const whole = Math.max(0, Math.floor(seconds));
-  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
-}
 
 type PlayerTransportProps = {
   playing: boolean;

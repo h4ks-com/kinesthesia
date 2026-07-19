@@ -26,6 +26,10 @@ export const scores = sqliteTable(
       .notNull()
       .default(false),
     melodyRate: integer("melody_rate"),
+    /** A battle also records how it went against the other player, so a public
+     * win-loss record can be built from these rows. */
+    outcome: text("outcome", { enum: ["win", "loss", "draw"] }),
+    opponentPoints: integer("opponent_points"),
     playedAt: integer("played_at").notNull().default(sql`(unixepoch() * 1000)`),
   },
   (table) => [

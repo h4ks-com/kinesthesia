@@ -131,6 +131,9 @@ export function useGates({
       (position: number) => openAt(gateIndexAt(gatesRef.current, position)),
       [openAt],
     ),
-    reset: useCallback(() => openAt(0), [openAt]),
+    reset: useCallback(() => {
+      openAt(0);
+      setScore(emptyScore);
+    }, [openAt]),
   };
 }

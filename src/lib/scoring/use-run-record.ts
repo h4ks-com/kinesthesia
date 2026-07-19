@@ -9,6 +9,7 @@ import {
   scorePoints,
   totalJudged,
 } from "@/lib/scoring/judge";
+import { scoreSubmission } from "@/lib/scoring/submission";
 
 type Options = {
   mode: PlayerMode;
@@ -47,24 +48,32 @@ export function useRunRecord({
     if (recorded.current === run.params.url) {
       return;
     }
-    if (totalJudged(run.score) === 0 || run.mode === "watch") {
+    // Battle records its own result once it knows the opponent's score, so
+    // only a solo learn run is posted here.
+    if (totalJudged(run.score) === 0 || run.mode !== "learn") {
       return;
     }
     recorded.current = run.params.url;
     void fetch("/api/scores", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        song: run.params.name,
-        url: run.params.url,
-        mode: run.mode,
-        points: scorePoints(run.score),
-        accuracy: accuracy(run.score),
-        bestCombo: run.score.bestCombo,
-        speed: run.speed,
-        simplified: run.simplified,
-        melodyRate: run.simplified ? run.melodyRate : null,
-      }),
+      body: JSON.stringify(
+        scoreSubmission(
+          {
+            name: run.params.name,
+            url: run.params.url,
+            speed: run.speed,
+            simplified: run.simplified,
+            melodyRate: run.melodyRate,
+          },
+          run.mode,
+          {
+            points: scorePoints(run.score),
+            accuracy: accuracy(run.score),
+            bestCombo: run.score.bestCombo,
+          },
+        ),
+      ),
     }).catch(() => {
       recorded.current = null;
     });

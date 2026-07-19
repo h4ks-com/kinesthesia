@@ -53,6 +53,12 @@ export function findRoom(code: string): BattleRoom | null {
   return rooms.get(code.toUpperCase()) ?? null;
 }
 
+/** A room is single use: the host closes it once a player is in, so the invite
+ * cannot pull a third person into the match. */
+export function closeRoom(code: string): void {
+  rooms.delete(code.toUpperCase());
+}
+
 export function openRooms(): readonly BattleRoom[] {
   evict(Date.now());
   return [...rooms.values()];

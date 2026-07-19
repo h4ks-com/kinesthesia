@@ -11,6 +11,7 @@ export type MultiplayerRoom = {
   readonly speed: number;
   readonly simplified: boolean;
   readonly melodyRate: number;
+  readonly transpose: number;
   /** A battle is one shared part; a co-op is two parts the host set. */
   readonly coop: boolean;
   readonly createdAt: number;

@@ -14,6 +14,7 @@ const song: PlayerParams = {
   speed: 1,
   simplified: false,
   melodyRate: 6,
+  transpose: 0,
 };
 
 describe("buildPlayerUrl", () => {

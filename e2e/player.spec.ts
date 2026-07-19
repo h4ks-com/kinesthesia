@@ -4,6 +4,7 @@ import {
   isPureWhite,
   keyRowFromBottom,
   litKeyCentre,
+  noteSpan,
   playerQuery,
   reachBarLeft,
   serveFixture,
@@ -247,4 +248,26 @@ test("the octave keys move the reach marker over the keyboard", async ({
 
   await page.keyboard.press("ArrowLeft");
   await expect.poll(async () => reachBarLeft(page)).toBe(start);
+});
+
+test("moving the song to another key holds your place in it", async ({
+  page,
+}) => {
+  await serveFixture(page);
+  await page.goto(`/learn?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  await page.getByRole("slider", { name: "Song position" }).fill("3");
+  await expect(page.getByText("0:03")).toBeVisible();
+  const home = await noteSpan(page);
+
+  await page.locator("footer").getByRole("button", { name: "Key" }).click();
+  await page.getByLabel("Transpose in semitones").fill("7");
+
+  await expect
+    .poll(async () => (await noteSpan(page))?.left ?? 0)
+    .toBeGreaterThan(home?.left ?? 0);
+  // The tune did not change, only where it sits, so the clock carries on.
+  await expect(page.getByText("0:03")).toBeVisible();
+  await expect(page).toHaveURL(/transpose=7/);
 });

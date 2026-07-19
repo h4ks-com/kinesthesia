@@ -3,6 +3,7 @@
 import { ExternalLink, Eye, GraduationCap, Star, Swords } from "lucide-react";
 import Link from "next/link";
 import { defaultMelodyRate } from "@/lib/midi/melody";
+import { defaultTranspose } from "@/lib/midi/song";
 import { defaultSpeed, type PlayerMode, playerPath } from "@/lib/player-url";
 
 const modes = [
@@ -53,6 +54,7 @@ export function SongRow({
     speed: defaultSpeed,
     simplified: false,
     melodyRate: defaultMelodyRate,
+    transpose: defaultTranspose,
   });
 
   return (
@@ -110,6 +112,7 @@ export function SongRow({
               speed: defaultSpeed,
               simplified: false,
               melodyRate: defaultMelodyRate,
+              transpose: defaultTranspose,
             })}
             data-tip={tip}
             data-tip-side="top"

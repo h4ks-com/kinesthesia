@@ -1,13 +1,18 @@
 "use client";
 
 import type { DataConnection } from "peerjs";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MultiplayerInvite } from "@/components/multiplayer-invite";
 import { OpponentPanel } from "@/components/opponent-panel";
 import { Player, type PlayerHandle } from "@/components/player";
 import { TransportBar } from "@/components/player-transport";
 import { clampMelodyRate, defaultMelodyRate } from "@/lib/midi/melody";
 import type { Part } from "@/lib/midi/part";
+import {
+  clampTranspose,
+  defaultTranspose,
+  transposeSong,
+} from "@/lib/midi/song";
 import { useSong } from "@/lib/midi/use-song";
 import type { IceServer } from "@/lib/multiplayer/ice";
 import {
@@ -60,6 +65,7 @@ type RoomReply = {
   readonly speed: number;
   readonly simplified: boolean;
   readonly melodyRate: number;
+  readonly transpose?: number;
   readonly coop: boolean;
 };
 
@@ -69,6 +75,7 @@ function matchKey(match: PlayerParams): string {
     match.simplified,
     match.melodyRate,
     match.speed,
+    match.transpose,
     (match.tracks ?? []).join(","),
   ].join("|");
 }
@@ -130,6 +137,12 @@ export function Multiplayer({
   // it is only watched until the round starts.
   const setupDone = settled || live;
   const song = useSong(match);
+  const theirTranspose = match?.transpose ?? defaultTranspose;
+  const theirSong = useMemo(
+    () =>
+      song.status === "ready" ? transposeSong(song.song, theirTranspose) : null,
+    [song, theirTranspose],
+  );
   const linkRef = useRef<DataConnection | null>(null);
   const peerRef = useRef<{ destroy: () => void } | null>(null);
   const playerRef = useRef<PlayerHandle | null>(null);
@@ -413,6 +426,7 @@ export function Multiplayer({
         speed: asSpeed(room.speed),
         simplified: room.simplified,
         melodyRate: clampMelodyRate(room.melodyRate),
+        transpose: clampTranspose(room.transpose ?? defaultTranspose),
       });
       const { Peer } = await import("peerjs");
       peerRef.current?.destroy();
@@ -461,6 +475,7 @@ export function Multiplayer({
           speed: settings.speed,
           simplified: theirs.simplified,
           melodyRate: theirs.melodyRate,
+          transpose: settings.transpose,
           coop,
         }),
       });
@@ -614,9 +629,9 @@ export function Multiplayer({
           ) : null
         }
         aside={
-          song.status === "ready" ? (
+          theirSong !== null ? (
             <OpponentPanel
-              song={song.song}
+              song={theirSong}
               part={theirSide}
               onPart={canBuildTheirSide ? setOpponentPart : null}
               coop={coop}

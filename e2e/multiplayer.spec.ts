@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { playerQuery, serveFixture } from "./fixture";
+import {
+  playerQuery,
+  reachBarLeft,
+  serveFixture,
+  songName,
+  songUrl,
+} from "./fixture";
 
 test("a match is set up and previewed before anyone is invited", async ({
   page,
@@ -199,4 +205,68 @@ test("battle locks the other side, co-op opens it up", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: /Play .* yourself/ }).first(),
   ).toBeVisible();
+});
+
+test("the room carries the key and a joiner adopts it", async ({ page }) => {
+  await serveFixture(page);
+  let posted: { transpose?: number } = {};
+  await page.route("**/api/multiplayer/rooms", async (route) => {
+    posted = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ code: "ABCDE" }),
+    });
+  });
+  const room = (transpose: number) => ({
+    peerId: "peer-does-not-exist",
+    url: songUrl,
+    name: songName,
+    source: "bitmidi",
+    tracks: [0],
+    speed: 1,
+    simplified: false,
+    melodyRate: 8,
+    transpose,
+    coop: false,
+  });
+
+  await page.goto(`/multiplayer?${playerQuery()}&transpose=4`);
+  await expect(page.locator("canvas").first()).toBeVisible();
+  await page.getByRole("button", { name: "Invite a player" }).click();
+  await expect(
+    page.getByRole("button", { name: "Copy the invite link" }),
+  ).toBeVisible({ timeout: 20_000 });
+  expect(posted.transpose).toBe(4);
+
+  await page.route("**/api/multiplayer/rooms/HOME1", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(room(0)),
+    }),
+  );
+  await page.route("**/api/multiplayer/rooms/MOVED", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(room(7)),
+    }),
+  );
+
+  // The roll frames itself on the part, so a part that moved up the keyboard
+  // scrolls the keys under it and drags the reach marker left.
+  await page.goto("/multiplayer?join=HOME1");
+  await expect(page.locator("canvas").first()).toBeVisible();
+  await expect.poll(async () => reachBarLeft(page)).not.toBeNull();
+  const home = await reachBarLeft(page);
+
+  await page.goto("/multiplayer?join=MOVED");
+  await expect(page.locator("canvas").first()).toBeVisible();
+  await expect.poll(async () => reachBarLeft(page)).not.toBeNull();
+
+  // The joiner never chose a key, so the room's is the only thing that could
+  // have moved their part.
+  expect(home).not.toBeNull();
+  await expect.poll(async () => reachBarLeft(page)).toBeLessThan(home ?? 0);
 });

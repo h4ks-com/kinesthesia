@@ -15,6 +15,7 @@ const host: NewRoom = {
   speed: 1,
   simplified: true,
   melodyRate: 4,
+  transpose: 0,
   coop: false,
 };
 

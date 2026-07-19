@@ -103,6 +103,7 @@ const roomSchema = z
     speed: z.number(),
     simplified: z.boolean(),
     melodyRate: z.number().int(),
+    transpose: z.number().int(),
     coop: z.boolean(),
   })
   .openapi("MultiplayerRoom");
@@ -126,6 +127,7 @@ const createRoomRoute = createRoute({
             speed: z.number().positive().max(4).default(1),
             simplified: z.boolean().default(false),
             melodyRate: z.number().int().min(1).max(12).default(8),
+            transpose: z.number().int().min(-12).max(12).default(0),
             coop: z.boolean().default(false),
           }),
         },

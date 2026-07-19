@@ -1,11 +1,18 @@
 "use client";
 
-import { Gauge, Pause, Play } from "lucide-react";
+import { Gauge, Music4, Pause, Play } from "lucide-react";
 import { SettingsMenu } from "@/components/settings-menu";
 import { Popover } from "@/components/ui/popover";
 import { SliderRow } from "@/components/ui/slider-row";
 import { formatClock } from "@/lib/format/clock";
 import type { InputStatus } from "@/lib/input/use-note-input";
+import {
+  clampTranspose,
+  defaultTranspose,
+  formatTranspose,
+  type Transpose,
+  transposeRange,
+} from "@/lib/midi/song";
 import { defaultSpeed, type Speed, speeds } from "@/lib/player-url";
 
 type PlayerTransportProps = {
@@ -15,6 +22,9 @@ type PlayerTransportProps = {
   speed: Speed;
   /** Null while the speed is fixed: a match runs both sides at one tempo. */
   onSpeed: ((speed: Speed) => void) | null;
+  transpose: Transpose;
+  /** Null while the key is fixed, for the same reason the tempo is. */
+  onTranspose: ((semitones: Transpose) => void) | null;
   keyWidth: number;
   onKeyWidth: (width: number) => void;
   octave: number | null;
@@ -35,6 +45,8 @@ export function PlayerTransport({
   duration,
   speed,
   onSpeed,
+  transpose,
+  onTranspose,
   keyWidth,
   onKeyWidth,
   octave,
@@ -94,7 +106,7 @@ export function PlayerTransport({
       {onSpeed === null ? null : (
         <div className="shrink-0">
           <Popover
-            label="Speed"
+            label={`Speed, ${speed}x`}
             side="top"
             align="right"
             clearance="keyboard"
@@ -110,7 +122,7 @@ export function PlayerTransport({
                 }`}
               >
                 <Gauge className="size-3.5" aria-hidden="true" />
-                {speed}x
+                <span className="hidden sm:inline">{speed}x</span>
               </span>
             )}
           >
@@ -127,6 +139,65 @@ export function PlayerTransport({
               />
               <p className="px-2 pb-1 font-mono text-[0.7rem] text-faint leading-relaxed">
                 Both sides of a match run at this tempo.
+              </p>
+            </div>
+          </Popover>
+        </div>
+      )}
+
+      {onTranspose === null ? (
+        transpose === defaultTranspose ? null : (
+          <span
+            data-tip="The host set this key"
+            data-tip-side="top"
+            data-tip-align="right"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-accent p-2 font-mono text-accent text-xs"
+          >
+            <Music4 className="size-3.5" aria-hidden="true" />
+            <span className="sr-only">Key,</span>
+            {formatTranspose(transpose)}
+            <span className="sr-only">semitones</span>
+          </span>
+        )
+      ) : (
+        <div className="shrink-0">
+          <Popover
+            label={`Key, ${formatTranspose(transpose)} semitones`}
+            side="top"
+            align="right"
+            clearance="keyboard"
+            trigger={(open) => (
+              <span
+                data-tip="Move the song to another key"
+                data-tip-side="top"
+                data-tip-align="right"
+                className={`inline-flex items-center gap-1.5 rounded-lg border p-2 font-mono text-xs transition-colors ${
+                  open || transpose !== defaultTranspose
+                    ? "border-accent text-accent"
+                    : "border-line-strong text-muted hover:border-accent hover:text-accent"
+                }`}
+              >
+                <Music4 className="size-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline">
+                  {formatTranspose(transpose)}
+                </span>
+              </span>
+            )}
+          >
+            <div className="w-56 p-1 max-sm:w-full">
+              <h3 className="label px-2">Key</h3>
+              <SliderRow
+                ariaLabel="Transpose in semitones"
+                min={transposeRange.min}
+                max={transposeRange.max}
+                step={1}
+                value={transpose}
+                valueText={formatTranspose(transpose)}
+                onChange={(value) => onTranspose(clampTranspose(value))}
+              />
+              <p className="px-2 pb-1 font-mono text-[0.7rem] text-faint leading-relaxed">
+                Moves every instrument and both sides of a match. Drums keep
+                their own sounds.
               </p>
             </div>
           </Popover>

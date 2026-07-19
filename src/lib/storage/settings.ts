@@ -1,3 +1,4 @@
+import type { Transpose } from "@/lib/midi/song";
 import { run, stores } from "@/lib/storage/idb";
 import { entryKey } from "@/lib/storage/library";
 
@@ -8,6 +9,8 @@ export type SongSettings = {
   readonly tracks: readonly number[];
   readonly simplified: boolean;
   readonly melodyRate: number;
+  /** Absent on rows written before the song could be moved to another key. */
+  readonly transpose?: Transpose;
 };
 
 /** Settings that belong to the hands and the screen, so they hold across

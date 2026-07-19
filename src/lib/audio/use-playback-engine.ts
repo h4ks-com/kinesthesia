@@ -23,6 +23,10 @@ export type Playback = {
 
 type Options = {
   song: Song | null;
+  /** Identity of the file being played. The engine is rebuilt when this
+   * changes, so re-deriving the song from the same file, as moving it to
+   * another key does, keeps the playhead where it is. */
+  sourceKey: string;
   autoNotes: ReadonlySet<number>;
   speed: number;
   onRestart: () => void;
@@ -30,6 +34,7 @@ type Options = {
 
 export function usePlaybackEngine({
   song,
+  sourceKey,
   autoNotes,
   speed,
   onRestart,
@@ -44,13 +49,17 @@ export function usePlaybackEngine({
   const restartRef = useRef(onRestart);
   restartRef.current = onRestart;
 
+  const songRef = useRef(song);
+  songRef.current = song;
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sourceKey is the rebuild key rather than something the effect reads, and dropping it would leave one engine serving two different files
   useEffect(() => {
-    if (song === null) {
-      return;
-    }
     const engine = new PlaybackEngine();
     engineRef.current = engine;
-    engine.setSong(song, autoNotesRef.current);
+    const current = songRef.current;
+    if (current !== null) {
+      engine.setSong(current, autoNotesRef.current);
+    }
     setPlaying(false);
     setElapsed(0);
     setSoundReady(false);
@@ -58,6 +67,12 @@ export function usePlaybackEngine({
       engine.dispose();
       engineRef.current = null;
     };
+  }, [sourceKey]);
+
+  useEffect(() => {
+    if (song !== null) {
+      engineRef.current?.setSong(song, autoNotesRef.current);
+    }
   }, [song]);
 
   useEffect(() => {

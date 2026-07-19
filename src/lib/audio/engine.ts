@@ -19,6 +19,9 @@ export class PlaybackEngine {
   setSong(song: Song, autoNotes: ReadonlySet<number>): void {
     this.song = song;
     this.autoNotes = autoNotes;
+    // Notes inside the look ahead window are already with a voice, so the
+    // cursor alone would hand them out a second time.
+    this.bank?.stopAll();
     this.resetCursor();
   }
 

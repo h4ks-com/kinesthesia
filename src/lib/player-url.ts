@@ -3,6 +3,11 @@ import {
   defaultMelodyRate,
   type MelodyRate,
 } from "@/lib/midi/melody";
+import {
+  clampTranspose,
+  defaultTranspose,
+  type Transpose,
+} from "@/lib/midi/song";
 
 export const playerModes = ["watch", "learn", "multiplayer"] as const;
 
@@ -23,6 +28,8 @@ export type PlayerParams = {
    * both sides of a match play the identical line. */
   readonly simplified: boolean;
   readonly melodyRate: MelodyRate;
+  /** Semitones the song is moved by, so a part can sit where the hands are. */
+  readonly transpose: Transpose;
 };
 
 function isSpeed(value: number): value is Speed {
@@ -33,7 +40,12 @@ export function asSpeed(value: number): Speed {
   return isSpeed(value) ? value : defaultSpeed;
 }
 
-export type SongSettingKey = "speed" | "tracks" | "simplified" | "melodyRate";
+export type SongSettingKey =
+  | "speed"
+  | "tracks"
+  | "simplified"
+  | "melodyRate"
+  | "transpose";
 
 /** A setting a link states outright wins over what the device remembers for
  * the tune, which is how a shared view reproduces itself. */
@@ -52,6 +64,9 @@ export function explicitSongSettings(
   }
   if (searchParams.has("rate")) {
     present.add("melodyRate");
+  }
+  if (searchParams.has("transpose")) {
+    present.add("transpose");
   }
   return present;
 }
@@ -96,6 +111,9 @@ export function buildPlayerUrl(
   if (explicit || params.melodyRate !== defaultMelodyRate) {
     target.searchParams.set("rate", String(params.melodyRate));
   }
+  if (explicit || params.transpose !== defaultTranspose) {
+    target.searchParams.set("transpose", String(params.transpose));
+  }
   return target.toString();
 }
 
@@ -124,6 +142,7 @@ export function parsePlayerParams(
           .filter((value) => Number.isInteger(value) && value >= 0);
 
   const speed = Number(searchParams.get("speed"));
+  const transpose = Number(searchParams.get("transpose"));
 
   return {
     url,
@@ -133,5 +152,8 @@ export function parsePlayerParams(
     speed: isSpeed(speed) ? speed : defaultSpeed,
     simplified: searchParams.get("simple") === "1",
     melodyRate: readRate(searchParams.get("rate")),
+    transpose: Number.isFinite(transpose)
+      ? clampTranspose(transpose)
+      : defaultTranspose,
   };
 }

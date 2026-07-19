@@ -57,7 +57,8 @@ test("the speed slider replaces the speed buttons", async ({ page }) => {
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(24);
 
   await speed.fill("5");
-  await expect(page.getByText("1.5x").first()).toBeVisible();
+  // The trigger is icon only on a phone, so the panel is where the value reads.
+  await expect(speed).toHaveAttribute("aria-valuetext", "1.5x");
   await expect(page).toHaveURL(/speed=1.5/);
 });
 

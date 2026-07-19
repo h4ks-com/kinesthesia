@@ -31,7 +31,13 @@ import {
   toggleHidden,
   tracksToHide,
 } from "@/lib/midi/part";
-import type { Song } from "@/lib/midi/song";
+import {
+  clampTranspose,
+  defaultTranspose,
+  type Song,
+  type Transpose,
+  transposeSong,
+} from "@/lib/midi/song";
 import { useSong } from "@/lib/midi/use-song";
 import {
   asSpeed,
@@ -106,7 +112,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   ref,
 ) {
   const load = useSong(params);
-  const song = load.status === "ready" ? load.song : null;
+  const original = load.status === "ready" ? load.song : null;
   const interactive = mode !== "watch";
   const waitsForYou = mode === "learn";
 
@@ -121,6 +127,12 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const [keyWidth, setKeyWidth] = useState(defaultKeyWidth);
   const [simplified, setSimplified] = useState(params.simplified);
   const [melodyRate, setMelodyRate] = useState(params.melodyRate);
+  const [transpose, setTranspose] = useState(params.transpose);
+
+  const song = useMemo(
+    () => (original === null ? null : transposeSong(original, transpose)),
+    [original, transpose],
+  );
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const globalTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -140,6 +152,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     speed: Speed;
     simplified: boolean;
     melodyRate: MelodyRate;
+    transpose: Transpose;
   };
   type UrlChange = Partial<SongSettingsValue>;
 
@@ -150,12 +163,14 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     speed,
     simplified,
     melodyRate,
+    transpose,
   });
   settingsRef.current = {
     tracks: [...playerTracks],
     speed,
     simplified,
     melodyRate,
+    transpose,
   };
 
   const merge = useCallback((next: UrlChange): SongSettingsValue => {
@@ -165,6 +180,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
       speed: next.speed ?? current.speed,
       simplified: next.simplified ?? current.simplified,
       melodyRate: next.melodyRate ?? current.melodyRate,
+      transpose: next.transpose ?? current.transpose,
     };
   }, []);
 
@@ -232,11 +248,15 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
           melodyRate: explicit.has("melodyRate")
             ? params.melodyRate
             : clampMelodyRate(stored.melodyRate),
+          transpose: explicit.has("transpose")
+            ? params.transpose
+            : clampTranspose(stored.transpose ?? defaultTranspose),
           tracks: explicit.has("tracks") ? null : stored.tracks,
         };
         setSpeed(next.speed);
         setSimplified(next.simplified);
         setMelodyRate(next.melodyRate);
+        setTranspose(next.transpose);
         if (next.tracks !== null) {
           setPlayerTracks(new Set(next.tracks));
         }
@@ -244,6 +264,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
           speed: next.speed,
           simplified: next.simplified,
           melodyRate: next.melodyRate,
+          transpose: next.transpose,
           tracks: next.tracks ?? undefined,
         });
       })
@@ -269,15 +290,20 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
 
   const focusedSong = useRef<Song | null>(null);
   useEffect(() => {
-    if (song === null || !interactive || playerTracks.size === 0) {
+    if (
+      original === null ||
+      song === null ||
+      !interactive ||
+      playerTracks.size === 0
+    ) {
       return;
     }
-    if (focusedSong.current === song) {
+    if (focusedSong.current === original) {
       return;
     }
-    focusedSong.current = song;
+    focusedSong.current = original;
     setHiddenTracks(tracksToHide(song, playerTracks));
-  }, [song, interactive, playerTracks]);
+  }, [song, original, interactive, playerTracks]);
 
   const owed = useMemo(() => {
     if (song === null || !interactive) {
@@ -314,6 +340,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const resetGates = useCallback(() => gatesRef.current?.reset(), []);
   const playback = usePlaybackEngine({
     song,
+    sourceKey: params.url,
     autoNotes,
     speed,
     onRestart: resetGates,
@@ -523,6 +550,11 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     settleCommit({ melodyRate: rate });
   }
 
+  function changeTranspose(next: Transpose) {
+    setTranspose(next);
+    settleCommit({ transpose: next });
+  }
+
   function changeSpeed(next: Speed) {
     setSpeed(next);
     settleCommit({ speed: next });
@@ -586,6 +618,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
               speed,
               simplified,
               melodyRate,
+              transpose,
             }}
             tracks={song.tracks}
             hiddenTracks={hiddenTracks}
@@ -642,6 +675,8 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
           duration={song.duration}
           speed={speed}
           onSpeed={locked ? null : changeSpeed}
+          transpose={transpose}
+          onTranspose={locked ? null : changeTranspose}
           keyWidth={keyWidth}
           onKeyWidth={(next) => changeKeyWidth(next)}
           octave={interactive ? input.octave : null}

@@ -47,37 +47,43 @@ const idleKeyColor = [223, 228, 236] as const;
 /** Finds the middle of each pale run along one row of the keyboard, which is
  * one run per visible white key, so both the count and the positions come from
  * what was actually painted rather than from assumed geometry. */
-export async function whiteKeyCentres(page: Page): Promise<number[]> {
-  return page.evaluate((fromBottom) => {
-    const canvas = document.querySelector("canvas");
-    if (canvas === null) {
-      return [];
-    }
-    const context = canvas.getContext("2d");
-    if (context === null) {
-      return [];
-    }
-    const ratio = canvas.width / canvas.clientWidth;
-    const row = Math.round((canvas.clientHeight - fromBottom) * ratio);
-    const { data } = context.getImageData(0, row, canvas.width, 1);
-    const centres: number[] = [];
-    let start: number | null = null;
-    for (let pixel = 0; pixel <= canvas.width; pixel += 1) {
-      const index = pixel * 4;
-      const pale =
-        pixel < canvas.width &&
-        (data[index] ?? 0) > 150 &&
-        (data[index + 2] ?? 0) > 150;
-      if (pale && start === null) {
-        start = pixel;
+export async function whiteKeyCentres(
+  page: Page,
+  which = 0,
+): Promise<number[]> {
+  return page.evaluate(
+    ([fromBottom, index]) => {
+      const canvas = document.querySelectorAll("canvas")[index ?? 0] ?? null;
+      if (canvas === null) {
+        return [];
       }
-      if (!pale && start !== null) {
-        centres.push((start + pixel) / 2 / ratio);
-        start = null;
+      const context = canvas.getContext("2d");
+      if (context === null) {
+        return [];
       }
-    }
-    return centres;
-  }, keyRowFromBottom);
+      const ratio = canvas.width / canvas.clientWidth;
+      const row = Math.round((canvas.clientHeight - (fromBottom ?? 0)) * ratio);
+      const { data } = context.getImageData(0, row, canvas.width, 1);
+      const centres: number[] = [];
+      let start: number | null = null;
+      for (let pixel = 0; pixel <= canvas.width; pixel += 1) {
+        const index = pixel * 4;
+        const pale =
+          pixel < canvas.width &&
+          (data[index] ?? 0) > 150 &&
+          (data[index + 2] ?? 0) > 150;
+        if (pale && start === null) {
+          start = pixel;
+        }
+        if (!pale && start !== null) {
+          centres.push((start + pixel) / 2 / ratio);
+          start = null;
+        }
+      }
+      return centres;
+    },
+    [keyRowFromBottom, which],
+  );
 }
 
 export async function pixelAt(
@@ -148,8 +154,6 @@ export async function keyIsLit(page: Page, x: number): Promise<boolean> {
   return distance > 25;
 }
 
-/** One measure of how much of the song is drawn as yours, since ghosted notes
- * are painted faintly. */
 /** Left edge of the accent bar marking what the computer keyboard reaches,
  * read off the strip just above the keys. Null when no bar is drawn. */
 export async function reachBarLeft(page: Page): Promise<number | null> {
@@ -177,6 +181,42 @@ export async function reachBarLeft(page: Page): Promise<number | null> {
   });
 }
 
+/** Where the falling notes sit across the keyboard, which is what moving the
+ * song to another key changes. Null when the roll is empty. */
+export async function noteSpan(
+  page: Page,
+  which = 0,
+): Promise<{ left: number; right: number } | null> {
+  return page.evaluate((index) => {
+    const canvas = document.querySelectorAll("canvas")[index] ?? null;
+    const context = canvas?.getContext("2d") ?? null;
+    if (canvas === null || context === null) {
+      return null;
+    }
+    const ratio = canvas.width / canvas.clientWidth;
+    const height = Math.round(canvas.height * 0.6);
+    const { data } = context.getImageData(0, 0, canvas.width, height);
+    let left: number | null = null;
+    let right: number | null = null;
+    for (let pixel = 0; pixel < data.length; pixel += 4) {
+      const lit =
+        (data[pixel] ?? 0) + (data[pixel + 1] ?? 0) + (data[pixel + 2] ?? 0) >
+        200;
+      if (!lit) {
+        continue;
+      }
+      const column = (pixel / 4) % canvas.width;
+      left = left === null ? column : Math.min(left, column);
+      right = right === null ? column : Math.max(right, column);
+    }
+    return left === null || right === null
+      ? null
+      : { left: Math.round(left / ratio), right: Math.round(right / ratio) };
+  }, which);
+}
+
+/** One measure of how much of the song is drawn as yours, since ghosted notes
+ * are painted faintly. */
 export async function brightNotePixels(page: Page): Promise<number> {
   return page.evaluate(() => {
     const canvas = document.querySelector("canvas");

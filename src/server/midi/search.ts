@@ -1,4 +1,5 @@
 import { defaultMelodyRate } from "@/lib/midi/melody";
+import { defaultTranspose } from "@/lib/midi/song";
 import {
   buildPlayerUrl,
   defaultSpeed,
@@ -40,6 +41,7 @@ export async function searchMidi({
           speed: defaultSpeed,
           simplified: false,
           melodyRate: defaultMelodyRate,
+          transpose: defaultTranspose,
         });
       return {
         ...result,

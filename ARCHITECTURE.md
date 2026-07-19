@@ -32,7 +32,7 @@ src/components/
                               match through its aside, overlay and footer slots
   player-header.tsx           title, score and mode switching
   part-controls.tsx           tracks, simplify and note density for one side
-  player-transport.tsx        play, clock, scrubber, speed and settings
+  player-transport.tsx        play, clock, scrubber, speed, key and settings
   settings-menu.tsx           key size, octave, timing and input
   piano-roll-view.tsx         canvas, the frame loop, touch input and panning
   track-menu.tsx              show, hide, solo and claim tracks
@@ -45,7 +45,7 @@ src/lib/
   player-url.ts               builds and parses player URLs
   search-params.ts            route search params to URLSearchParams
   format/clock.ts             seconds as m:ss
-  midi/song.ts                parses a .mid into a flat note list
+  midi/song.ts                parses a .mid into a flat note list, moves it to another key
   midi/melody.ts              reduces a part to one playable note at a time
   midi/part.ts                a side's tracks and the notes sounding right now
   midi/use-part-roll.ts       a part as the getters the roll draws with
@@ -108,9 +108,9 @@ The match hangs off the player through its `aside`, `overlay` and footer slots,
 which puts one transport under both halves rather than one per side. That bar
 carries the clock, the timeline, the shared speed and the invite, and because the
 other half draws off the player's own clock, scrubbing walks both rolls together
-and reads ahead on what each side is about to play. Speed is global to a match,
-so it sits on that bar; what the settings menu keeps is only what this device
-does with the song: key size, octave, timing and input.
+and reads ahead on what each side is about to play. Speed and key are global to
+a match, so they sit on that bar; what the settings menu keeps is only what this
+device does with the song: key size, octave, timing and input.
 
 Sending the invite is the last step and ends setup. It opens a room, freezes both
 parts and takes the play and seek controls away, so from then on neither side is
@@ -174,7 +174,7 @@ header renders no button and the app is fully anonymous with recents and
 favourites kept in the browser.
 
 Settings are remembered in the browser. Per song settings (speed, tracks,
-simplify and its note rate) come back when the song opens in any mode; global
+simplify and its note rate, key) come back when the song opens in any mode; global
 settings (key width, timing offset) hold across every song. A link that states
 a song setting outright still wins, so a shared view reproduces itself. A locked
 match neither reads nor writes this memory, since its part is the prepared one.

@@ -50,6 +50,39 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* The platform scrollbar is a bright slab on this chrome and squares off the
+   rounded panels it sits in. The transparent border insets the thumb so it
+   clears the corner instead of running into it. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 .label {
   font-family: var(--font-mono-data), ui-monospace, monospace;
   font-size: 0.6875rem;

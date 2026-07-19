@@ -602,7 +602,6 @@ export function Multiplayer({
             <MultiplayerInvite
               connection={connection}
               copyState={copyState}
-              coop={coop}
               onInvite={() => {
                 if (isHost) {
                   void invite();

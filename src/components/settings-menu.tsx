@@ -101,7 +101,7 @@ export function SettingsMenu({
         </Section>
 
         {showMelodyRate ? (
-          <Section title="Note speed">
+          <Section title="Note density">
             <SliderRow
               ariaLabel="Maximum notes per second"
               min={melodyRateRange.min}

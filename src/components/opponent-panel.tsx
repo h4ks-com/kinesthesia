@@ -147,11 +147,11 @@ export function OpponentPanel({
 
         {onPart !== null && simplified ? (
           <Popover
-            label="Their note speed"
+            label="Their note density"
             align="right"
             trigger={(open) => (
               <span
-                data-tip="Their note speed"
+                data-tip="Their note density"
                 className={`inline-flex items-center rounded-lg border p-2 font-mono text-xs transition-colors ${
                   open
                     ? "border-accent text-accent"
@@ -163,7 +163,7 @@ export function OpponentPanel({
             )}
           >
             <div className="w-52 p-1 max-sm:w-full">
-              <h3 className="label px-2">Their note speed</h3>
+              <h3 className="label px-2">Their note density</h3>
               <SliderRow
                 ariaLabel="Their maximum notes per second"
                 min={melodyRateRange.min}

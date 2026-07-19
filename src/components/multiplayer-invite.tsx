@@ -14,17 +14,13 @@ export type InviteConnection =
 type MultiplayerInviteProps = {
   connection: InviteConnection;
   copyState: "idle" | "copied" | "denied";
-  coop: boolean;
   onInvite: () => void;
   onCopy: () => void;
 };
 
-/** Sits under the other player, since sending the invite is the last step of
- * setting them up. */
 export function MultiplayerInvite({
   connection,
   copyState,
-  coop,
   onInvite,
   onCopy,
 }: MultiplayerInviteProps) {
@@ -87,14 +83,8 @@ export function MultiplayerInvite({
 
   return (
     <>
-      <span className="min-w-0 flex-1 truncate text-xs">
-        {connection.status === "failed" ? (
-          <span className="text-danger">{connection.message}</span>
-        ) : (
-          <span className="text-muted">
-            {coop ? "Set the part they play" : "Both play your part"}
-          </span>
-        )}
+      <span className="min-w-0 flex-1 truncate text-danger text-xs">
+        {connection.status === "failed" ? connection.message : null}
       </span>
       <button
         type="button"

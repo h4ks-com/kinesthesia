@@ -126,7 +126,9 @@ test("simplify reduces the part and ghosts the rest", async ({ page }) => {
     .toBeLessThan(full * 0.9);
 });
 
-test("the note speed slider follows the simplify toggle", async ({ page }) => {
+test("the note density slider follows the simplify toggle", async ({
+  page,
+}) => {
   await serveFixture(page);
   await page.goto(`/learn?${playerQuery()}`);
   await expect(page.locator("canvas")).toBeVisible();

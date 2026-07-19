@@ -143,15 +143,17 @@ test("the note speed slider follows the simplify toggle", async ({ page }) => {
   await expect(page).toHaveURL(/rate=3/);
 });
 
-test("a battle keeps the simplify setting fixed for both players", async ({
+test("multiplayer keeps the simplify setting fixed for both players", async ({
   page,
 }) => {
   await serveFixture(page);
   await page.goto(`/learn?${playerQuery()}`);
   await page.getByRole("button", { name: "Simplify" }).click();
 
-  const battle = page.getByRole("link", { name: "Switch to Battle" });
-  await expect(battle).toHaveAttribute("href", /simple=1/);
+  const multiplayer = page.getByRole("link", {
+    name: "Switch to Multiplayer",
+  });
+  await expect(multiplayer).toHaveAttribute("href", /simple=1/);
 });
 
 test("a song remembers its settings across modes", async ({ page }) => {

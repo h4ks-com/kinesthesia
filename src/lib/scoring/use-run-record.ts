@@ -48,7 +48,7 @@ export function useRunRecord({
     if (recorded.current === run.params.url) {
       return;
     }
-    // Battle records its own result once it knows the opponent's score, so
+    // A match records its own result once it knows the opponent's score, so
     // only a solo learn run is posted here.
     if (totalJudged(run.score) === 0 || run.mode !== "learn") {
       return;
@@ -66,7 +66,7 @@ export function useRunRecord({
             simplified: run.simplified,
             melodyRate: run.melodyRate,
           },
-          run.mode,
+          "learn",
           {
             points: scorePoints(run.score),
             accuracy: accuracy(run.score),

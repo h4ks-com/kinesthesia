@@ -4,7 +4,7 @@ import {
   createRoom,
   findRoom,
   type NewRoom,
-} from "@/server/battle/rooms";
+} from "@/server/multiplayer/rooms";
 
 const host: NewRoom = {
   peerId: "peer-1",
@@ -15,9 +15,10 @@ const host: NewRoom = {
   speed: 1,
   simplified: true,
   melodyRate: 4,
+  coop: false,
 };
 
-describe("battle rooms", () => {
+describe("multiplayer rooms", () => {
   it("hands out a five character code", () => {
     expect(createRoom(host).code).toMatch(/^[A-Z2-9]{5}$/);
   });
@@ -39,6 +40,11 @@ describe("battle rooms", () => {
     const found = findRoom(room.code);
     expect(found?.url).toBe(host.url);
     expect(found?.tracks).toEqual([0, 2]);
+  });
+
+  it("carries whether the room is a co-op", () => {
+    const room = createRoom({ ...host, coop: true });
+    expect(findRoom(room.code)?.coop).toBe(true);
   });
 
   it("returns null for a code nobody opened", () => {

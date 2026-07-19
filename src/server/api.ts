@@ -3,15 +3,15 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Scalar } from "@scalar/hono-api-reference";
 import { currentViewer } from "@/server/auth";
-import {
-  type BattleRoom,
-  closeRoom,
-  createRoom,
-  findRoom,
-} from "@/server/battle/rooms";
 import type { Score } from "@/server/db/schema";
 import { midiSourceIds, midiSources } from "@/server/midi/registry";
 import { searchMidi } from "@/server/midi/search";
+import {
+  closeRoom,
+  createRoom,
+  findRoom,
+  type MultiplayerRoom,
+} from "@/server/multiplayer/rooms";
 import { saveScore, statsFor, topScores } from "@/server/scores/store";
 
 const searchInputShape = {
@@ -35,9 +35,9 @@ const midiSearchItemSchema = z
     learnUrl: z
       .string()
       .describe("Link that waits for the player to hit each note"),
-    battleUrl: z
+    multiplayerUrl: z
       .string()
-      .describe("Link that scores two people racing on this song"),
+      .describe("Link that opens this song for two players together"),
   })
   .openapi("MidiSearchItem");
 
@@ -103,13 +103,14 @@ const roomSchema = z
     speed: z.number(),
     simplified: z.boolean(),
     melodyRate: z.number().int(),
+    coop: z.boolean(),
   })
-  .openapi("BattleRoom");
+  .openapi("MultiplayerRoom");
 
 const createRoomRoute = createRoute({
   method: "post",
-  path: "/battle/rooms",
-  summary: "Open a battle room",
+  path: "/multiplayer/rooms",
+  summary: "Open a multiplayer room",
   description:
     "Registers the host peer so a second player can find it by code. Gameplay then runs peer to peer.",
   request: {
@@ -125,6 +126,7 @@ const createRoomRoute = createRoute({
             speed: z.number().positive().max(4).default(1),
             simplified: z.boolean().default(false),
             melodyRate: z.number().int().min(1).max(12).default(8),
+            coop: z.boolean().default(false),
           }),
         },
       },
@@ -140,8 +142,8 @@ const createRoomRoute = createRoute({
 
 const joinRoomRoute = createRoute({
   method: "get",
-  path: "/battle/rooms/{code}",
-  summary: "Look up a battle room",
+  path: "/multiplayer/rooms/{code}",
+  summary: "Look up a multiplayer room",
   request: { params: z.object({ code: z.string().length(5) }) },
   responses: {
     200: {
@@ -159,8 +161,8 @@ const joinRoomRoute = createRoute({
 
 const closeRoomRoute = createRoute({
   method: "delete",
-  path: "/battle/rooms/{code}",
-  summary: "Close a battle room",
+  path: "/multiplayer/rooms/{code}",
+  summary: "Close a multiplayer room",
   description:
     "The host closes the room once a player has joined, so the invite cannot pull anyone else in.",
   request: { params: z.object({ code: z.string().length(5) }) },
@@ -169,7 +171,7 @@ const closeRoomRoute = createRoute({
   },
 });
 
-function roomResponse(room: BattleRoom) {
+function roomResponse(room: MultiplayerRoom) {
   return { ...room, tracks: [...room.tracks] };
 }
 
@@ -254,7 +256,7 @@ const submitScoreRoute = createRoute({
           schema: z.object({
             song: z.string().min(1),
             url: z.string().url(),
-            mode: z.enum(["learn", "battle"]),
+            mode: z.enum(["learn", "battle", "coop"]),
             points: z.number().int().min(0),
             accuracy: z.number().min(0).max(1),
             bestCombo: z.number().int().min(0),
@@ -364,8 +366,8 @@ const mcpInstructions = `Kinesthesia is a MIDI file search engine. Look up songs
 by name and get, for every match, a direct .mid download URL that any program
 reading MIDI can fetch. Use it whenever someone wants a MIDI file for a song.
 Each match also carries a player link that opens the song in a browser: /watch
-plays it back, /learn waits for the player to hit each note, /battle scores two
-people on the same song.`;
+plays it back, /learn waits for the player to hit each note, /multiplayer plays
+it with two people together.`;
 
 function createMcpServer(): McpServer {
   const mcp = new McpServer(
@@ -378,7 +380,7 @@ function createMcpServer(): McpServer {
     {
       title: "Search MIDI files",
       description:
-        "Find MIDI files by song name. Returns, for each match, the source, a direct .mid download URL to fetch the file, and browser links to play it back (playUrl), practise it (learnUrl) or race someone on it (battleUrl).",
+        "Find MIDI files by song name. Returns, for each match, the source, a direct .mid download URL to fetch the file, and browser links to play it back (playUrl), practise it (learnUrl) or play it with someone (multiplayerUrl).",
       inputSchema: searchInputShape,
     },
     async ({ q, source, limit }) => {

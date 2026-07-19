@@ -143,6 +143,29 @@ body {
   animation: rise 0.18s ease both;
 }
 
+@keyframes pop {
+  0% {
+    opacity: 0;
+    scale: 0.8;
+  }
+  15% {
+    opacity: 1;
+    scale: 1.06;
+  }
+  45% {
+    opacity: 1;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 1;
+  }
+}
+
+.pop {
+  animation: pop 0.7s ease both;
+}
+
 ::selection {
   background: var(--accent-soft);
   color: var(--text);

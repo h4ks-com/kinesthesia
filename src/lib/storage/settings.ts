@@ -2,7 +2,7 @@ import { run, stores } from "@/lib/storage/idb";
 import { entryKey } from "@/lib/storage/library";
 
 /** Settings that belong to a song: the same tune keeps them across watch,
- * learn and battle, and gets them back when it opens again. */
+ * learn and multiplayer, and gets them back when it opens again. */
 export type SongSettings = {
   readonly speed: number;
   readonly tracks: readonly number[];

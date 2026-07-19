@@ -13,7 +13,12 @@ const modes = [
     icon: GraduationCap,
     tip: "Learn it yourself",
   },
-  { mode: "battle", label: "Battle", icon: Swords, tip: "Challenge someone" },
+  {
+    mode: "multiplayer",
+    label: "Multiplayer",
+    icon: Swords,
+    tip: "Play together",
+  },
 ] as const satisfies readonly {
   mode: PlayerMode;
   label: string;

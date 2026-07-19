@@ -16,7 +16,7 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Kinesthesia",
-  description: "Watch, play and battle your way through MIDI songs.",
+  description: "Watch, learn and play MIDI songs together.",
 };
 
 export default function RootLayout({

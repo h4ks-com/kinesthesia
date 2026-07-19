@@ -12,7 +12,7 @@ export type MidiSearchResult = {
 export type MidiSearchItem = MidiSearchResult & {
   readonly playUrl: string;
   readonly learnUrl: string;
-  readonly battleUrl: string;
+  readonly multiplayerUrl: string;
 };
 
 export type MidiSource = {

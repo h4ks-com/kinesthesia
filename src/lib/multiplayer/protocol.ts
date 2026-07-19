@@ -1,11 +1,11 @@
-import type { Score } from "@/lib/scoring/judge";
+import type { Judgement, Score } from "@/lib/scoring/judge";
 
-export type BattleMessage =
+export type MatchMessage =
   | {
       readonly kind: "hello";
       readonly name: string;
-      /** What the sender owes, so their roll can be drawn the way they see it
-       * rather than as the whole part. */
+      /** The sender's part, so their roll is drawn the way they see it: a co-op
+       * hands each side a different one. */
       readonly simplified?: boolean;
       readonly melodyRate?: number;
       readonly tracks?: readonly number[];
@@ -16,15 +16,16 @@ export type BattleMessage =
   /** The host owns the clock, so both sides start a round from this one
    * message and no one can drift the match by starting on their own. */
   | { readonly kind: "begin"; readonly round: number }
+  /** Both sides roll from the same start on their own clock, so only the
+   * running score crosses the wire. */
   | {
       readonly kind: "score";
       readonly score: Score;
       readonly points: number;
       readonly accuracy: number;
-      readonly position: number;
     }
-  | { readonly kind: "press"; readonly pitch: number }
-  | { readonly kind: "release"; readonly pitch: number }
+  /** One per judged note, so the other side can flash the same hit or miss. */
+  | { readonly kind: "hit"; readonly judgement: Judgement }
   | { readonly kind: "finished"; readonly points: number }
   | { readonly kind: "rematch" }
   /** A closed tab fires no clean disconnect, so each side beats steadily and a
@@ -45,7 +46,6 @@ export type Opponent = {
   readonly points: number;
   readonly accuracy: number;
   readonly combo: number;
-  readonly position: number;
   readonly finished: boolean;
 };
 
@@ -54,7 +54,6 @@ export const noOpponent: Opponent = {
   points: 0,
   accuracy: 1,
   combo: 0,
-  position: 0,
   finished: false,
 };
 
@@ -63,14 +62,13 @@ const kinds = [
   "ready",
   "begin",
   "score",
-  "press",
-  "release",
+  "hit",
   "finished",
   "rematch",
   "ping",
 ];
 
-export function isBattleMessage(value: unknown): value is BattleMessage {
+export function isMatchMessage(value: unknown): value is MatchMessage {
   if (typeof value !== "object" || value === null) {
     return false;
   }

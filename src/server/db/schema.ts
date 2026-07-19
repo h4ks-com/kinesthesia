@@ -15,7 +15,7 @@ export const scores = sqliteTable(
     playerName: text("player_name").notNull(),
     song: text("song").notNull(),
     url: text("url").notNull(),
-    mode: text("mode", { enum: ["learn", "battle"] }).notNull(),
+    mode: text("mode", { enum: ["learn", "battle", "coop"] }).notNull(),
     points: integer("points").notNull(),
     accuracy: real("accuracy").notNull(),
     bestCombo: integer("best_combo").notNull(),
@@ -26,8 +26,9 @@ export const scores = sqliteTable(
       .notNull()
       .default(false),
     melodyRate: integer("melody_rate"),
-    /** A battle also records how it went against the other player, so a public
-     * win-loss record can be built from these rows. */
+    /** A battle records how it went against the other player, so a public
+     * win-loss record can be built from these rows; a co-op leaves outcome
+     * empty and just keeps the other player's points beside it. */
     outcome: text("outcome", { enum: ["win", "loss", "draw"] }),
     opponentPoints: integer("opponent_points"),
     playedAt: integer("played_at").notNull().default(sql`(unixepoch() * 1000)`),

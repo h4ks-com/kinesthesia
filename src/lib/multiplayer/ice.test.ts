@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { iceServers } from "@/lib/battle/ice";
+import { iceServers } from "@/lib/multiplayer/ice";
 
 describe("iceServers", () => {
   it("falls back to plain STUN when no relay is configured", () => {

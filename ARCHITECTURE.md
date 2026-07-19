@@ -9,14 +9,14 @@ and the MCP tools.
 ```
 src/app/
   page.tsx                    search home
-  watch|learn|battle/page.tsx  read the URL, hand params to the player
+  watch|learn|multiplayer/page.tsx  read the URL, hand params to the player
   api/[[...route]]/route.ts   mounts the Hono app at /api
 src/server/
   api.ts                      routes, OpenAPI spec, Scalar docs, MCP server
   config.ts                   environment
   auth.ts                     optional Logto session and sign in actions
   http/fetch.ts               proxy aware fetch for outbound source calls
-  battle/rooms.ts             room codes pointing at a host peer
+  multiplayer/rooms.ts        room codes pointing at a host peer, per match
   db/schema.ts                Drizzle tables
   db/client.ts                libSQL connection and migration runner
   scores/store.ts             leaderboard queries
@@ -34,14 +34,19 @@ src/components/
   settings-menu.tsx           speed and octave in one place
   piano-roll-view.tsx         canvas, the frame loop, touch input and panning
   track-menu.tsx              show, hide, solo and claim tracks
-  battle.tsx                  set up, invite, then the split view
-  battle-invite.tsx           the invite banner over the roll
+  hit-flag.tsx                the per-note perfect, good or miss verdict
+  multiplayer.tsx             set up, invite, then the split view
+  multiplayer-invite.tsx      the invite banner and battle or co-op toggle
+  opponent-setup.tsx          the host building the co-op opponent's part
   opponent-view.tsx           the other player's roll, silent by design
 src/lib/
   player-url.ts               builds and parses player URLs
   search-params.ts            route search params to URLSearchParams
+  format/clock.ts             seconds as m:ss
   midi/song.ts                parses a .mid into a flat note list
   midi/melody.ts              reduces a part to one playable note at a time
+  midi/part.ts                a side's tracks and the notes sounding right now
+  midi/use-part-roll.ts       a part as the getters the roll draws with
   midi/palette.ts             per track and per pitch colours
   audio/transport.ts          song position on the audio clock
   audio/engine.ts             instruments and the look ahead scheduler
@@ -57,10 +62,11 @@ src/lib/
   scoring/judge.ts            hit windows, combo and accuracy
   scoring/gates.ts            chords the player owes, as one unit each
   scoring/use-gates.ts        waiting, judging and missing
+  scoring/submission.ts       the one shape a recorded run is posted in
   scoring/use-run-record.ts   sends a finished run to the leaderboard
   input/use-note-input.ts     keyboard, MIDI and octave in one listener
-  battle/protocol.ts          messages exchanged between peers
-  battle/ice.ts               STUN, plus a TURN relay when configured
+  multiplayer/protocol.ts     messages exchanged between peers
+  multiplayer/ice.ts          STUN, plus a TURN relay when configured
   storage/idb.ts              the IndexedDB connection and one query helper
   storage/library.ts          recents and favourites, and the word filter the
                               home page runs over them
@@ -77,43 +83,49 @@ backwards.
 
 ## Modes
 
-`watch` plays every track. `learn` and `battle` hand the chosen tracks to the
-player: the notes they owe are muted and the roll shows only them. Simplify
+`watch` plays every track. `learn` and `multiplayer` hand the chosen tracks to
+the player: the notes they owe are muted and the roll shows only them. Simplify
 reduces that part to one note at a time, and the notes it drops are played by
 the engine and drawn faintly, so the song still sounds whole. The reduction is
-a pure function of the file and the URL parameters, because both sides of a
-battle derive it separately and have to agree. `learn` pauses when
-it reaches a note the player owes and resumes once they press it, while `battle`
-plays straight through and simply counts the miss.
+a pure function of the file and the part parameters, because both sides of a
+match derive it separately and have to agree. `learn` pauses when it reaches a
+note the player owes and resumes once they press it, while `multiplayer` plays
+straight through and simply counts the miss. Each judged note pops a `hit-flag`,
+green, gold or red, high on the roll clear of the keys.
 
-`battle` opens on the song itself: the host picks the part and difficulty and
-plays it as much as they like, then confirms with an invite. That opens a room,
-freezes the settings, and hands back a link. Opening that link joins straight
-away and adopts the host's settings, so both sides play the same part without
-anyone typing a code.
+`multiplayer` opens on the song itself: the host picks the part and difficulty
+and plays it as much as they like, then confirms with an invite. That opens a
+room, freezes the settings, and hands back a link. Opening that link joins
+straight away and adopts what the host prepared, so nobody types a code. A
+**battle** locks both sides to one part; a **co-op** lets the host build a
+different part per side (`opponent-setup`) and hands the joiner theirs. Speed is
+always shared, so the two rolls stay in step.
 
 Once connected it shows both players side by side, stacked on a narrow screen.
-Each side hears only itself; the opponent's roll, keys and score are drawn from
-the messages arriving over the peer connection, and their `hello` carries the
-part they are playing so their roll is drawn the way they see it.
+Each side hears only itself and rolls from its own clock; because both start
+together and share the song and speed, the opponent's roll scrolls off the local
+position and stays smooth without a single note event on the wire. Their `hello`
+carries the part they are playing, so their roll and keys are drawn the way they
+see it, and only their running score and each `hit` cross over.
 
 A match plays together and never pauses. Both tap Ready, which unlocks their
 audio in a gesture; the host then sends `begin` and both run one countdown and
 start from zero, so the transport is hidden and nobody can pause or seek. When
-the song ends each shows the winner by points and can agree to a rematch or
+the song ends each shows the result by points and can agree to a rematch or
 leave. Each side beats a steady `ping`, since a closed tab fires no clean
 disconnect; a silence longer than a few beats reads as the other player gone,
 which stops the round and shows that they left. The room is closed the moment a
-player joins, so an invite pulls in nobody else. A finished battle records its
-outcome to the server for a signed in player.
+player joins, so an invite pulls in nobody else. A finished match records its
+run for a signed in player: a battle keeps the win-loss outcome, a co-op keeps
+the other player's points with no winner.
 
 ## Endpoints
 
 ```
 GET  /api/midi/search         search across sources
 GET  /api/midi/sources        list sources
-POST /api/battle/rooms        open a room
-GET  /api/battle/rooms/{code} look one up
+POST /api/multiplayer/rooms        open a room
+GET  /api/multiplayer/rooms/{code} look one up
 GET  /api/openapi.json        generated spec
 GET  /api/docs                Scalar reference
 ALL  /api/mcp                 MCP over streamable HTTP
@@ -137,7 +149,7 @@ Browsers fetch `.mid` files straight from the source, so playback needs no
 proxy. Only server side search does, and only when the host IP is blocked, which
 is what `MIDI_SOURCE_PROXY_URL` is for.
 
-Battle rooms live in memory, so they are lost on restart and do not span
+Multiplayer rooms live in memory, so they are lost on restart and do not span
 replicas. Web MIDI is unavailable in Safari, which is why the computer keyboard
 path is not optional.
 
@@ -149,12 +161,14 @@ Settings are remembered in the browser. Per song settings (speed, tracks,
 simplify and its note rate) come back when the song opens in any mode; global
 settings (key width, timing offset) hold across every song. A link that states
 a song setting outright still wins, so a shared view reproduces itself. A locked
-battle neither reads nor writes this memory, since its part is the agreed one.
+match neither reads nor writes this memory, since its part is the prepared one.
 
 A finished run is recorded with the settings that made it easier or harder, so
 a leaderboard can say what a score was worth: speed, whether the part was
-simplified, and the note rate it was reduced to. A battle also records its
-outcome and the opponent's points, for a win-loss record.
+simplified, and the note rate it was reduced to. A run is kept as `learn`, a
+competitive `battle` or a shared `coop`; a battle also records its win-loss
+outcome and the opponent's points, while a co-op keeps the opponent's points
+with no outcome.
 
 Scores live in SQLite through Drizzle over the libSQL driver. The driver matters:
 `bun:sqlite` exists only under Bun and `node:sqlite` only under Node, while this

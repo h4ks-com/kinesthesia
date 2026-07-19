@@ -1,10 +1,15 @@
 import type { MelodyRate } from "@/lib/midi/melody";
-import type { PlayerMode, PlayerParams, Speed } from "@/lib/player-url";
+import type { PlayerParams, Speed } from "@/lib/player-url";
+
+/** What a recorded run actually was: the route is `multiplayer`, but a run is
+ * kept as the competitive `battle` or the shared `coop` so a win-loss record
+ * can tell them apart. */
+export type RecordedMode = "learn" | "battle" | "coop";
 
 export type ScoreSubmission = {
   song: string;
   url: string;
-  mode: PlayerMode;
+  mode: RecordedMode;
   points: number;
   accuracy: number;
   bestCombo: number;
@@ -26,7 +31,7 @@ type Stats = {
 
 export function scoreSubmission(
   settings: Settings,
-  mode: PlayerMode,
+  mode: RecordedMode,
   stats: Stats,
 ): ScoreSubmission {
   return {

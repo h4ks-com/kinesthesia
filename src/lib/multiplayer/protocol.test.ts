@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  type BattleMessage,
   battleOutcome,
-  isBattleMessage,
-} from "@/lib/battle/protocol";
+  isMatchMessage,
+  type MatchMessage,
+} from "@/lib/multiplayer/protocol";
 
 describe("battleOutcome", () => {
   it("reads more points as a win", () => {
@@ -19,9 +19,9 @@ describe("battleOutcome", () => {
   });
 });
 
-describe("isBattleMessage", () => {
+describe("isMatchMessage", () => {
   it("accepts the sync messages", () => {
-    const messages: BattleMessage[] = [
+    const messages: MatchMessage[] = [
       { kind: "ready" },
       { kind: "begin", round: 1 },
       { kind: "rematch" },
@@ -29,13 +29,13 @@ describe("isBattleMessage", () => {
       { kind: "ping" },
     ];
     for (const message of messages) {
-      expect(isBattleMessage(message)).toBe(true);
+      expect(isMatchMessage(message)).toBe(true);
     }
   });
 
   it("rejects anything without a known kind", () => {
-    expect(isBattleMessage({ kind: "nope" })).toBe(false);
-    expect(isBattleMessage(null)).toBe(false);
-    expect(isBattleMessage("begin")).toBe(false);
+    expect(isMatchMessage({ kind: "nope" })).toBe(false);
+    expect(isMatchMessage(null)).toBe(false);
+    expect(isMatchMessage("begin")).toBe(false);
   });
 });

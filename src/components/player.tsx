@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { HitFlag } from "@/components/hit-flag";
 import { PianoRollView } from "@/components/piano-roll-view";
 import { PlayerHeader } from "@/components/player-header";
 import { PlayerTransport } from "@/components/player-transport";
@@ -34,7 +35,7 @@ import {
 } from "@/lib/player-url";
 import { clampKeyWidth, defaultKeyWidth } from "@/lib/render/keyboard";
 import { busiestTrack } from "@/lib/scoring/gates";
-import type { Score } from "@/lib/scoring/judge";
+import type { Judgement, Score } from "@/lib/scoring/judge";
 import { useGates } from "@/lib/scoring/use-gates";
 import { useRunRecord } from "@/lib/scoring/use-run-record";
 import {
@@ -48,25 +49,25 @@ import {
 type PlayerProps = {
   mode: PlayerMode;
   params: PlayerParams;
-  onScore?: (score: Score, position: number) => void;
-  onPress?: (pitch: number) => void;
-  onRelease?: (pitch: number) => void;
+  onScore?: (score: Score) => void;
+  onHit?: (judgement: Judgement) => void;
   opponent?: { name: string; points: number; accuracy: number } | null;
   /** A live match freezes the settings, since both sides derive their part
    * from them and have to keep agreeing once the scoring starts. */
   locked?: boolean;
-  /** A running battle round hides the transport, so no one can pause, seek or
+  /** A running match round hides the transport, so no one can pause, seek or
    * start on their own; the handle drives playback. */
   matchActive?: boolean;
   onEnd?: (score: Score) => void;
 };
 
-/** The battle drives each side's playback through this, so one signal starts a
+/** The match drives each side's playback through this, so one signal starts a
  * round on both sides. */
 export type PlayerHandle = {
   prepare: () => Promise<void>;
   startRound: () => void;
   stop: () => void;
+  getPosition: () => number;
 };
 
 export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
@@ -74,8 +75,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     mode,
     params,
     onScore,
-    onPress,
-    onRelease,
+    onHit,
     opponent = null,
     locked = false,
     matchActive = false,
@@ -238,8 +238,8 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     ) {
       return;
     }
-    // Publishing the default claim lets a battle invite record the part the
-    // host is actually about to play.
+    // Publishing the default claim lets a multiplayer invite record the part
+    // the host is actually about to play.
     const claimed = busiestTrack(song);
     setPlayerTracks(new Set([claimed]));
     commit({ tracks: [claimed] });
@@ -315,6 +315,11 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const gatesRef = useRef(gates);
   gatesRef.current = gates;
 
+  // The end is only counted for a round that actually started, so a song left
+  // at its end during preview does not report a finish the moment a match opens.
+  const startedRef = useRef(false);
+  const endedRef = useRef(false);
+
   const offsetRef = useRef(latencyOffset);
   offsetRef.current = latencyOffset;
   const ownedTrack = [...playerTracks][0] ?? 0;
@@ -323,8 +328,9 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     onPress: useCallback(
       (pitch: number, velocity: number, at: number) => {
         playback.strike(pitch, velocity, ownedTrack);
-        onPress?.(pitch);
-        if (interactive) {
+        // A match only scores a struck note once its round is running, so keys
+        // pressed during the countdown or result never count or reach the peer.
+        if (interactive && (mode !== "multiplayer" || startedRef.current)) {
           gatesRef.current.judgeStrike(
             pitch,
             judgedPosition(
@@ -337,14 +343,13 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
           );
         }
       },
-      [playback, ownedTrack, interactive, onPress],
+      [playback, ownedTrack, interactive, mode],
     ),
     onRelease: useCallback(
       (pitch: number) => {
         playback.release(pitch, ownedTrack);
-        onRelease?.(pitch);
       },
-      [playback, ownedTrack, onRelease],
+      [playback, ownedTrack],
     ),
     onToggle: useCallback(() => {
       if (!matchActive) {
@@ -389,16 +394,19 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     melodyRate,
   });
 
-  const positionRef = useRef(playback.getPosition);
-  positionRef.current = playback.getPosition;
   useEffect(() => {
-    onScore?.(gates.score, positionRef.current());
+    onScore?.(gates.score);
   }, [gates.score, onScore]);
 
-  // The end is only counted for a round that actually started, so a song left
-  // at its end during preview does not report a finish the moment a match opens.
-  const startedRef = useRef(false);
-  const endedRef = useRef(false);
+  const hitRef = useRef(gates.lastHit?.seq ?? 0);
+  useEffect(() => {
+    const hit = gates.lastHit;
+    if (hit === null || hit.seq === hitRef.current) {
+      return;
+    }
+    hitRef.current = hit.seq;
+    onHit?.(hit.judgement);
+  }, [gates.lastHit, onHit]);
 
   useImperativeHandle(
     ref,
@@ -414,6 +422,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
         endedRef.current = true;
         playback.pause();
       },
+      getPosition: () => playback.getPosition(),
     }),
     [playback],
   );
@@ -576,12 +585,13 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
           onStrike={(pitch) => input.press(pitch, 0.8)}
           onRelease={input.release}
         />
+        {interactive ? <HitFlag hit={gates.lastHit} /> : null}
         {gates.waiting ? (
           <p className="rise -translate-x-1/2 absolute top-6 left-1/2 rounded-full border border-accent/40 bg-panel/90 px-4 py-1.5 font-mono text-accent text-xs backdrop-blur">
             waiting for you
           </p>
         ) : null}
-        {playback.soundReady || mode === "battle" ? null : (
+        {playback.soundReady || mode === "multiplayer" ? null : (
           <p className="-translate-x-1/2 absolute top-6 left-1/2 flex items-center gap-2 whitespace-nowrap rounded-full border border-line-strong bg-panel/90 px-4 py-1.5 text-muted text-xs backdrop-blur">
             <Volume2 className="size-3.5 shrink-0" aria-hidden="true" />
             press play to start the sound

@@ -4,7 +4,7 @@ import {
   type MelodyRate,
 } from "@/lib/midi/melody";
 
-export const playerModes = ["watch", "learn", "battle"] as const;
+export const playerModes = ["watch", "learn", "multiplayer"] as const;
 
 export type PlayerMode = (typeof playerModes)[number];
 
@@ -20,7 +20,7 @@ export type PlayerParams = {
   readonly tracks: readonly number[] | null;
   readonly speed: Speed;
   /** Reduces the part you owe to one note at a time. It rides in the URL so
-   * both sides of a battle play the identical line. */
+   * both sides of a match play the identical line. */
   readonly simplified: boolean;
   readonly melodyRate: MelodyRate;
 };

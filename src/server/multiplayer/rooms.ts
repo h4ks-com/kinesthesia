@@ -1,21 +1,24 @@
-export type BattleRoom = {
+export type MultiplayerRoom = {
   readonly code: string;
   readonly peerId: string;
   readonly url: string;
   readonly name: string;
   readonly source: string | null;
   readonly tracks: readonly number[];
-  /** The host's settings travel with the room, so a joiner cannot hand
-   * themselves an easier part than the player they are up against. */
+  /** The host prepares the room, so a joiner cannot hand themselves an easier
+   * part; a battle locks both to the same one, a co-op carries the part the
+   * host assigned this side. */
   readonly speed: number;
   readonly simplified: boolean;
   readonly melodyRate: number;
+  /** A battle is one shared part; a co-op is two parts the host set. */
+  readonly coop: boolean;
   readonly createdAt: number;
 };
 
 const roomLifetime = 1000 * 60 * 30;
 const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const rooms = new Map<string, BattleRoom>();
+const rooms = new Map<string, MultiplayerRoom>();
 
 function makeCode(): string {
   let code = "";
@@ -33,21 +36,21 @@ function evict(now: number): void {
   }
 }
 
-export type NewRoom = Omit<BattleRoom, "code" | "createdAt">;
+export type NewRoom = Omit<MultiplayerRoom, "code" | "createdAt">;
 
-export function createRoom(input: NewRoom): BattleRoom {
+export function createRoom(input: NewRoom): MultiplayerRoom {
   const now = Date.now();
   evict(now);
   let code = makeCode();
   while (rooms.has(code)) {
     code = makeCode();
   }
-  const room: BattleRoom = { ...input, code, createdAt: now };
+  const room: MultiplayerRoom = { ...input, code, createdAt: now };
   rooms.set(code, room);
   return room;
 }
 
-export function findRoom(code: string): BattleRoom | null {
+export function findRoom(code: string): MultiplayerRoom | null {
   const now = Date.now();
   evict(now);
   return rooms.get(code.toUpperCase()) ?? null;
@@ -59,7 +62,7 @@ export function closeRoom(code: string): void {
   rooms.delete(code.toUpperCase());
 }
 
-export function openRooms(): readonly BattleRoom[] {
+export function openRooms(): readonly MultiplayerRoom[] {
   evict(Date.now());
   return [...rooms.values()];
 }

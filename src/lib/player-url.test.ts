@@ -36,7 +36,7 @@ describe("buildPlayerUrl", () => {
 
   it("serialises selected tracks", () => {
     const built = new URL(
-      buildPlayerUrl("https://kinesthesia.h4ks.com", "battle", {
+      buildPlayerUrl("https://kinesthesia.h4ks.com", "multiplayer", {
         ...song,
         tracks: [0, 3, 7],
       }),

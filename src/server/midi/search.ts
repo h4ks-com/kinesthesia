@@ -45,7 +45,7 @@ export async function searchMidi({
         ...result,
         playUrl: link("watch"),
         learnUrl: link("learn"),
-        battleUrl: link("battle"),
+        multiplayerUrl: link("multiplayer"),
       };
     });
 }

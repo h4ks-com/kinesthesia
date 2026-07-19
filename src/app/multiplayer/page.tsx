@@ -1,11 +1,11 @@
-import { Battle } from "@/components/battle";
 import { MissingSong } from "@/components/missing-song";
-import { iceServers } from "@/lib/battle/ice";
+import { Multiplayer } from "@/components/multiplayer";
+import { iceServers } from "@/lib/multiplayer/ice";
 import { parsePlayerParams } from "@/lib/player-url";
 import { type RouteSearchParams, toSearchParams } from "@/lib/search-params";
 import { config } from "@/server/config";
 
-export default async function BattlePage({
+export default async function MultiplayerPage({
   searchParams,
 }: {
   searchParams: Promise<RouteSearchParams>;
@@ -17,7 +17,7 @@ export default async function BattlePage({
     return <MissingSong />;
   }
   return (
-    <Battle
+    <Multiplayer
       params={params}
       playerName={query.get("player") ?? "Player"}
       joinCode={joinCode}

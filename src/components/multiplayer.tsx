@@ -2,31 +2,35 @@
 
 import type { DataConnection } from "peerjs";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BattleInvite } from "@/components/battle-invite";
+import { MultiplayerInvite } from "@/components/multiplayer-invite";
+import { OpponentSetup } from "@/components/opponent-setup";
 import { OpponentView } from "@/components/opponent-view";
 import { Player, type PlayerHandle } from "@/components/player";
-import type { IceServer } from "@/lib/battle/ice";
+import { clampMelodyRate, defaultMelodyRate } from "@/lib/midi/melody";
+import type { Part } from "@/lib/midi/part";
+import { useSong } from "@/lib/midi/use-song";
+import type { IceServer } from "@/lib/multiplayer/ice";
 import {
-  type BattleMessage,
   battleOutcome,
-  isBattleMessage,
+  isMatchMessage,
+  type MatchMessage,
   noOpponent,
   type Opponent,
   type Outcome,
-} from "@/lib/battle/protocol";
-import {
-  clampMelodyRate,
-  defaultMelodyRate,
-  type MelodyRate,
-} from "@/lib/midi/melody";
-import { useSong } from "@/lib/midi/use-song";
+} from "@/lib/multiplayer/protocol";
 import {
   asSpeed,
   type PlayerParams,
   parsePlayerParams,
 } from "@/lib/player-url";
-import { accuracy, type Score, scorePoints } from "@/lib/scoring/judge";
+import {
+  accuracy,
+  type Judgement,
+  type Score,
+  scorePoints,
+} from "@/lib/scoring/judge";
 import { scoreSubmission } from "@/lib/scoring/submission";
+import type { Hit } from "@/lib/scoring/use-gates";
 
 type Connection =
   | { status: "setup" }
@@ -40,17 +44,11 @@ type Connection =
  * countdown, to a result. */
 type Phase = "ready" | "countdown" | "playing" | "result";
 
-type BattleProps = {
+type MultiplayerProps = {
   params: PlayerParams | null;
   playerName: string;
   ice: readonly IceServer[];
   joinCode: string | null;
-};
-
-type OpponentPart = {
-  readonly simplified: boolean;
-  readonly melodyRate: MelodyRate;
-  readonly tracks: readonly number[];
 };
 
 type RoomReply = {
@@ -62,6 +60,7 @@ type RoomReply = {
   readonly speed: number;
   readonly simplified: boolean;
   readonly melodyRate: number;
+  readonly coop: boolean;
 };
 
 function matchKey(match: PlayerParams): string {
@@ -85,7 +84,12 @@ function settingsFromUrl(fallback: PlayerParams | null): PlayerParams | null {
   );
 }
 
-export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
+export function Multiplayer({
+  params,
+  playerName,
+  ice,
+  joinCode,
+}: MultiplayerProps) {
   const isHost = joinCode === null;
   const [connection, setConnection] = useState<Connection>(
     isHost ? { status: "setup" } : { status: "joining" },
@@ -95,8 +99,14 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
   const [copyState, setCopyState] = useState<"idle" | "copied" | "denied">(
     "idle",
   );
-  const [theirPart, setTheirPart] = useState<OpponentPart | null>(null);
+  const [theirPart, setTheirPart] = useState<Part | null>(null);
   const [roomOpen, setRoomOpen] = useState(joinCode !== null);
+  const [coop, setCoop] = useState(false);
+  const [opponentPart, setOpponentPart] = useState<Part>(() => ({
+    simplified: params?.simplified ?? false,
+    melodyRate: params?.melodyRate ?? defaultMelodyRate,
+    tracks: params?.tracks ?? [],
+  }));
 
   const [phase, setPhase] = useState<Phase>("ready");
   const [round, setRound] = useState(0);
@@ -107,8 +117,9 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
   const [myRematch, setMyRematch] = useState(false);
   const [theirRematch, setTheirRematch] = useState(false);
   const [opponentGone, setOpponentGone] = useState(false);
+  const [theirHit, setTheirHit] = useState<Hit | null>(null);
+  const hitSeqRef = useRef(0);
 
-  const opponentKeys = useRef<Set<number>>(new Set());
   const match = agreed ?? params;
   const theirPoints = opponent?.points ?? 0;
   const opponentFinished = opponent?.finished === true;
@@ -127,7 +138,7 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
     [params],
   );
 
-  const send = useCallback((message: BattleMessage): void => {
+  const send = useCallback((message: MatchMessage): void => {
     linkRef.current?.send(message);
   }, []);
 
@@ -146,6 +157,7 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
     setMyPoints(0);
     setMyRematch(false);
     setTheirRematch(false);
+    setTheirHit(null);
     setOpponent((current) =>
       current === null ? current : { ...current, points: 0, finished: false },
     );
@@ -180,10 +192,10 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
           simplified: mine?.simplified ?? false,
           melodyRate: mine?.melodyRate ?? defaultMelodyRate,
           tracks: mine?.tracks ?? [],
-        } satisfies BattleMessage);
+        } satisfies MatchMessage);
       });
       link.on("data", (raw) => {
-        if (!isBattleMessage(raw)) {
+        if (!isMatchMessage(raw)) {
           return;
         }
         lastSeen.current = Date.now();
@@ -207,14 +219,11 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
             points: raw.points,
             accuracy: raw.accuracy,
             combo: raw.score.combo,
-            position: raw.position,
           }));
         }
-        if (raw.kind === "press") {
-          opponentKeys.current.add(raw.pitch);
-        }
-        if (raw.kind === "release") {
-          opponentKeys.current.delete(raw.pitch);
+        if (raw.kind === "hit") {
+          hitSeqRef.current += 1;
+          setTheirHit({ judgement: raw.judgement, seq: hitSeqRef.current });
         }
         if (raw.kind === "finished") {
           setOpponent((current) => ({
@@ -342,14 +351,18 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
       return;
     }
     recordedRound.current = round;
-    const outcome: Outcome = opponentGone
-      ? "win"
-      : battleOutcome(myPoints, theirPoints);
+    // A co-op has no winner, so it keeps the other player's points beside the
+    // run but leaves the outcome empty; a battle owns the win-loss.
+    const outcome: Outcome | null = coop
+      ? null
+      : opponentGone
+        ? "win"
+        : battleOutcome(myPoints, theirPoints);
     void fetch("/api/scores", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...scoreSubmission(match, "battle", {
+        ...scoreSubmission(match, coop ? "coop" : "battle", {
           points: myPoints,
           accuracy: myStats.current.accuracy,
           bestCombo: myStats.current.bestCombo,
@@ -362,6 +375,7 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
     phase,
     round,
     match,
+    coop,
     opponentGone,
     opponentFinished,
     theirPoints,
@@ -370,12 +384,13 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
 
   const joinRoom = useCallback(
     async (code: string) => {
-      const response = await fetch(`/api/battle/rooms/${code}`);
+      const response = await fetch(`/api/multiplayer/rooms/${code}`);
       if (!response.ok) {
         setConnection({ status: "failed", message: "That invite has expired" });
         return;
       }
       const room: RoomReply = await response.json();
+      setCoop(room.coop);
       setAgreed({
         url: room.url,
         name: room.name,
@@ -410,8 +425,17 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
     peer.on("error", (error) =>
       setConnection({ status: "failed", message: error.message }),
     );
+    // A co-op hands the joiner the part the host built for them; a battle sends
+    // the host's own, so both play the one line.
+    const theirs: Part = coop
+      ? opponentPart
+      : {
+          tracks: settings.tracks ?? [],
+          simplified: settings.simplified,
+          melodyRate: settings.melodyRate,
+        };
     peer.on("open", async (peerId) => {
-      const response = await fetch("/api/battle/rooms", {
+      const response = await fetch("/api/multiplayer/rooms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -419,10 +443,11 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
           url: settings.url,
           name: settings.name,
           source: settings.source,
-          tracks: settings.tracks ?? [],
+          tracks: theirs.tracks,
           speed: settings.speed,
-          simplified: settings.simplified,
-          melodyRate: settings.melodyRate,
+          simplified: theirs.simplified,
+          melodyRate: theirs.melodyRate,
+          coop,
         }),
       });
       if (!response.ok) {
@@ -431,7 +456,7 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
       }
       const room: { code: string } = await response.json();
       roomCodeRef.current = room.code;
-      const invitation = new URL("/battle", window.location.origin);
+      const invitation = new URL("/multiplayer", window.location.origin);
       invitation.searchParams.set("join", room.code);
       const link = invitation.toString();
       setRoomOpen(true);
@@ -441,7 +466,7 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
     peer.on("connection", (link) => {
       // The invite is single use, so the room closes the moment a player joins.
       if (roomCodeRef.current !== null) {
-        void fetch(`/api/battle/rooms/${roomCodeRef.current}`, {
+        void fetch(`/api/multiplayer/rooms/${roomCodeRef.current}`, {
           method: "DELETE",
         }).catch(() => {});
       }
@@ -473,26 +498,21 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
     }
   }
 
-  const onScore = useCallback((score: Score, position: number) => {
+  const onScore = useCallback((score: Score) => {
     linkRef.current?.send({
       kind: "score",
       score,
       points: scorePoints(score),
       accuracy: accuracy(score),
-      position,
-    } satisfies BattleMessage);
+    } satisfies MatchMessage);
   }, []);
 
-  const onPress = useCallback((pitch: number) => {
-    linkRef.current?.send({ kind: "press", pitch } satisfies BattleMessage);
+  const onHit = useCallback((judgement: Judgement) => {
+    linkRef.current?.send({ kind: "hit", judgement } satisfies MatchMessage);
   }, []);
 
-  const onRelease = useCallback((pitch: number) => {
-    linkRef.current?.send({ kind: "release", pitch } satisfies BattleMessage);
-  }, []);
-
-  const opponentPressed = useCallback(
-    () => opponentKeys.current as ReadonlySet<number>,
+  const opponentPosition = useCallback(
+    () => playerRef.current?.getPosition() ?? 0,
     [],
   );
 
@@ -516,11 +536,10 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
           <Player
             ref={playerRef}
             key={matchKey(match)}
-            mode="battle"
+            mode="multiplayer"
             params={match}
             onScore={onScore}
-            onPress={onPress}
-            onRelease={onRelease}
+            onHit={onHit}
             opponent={null}
             locked={settled}
             matchActive={live}
@@ -529,9 +548,11 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
         )}
 
         {live ? null : (
-          <BattleInvite
+          <MultiplayerInvite
             connection={connection}
             copyState={copyState}
+            coop={coop}
+            onCoop={isHost ? setCoop : null}
             onInvite={() => {
               if (isHost) {
                 void invite();
@@ -567,19 +588,27 @@ export function Battle({ params, playerName, ice, joinCode }: BattleProps) {
         ) : null}
       </div>
 
-      {song.status === "ready" ? (
+      {song.status !== "ready" ? (
+        <section className="flex min-h-0 min-w-0 flex-1 items-center justify-center border-line bg-void text-muted text-sm max-lg:border-t lg:border-l">
+          waiting for a player
+        </section>
+      ) : isHost && !live && coop ? (
+        <OpponentSetup
+          song={song.song}
+          part={opponentPart}
+          onChange={setOpponentPart}
+          getPosition={opponentPosition}
+        />
+      ) : (
         <OpponentView
           song={song.song}
           hiddenTracks={new Set()}
           opponent={opponent ?? noOpponent}
           part={theirPart}
-          pressed={opponentPressed}
+          getPosition={opponentPosition}
+          hit={theirHit}
           state={live ? "playing" : opponent !== null ? "gone" : "waiting"}
         />
-      ) : (
-        <section className="flex min-h-0 min-w-0 flex-1 items-center justify-center border-line bg-void text-muted text-sm max-lg:border-t lg:border-l">
-          waiting for a player
-        </section>
       )}
     </div>
   );

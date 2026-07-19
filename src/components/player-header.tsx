@@ -14,7 +14,7 @@ import { accuracy, type Score, scorePoints } from "@/lib/scoring/judge";
 const modeCatalog = [
   { mode: "watch", label: "Watch", icon: Eye },
   { mode: "learn", label: "Learn", icon: GraduationCap },
-  { mode: "battle", label: "Battle", icon: Swords },
+  { mode: "multiplayer", label: "Multiplayer", icon: Swords },
 ] as const satisfies readonly {
   mode: PlayerMode;
   label: string;
@@ -55,7 +55,7 @@ export function PlayerHeader({
   onSolo,
 }: PlayerHeaderProps) {
   const switchable = modeCatalog.filter((entry) =>
-    mode === "battle" ? false : entry.mode !== mode,
+    mode === "multiplayer" ? false : entry.mode !== mode,
   );
 
   return (

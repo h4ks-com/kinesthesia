@@ -32,7 +32,7 @@ export function clampMelodyRate(value: number): MelodyRate {
 
 /** Reduces a song to one note at a time: the top of the right hand, thinned to
  * a rate a thumb can follow. Pure and deterministic, because both players in a
- * battle derive this line separately and must agree on it exactly. */
+ * match derive this line separately and must agree on it exactly. */
 export function reduceToMelody(song: Song, options: MelodyOptions): SongNote[] {
   const source = playable(song, options.tracks);
   if (source.length === 0) {

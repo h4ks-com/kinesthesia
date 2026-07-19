@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { playerQuery, serveFixture } from "./fixture";
 
-test("a battle is set up and previewed before anyone is invited", async ({
+test("a match is set up and previewed before anyone is invited", async ({
   page,
 }) => {
   await serveFixture(page);
-  await page.goto(`/battle?${playerQuery()}`);
+  await page.goto(`/multiplayer?${playerQuery()}`);
 
   // The song is playable straight away, so the host can try the part first.
   await expect(page.locator("canvas").first()).toBeVisible();
@@ -30,7 +30,7 @@ test("the room stores the difficulty and the link stays short", async ({
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await serveFixture(page);
   let posted: { simplified?: boolean } = {};
-  await page.route("**/api/battle/rooms", async (route) => {
+  await page.route("**/api/multiplayer/rooms", async (route) => {
     posted = route.request().postDataJSON();
     await route.fulfill({
       status: 200,
@@ -39,7 +39,7 @@ test("the room stores the difficulty and the link stays short", async ({
     });
   });
 
-  await page.goto(`/battle?${playerQuery()}`);
+  await page.goto(`/multiplayer?${playerQuery()}`);
   await expect(page.locator("canvas").first()).toBeVisible();
   await page.getByRole("button", { name: "Simplify" }).click();
   await page.getByRole("button", { name: "Invite a player" }).click();
@@ -55,7 +55,7 @@ test("the room stores the difficulty and the link stays short", async ({
 
 test("opening an invite link joins without typing a code", async ({ page }) => {
   await serveFixture(page);
-  await page.route("**/api/battle/rooms/ABCDE", (route) =>
+  await page.route("**/api/multiplayer/rooms/ABCDE", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -68,11 +68,12 @@ test("opening an invite link joins without typing a code", async ({ page }) => {
         speed: 1,
         simplified: true,
         melodyRate: 4,
+        coop: false,
       }),
     }),
   );
 
-  await page.goto("/battle?join=ABCDE");
+  await page.goto("/multiplayer?join=ABCDE");
   await expect(page.getByText("Joining the match")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Invite a player" }),
@@ -81,17 +82,17 @@ test("opening an invite link joins without typing a code", async ({ page }) => {
 
 test("an expired invite says so", async ({ page }) => {
   await serveFixture(page);
-  await page.route("**/api/battle/rooms/ZZZZZ", (route) =>
+  await page.route("**/api/multiplayer/rooms/ZZZZZ", (route) =>
     route.fulfill({ status: 404, body: "{}" }),
   );
 
-  await page.goto(`/battle?${playerQuery()}&join=ZZZZZ`);
+  await page.goto(`/multiplayer?${playerQuery()}&join=ZZZZZ`);
   await expect(page.getByText("That invite has expired")).toBeVisible();
 });
 
 test("confirming the invite freezes the settings", async ({ page }) => {
   await serveFixture(page);
-  await page.route("**/api/battle/rooms", (route) =>
+  await page.route("**/api/multiplayer/rooms", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -99,7 +100,7 @@ test("confirming the invite freezes the settings", async ({ page }) => {
     }),
   );
 
-  await page.goto(`/battle?${playerQuery()}`);
+  await page.goto(`/multiplayer?${playerQuery()}`);
   await expect(page.locator("canvas").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Simplify" })).toBeVisible();
 
@@ -116,7 +117,7 @@ test("confirming the invite freezes the settings", async ({ page }) => {
 
 test("claiming a track is frozen once the invite is out", async ({ page }) => {
   await serveFixture(page);
-  await page.route("**/api/battle/rooms", (route) =>
+  await page.route("**/api/multiplayer/rooms", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -124,7 +125,7 @@ test("claiming a track is frozen once the invite is out", async ({ page }) => {
     }),
   );
 
-  await page.goto(`/battle?${playerQuery()}`);
+  await page.goto(`/multiplayer?${playerQuery()}`);
   await expect(page.locator("canvas").first()).toBeVisible();
   await page.getByRole("button", { name: "Tracks" }).click();
   await expect(
@@ -144,14 +145,29 @@ test("claiming a track is frozen once the invite is out", async ({ page }) => {
   ).toHaveCount(0);
 });
 
-test("battle is split with an opponent side from the start", async ({
+test("the match is split with an opponent side from the start", async ({
   page,
 }) => {
   await serveFixture(page);
-  await page.goto(`/battle?${playerQuery()}`);
+  await page.goto(`/multiplayer?${playerQuery()}`);
 
   // Two rolls before anyone joins: yours and the opponent's, which waits.
   await expect(page.locator("canvas")).toHaveCount(2);
   await expect(page.getByText("Opponent")).toBeVisible();
   await expect(page.getByText("waiting for a player")).toBeVisible();
+});
+
+test("co-op lets the host set the opponent's part", async ({ page }) => {
+  await serveFixture(page);
+  await page.goto(`/multiplayer?${playerQuery()}`);
+  await expect(page.locator("canvas").first()).toBeVisible();
+
+  // Battle is the default, so the opponent side just waits.
+  await expect(page.getByText("waiting for a player")).toBeVisible();
+
+  await page.getByRole("button", { name: "Co-op" }).click();
+
+  // Co-op opens the opponent side for the host to build a different part.
+  await expect(page.getByText("Opponent plays")).toBeVisible();
+  await expect(page.getByText("waiting for a player")).toHaveCount(0);
 });

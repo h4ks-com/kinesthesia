@@ -11,21 +11,26 @@ export type InviteConnection =
   | { status: "failed"; message: string }
   | { status: "connected" };
 
-type BattleInviteProps = {
+type MultiplayerInviteProps = {
   connection: InviteConnection;
   copyState: "idle" | "copied" | "denied";
+  coop: boolean;
+  /** Null for a joiner, whose side is whatever the host prepared. */
+  onCoop: ((coop: boolean) => void) | null;
   onInvite: () => void;
   onCopy: () => void;
 };
 
 /** Sits over the roll while the host sets the match up, so they can play the
  * song and change the difficulty before anyone is waiting on them. */
-export function BattleInvite({
+export function MultiplayerInvite({
   connection,
   copyState,
+  coop,
+  onCoop,
   onInvite,
   onCopy,
-}: BattleInviteProps) {
+}: MultiplayerInviteProps) {
   const copyRef = useRef<HTMLButtonElement | null>(null);
   const waiting = connection.status === "waiting";
 
@@ -83,11 +88,12 @@ export function BattleInvite({
 
   return (
     <Banner>
+      {onCoop === null ? null : <CoopToggle coop={coop} onCoop={onCoop} />}
       {connection.status === "failed" ? (
         <span className="text-danger">{connection.message}</span>
       ) : (
         <span className="text-muted">
-          Set the part and difficulty, have a go
+          {coop ? "Set each side's part" : "Set the part and difficulty"}
         </span>
       )}
       <button
@@ -99,6 +105,42 @@ export function BattleInvite({
         {connection.status === "failed" ? "Try again" : "Invite a player"}
       </button>
     </Banner>
+  );
+}
+
+/** Battle locks both sides to one part; co-op lets the host set a part per
+ * side. */
+function CoopToggle({
+  coop,
+  onCoop,
+}: {
+  coop: boolean;
+  onCoop: (coop: boolean) => void;
+}) {
+  return (
+    <fieldset className="flex shrink-0 items-center rounded-full border border-line-strong p-0.5">
+      <legend className="sr-only">Match type</legend>
+      <button
+        type="button"
+        aria-pressed={!coop}
+        onClick={() => onCoop(false)}
+        className={`rounded-full px-2.5 py-0.5 text-xs transition-colors ${
+          coop ? "text-muted hover:text-text" : "bg-accent text-void"
+        }`}
+      >
+        Battle
+      </button>
+      <button
+        type="button"
+        aria-pressed={coop}
+        onClick={() => onCoop(true)}
+        className={`rounded-full px-2.5 py-0.5 text-xs transition-colors ${
+          coop ? "bg-accent text-void" : "text-muted hover:text-text"
+        }`}
+      >
+        Co-op
+      </button>
+    </fieldset>
   );
 }
 

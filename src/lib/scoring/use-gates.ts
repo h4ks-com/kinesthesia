@@ -7,13 +7,19 @@ import {
   applyJudgement,
   emptyScore,
   goodWindow,
+  type Judgement,
   judge,
   type Score,
 } from "@/lib/scoring/judge";
 
+/** Bumped on every judged note so a flag re-triggers even when the verdict
+ * repeats; the verdict alone would not change and the flag would sit still. */
+export type Hit = { judgement: Judgement; seq: number };
+
 export type Gates = {
   score: Score;
   waiting: boolean;
+  lastHit: Hit | null;
   owed: () => ReadonlySet<number>;
   judgeStrike: (pitch: number, position: number) => void;
   moveTo: (position: number) => void;
@@ -41,9 +47,16 @@ export function useGates({
 }: Options): Gates {
   const [score, setScore] = useState<Score>(emptyScore);
   const [waiting, setWaiting] = useState(false);
+  const [lastHit, setLastHit] = useState<Hit | null>(null);
   const gatesRef = useRef<Gate[]>([]);
   const indexRef = useRef(0);
   const pendingRef = useRef<Set<number>>(new Set());
+  const seqRef = useRef(0);
+
+  const flag = useCallback((judgement: Judgement) => {
+    seqRef.current += 1;
+    setLastHit({ judgement, seq: seqRef.current });
+  }, []);
 
   const openAt = useCallback((index: number) => {
     indexRef.current = index;
@@ -91,11 +104,12 @@ export function useGates({
           }
           return next;
         });
+        flag("miss");
         openAt(indexRef.current + 1);
       }
     }, 16);
     return () => clearInterval(timer);
-  }, [active, waitsForYou, getPosition, isPlaying, pause, openAt]);
+  }, [active, waitsForYou, getPosition, isPlaying, pause, openAt, flag]);
 
   const judgeStrike = useCallback(
     (pitch: number, position: number) => {
@@ -105,12 +119,13 @@ export function useGates({
       }
       if (!pendingRef.current.has(pitch)) {
         setScore((current) => applyJudgement(current, "miss"));
+        flag("miss");
         return;
       }
       pendingRef.current.delete(pitch);
-      setScore((current) =>
-        applyJudgement(current, judge(position - gate.start)),
-      );
+      const judgement = judge(position - gate.start);
+      setScore((current) => applyJudgement(current, judgement));
+      flag(judgement);
       if (pendingRef.current.size === 0) {
         const wasWaiting = waiting;
         openAt(indexRef.current + 1);
@@ -119,12 +134,13 @@ export function useGates({
         }
       }
     },
-    [openAt, resume, waiting],
+    [openAt, resume, waiting, flag],
   );
 
   return {
     score,
     waiting,
+    lastHit,
     owed: useCallback(() => pendingRef.current as ReadonlySet<number>, []),
     judgeStrike,
     moveTo: useCallback(
@@ -134,6 +150,7 @@ export function useGates({
     reset: useCallback(() => {
       openAt(0);
       setScore(emptyScore);
+      setLastHit(null);
     }, [openAt]),
   };
 }

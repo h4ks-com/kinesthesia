@@ -21,6 +21,7 @@ import {
   playerPath,
 } from "@/lib/player-url";
 import { accuracy, type Score, scorePoints } from "@/lib/scoring/judge";
+import { isLocalUrl } from "@/lib/storage/uploads";
 
 const modeCatalog = [
   { mode: "watch", label: "Watch", icon: Eye },
@@ -79,6 +80,7 @@ export function PlayerHeader({
   onToggleMine,
   onSolo,
 }: PlayerHeaderProps) {
+  const local = isLocalUrl(params.url);
   const switchable = modeCatalog.filter((entry) =>
     mode === "multiplayer" ? false : entry.mode !== mode,
   );
@@ -162,17 +164,31 @@ export function PlayerHeader({
 
       {switchable.length === 0 ? null : (
         <div data-tour="modes" className="flex shrink-0 items-center gap-2">
-          {switchable.map(({ mode: target, label, icon: Icon }) => (
-            <Link
-              key={target}
-              href={playerPath(target, params)}
-              data-tip={`Switch to ${label.toLowerCase()}`}
-              aria-label={`Switch to ${label}`}
-              className="rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"
-            >
-              <Icon className="size-4" aria-hidden="true" />
-            </Link>
-          ))}
+          {switchable.map(({ mode: target, label, icon: Icon }) =>
+            local && target === "multiplayer" ? (
+              <button
+                key={target}
+                type="button"
+                aria-disabled="true"
+                onClick={(event) => event.preventDefault()}
+                data-tip="Uploaded files can't be shared"
+                aria-label="Multiplayer unavailable for uploaded files"
+                className="cursor-not-allowed rounded-lg border border-line p-2 text-line-strong"
+              >
+                <Icon className="size-4" aria-hidden="true" />
+              </button>
+            ) : (
+              <Link
+                key={target}
+                href={playerPath(target, params)}
+                data-tip={`Switch to ${label.toLowerCase()}`}
+                aria-label={`Switch to ${label}`}
+                className="rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"
+              >
+                <Icon className="size-4" aria-hidden="true" />
+              </Link>
+            ),
+          )}
         </div>
       )}
 

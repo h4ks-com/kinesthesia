@@ -19,10 +19,14 @@ import {
   type LibraryEntry,
   listFavourites,
   listRecent,
-  recordPlay,
   toggleFavourite,
 } from "@/lib/storage/library";
-import { storeUpload } from "@/lib/storage/uploads";
+import {
+  clearUploads,
+  isLocalUrl,
+  listUploads,
+  storeUpload,
+} from "@/lib/storage/uploads";
 import { shortestQuery, useLiveSearch } from "@/lib/use-live-search";
 import type { Viewer } from "@/server/auth";
 
@@ -46,6 +50,7 @@ export function Home({
   const [query, setQuery] = useState("");
   const [recent, setRecent] = useState<readonly LibraryEntry[]>([]);
   const [favorites, setFavorites] = useState<readonly LibraryEntry[]>([]);
+  const [uploads, setUploads] = useState<readonly LibraryEntry[]>([]);
   const [dragging, setDragging] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -54,6 +59,7 @@ export function Home({
   const refreshLibrary = useCallback(() => {
     void listRecent().then(setRecent);
     void listFavourites().then(setFavorites);
+    void listUploads().then(setUploads);
   }, []);
 
   useEffect(refreshLibrary, [refreshLibrary]);
@@ -70,8 +76,7 @@ export function Home({
       setUploadError(null);
       try {
         for (const file of midis) {
-          const url = await storeUpload(await file.arrayBuffer());
-          await recordPlay({ url, name: file.name, source: "local" });
+          await storeUpload(file.name, await file.arrayBuffer());
         }
       } catch {
         setUploadError("Could not save that file on this device.");
@@ -103,7 +108,10 @@ export function Home({
   const keepTyping = state.status === "typing";
   const trimmed = query.trim();
   const matchedFavorites = filterLibrary(favorites, trimmed);
-  const matchedRecent = filterLibrary(recent, trimmed);
+  const matchedUploads = filterLibrary(uploads, trimmed);
+  const matchedRecent = filterLibrary(recent, trimmed).filter(
+    (entry) => !isLocalUrl(entry.url),
+  );
 
   return (
     <>
@@ -227,6 +235,35 @@ export function Home({
                 sourceUrl={null}
                 plays={null}
                 favorite
+                onToggleFavorite={() => void onToggleFavorite(entry)}
+              />
+            ))}
+          </LibrarySection>
+        ) : null}
+
+        {matchedUploads.length > 0 ? (
+          <LibrarySection
+            title="Uploads"
+            count={matchedUploads.length}
+            action={
+              <ClearButton
+                label="Clear uploads"
+                onClear={async () => {
+                  await clearUploads();
+                  refreshLibrary();
+                }}
+              />
+            }
+          >
+            {matchedUploads.map((entry) => (
+              <SongRow
+                key={entry.key}
+                name={entry.name}
+                url={entry.url}
+                source={entry.source}
+                sourceUrl={null}
+                plays={null}
+                favorite={favoriteKeys.has(entry.key)}
                 onToggleFavorite={() => void onToggleFavorite(entry)}
               />
             ))}

@@ -186,27 +186,25 @@ body {
   animation: rise 0.18s ease both;
 }
 
+/* Ends visible on purpose: a hit flag is removed by a timer, not by fading, so
+   the reduced-motion jump to the final frame must leave it on screen. */
 @keyframes pop {
   0% {
     opacity: 0;
     scale: 0.8;
   }
-  15% {
+  60% {
     opacity: 1;
     scale: 1.06;
   }
-  45% {
-    opacity: 1;
-    scale: 1;
-  }
   100% {
-    opacity: 0;
+    opacity: 1;
     scale: 1;
   }
 }
 
 .pop {
-  animation: pop 0.7s ease both;
+  animation: pop 0.2s ease both;
 }
 
 ::selection {

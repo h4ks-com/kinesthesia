@@ -52,8 +52,7 @@ type PlayerHeaderProps = {
   voicing: SongVoicing;
   onVoicing: ((track: number, voicing: Voicing) => void) | null;
   sound: SoundSharing | null;
-  /** Null outside watch, the one mode with no scoring chrome to hide. */
-  onFocus: (() => void) | null;
+  onFocus: () => void;
   onHelp: () => void;
 };
 
@@ -150,18 +149,16 @@ export function PlayerHeader({
         />
       )}
 
-      {onFocus === null ? null : (
-        <button
-          type="button"
-          data-tour="focus"
-          onClick={onFocus}
-          data-tip="Just the keys and the notes (esc to leave)"
-          aria-label="Focus mode"
-          className="shrink-0 rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"
-        >
-          <Maximize className="size-4" aria-hidden="true" />
-        </button>
-      )}
+      <button
+        type="button"
+        data-tour="focus"
+        onClick={onFocus}
+        data-tip="Just the keys and the notes"
+        aria-label="Focus mode"
+        className="shrink-0 rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"
+      >
+        <Maximize className="size-4" aria-hidden="true" />
+      </button>
 
       {switchable.length === 0 ? null : (
         <div data-tour="modes" className="flex shrink-0 items-center gap-2">

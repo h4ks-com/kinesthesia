@@ -217,10 +217,13 @@ this session, then your own saved version, then whoever shaped it last, then
 the instruments the file named. It stays out of the URL: there is a version per
 track and a link carrying all of it would be unreadable.
 
-Focus mode strips watch back to the keys and the falling notes, for recording.
-It rides in the link so a focused view reproduces itself, and stays out of that
-per song memory because it belongs to the recording rather than to the song.
-Only watch offers it, so no mode that scores can hide what it is scoring.
+Focus mode strips any mode back to the keys and the falling notes, for
+recording. It rides in the link so a focused view reproduces itself, and stays
+out of that per song memory because it belongs to the recording rather than to
+the song. Entering it names the song over the empty view, then fades; a corner
+button and Escape both leave, so a phone with no Escape is never stuck. A
+crafted link auto-focuses a solo view but not a match, whose invite and setup
+live in the chrome focus hides.
 
 A finished run is recorded with the settings that made it easier or harder, so
 a leaderboard can say what a score was worth: speed, whether the part was

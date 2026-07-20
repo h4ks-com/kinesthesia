@@ -300,20 +300,23 @@ test("focus mode leaves only the keys and the notes", async ({ page }) => {
   await expect(page.locator("footer span").first()).not.toContainText("0:00");
 });
 
-test("a focused link says how to get back out", async ({ page }) => {
+test("a focused link presents the song and offers a way out", async ({
+  page,
+}) => {
   await serveFixture(page);
   await page.goto(`/watch?${playerQuery()}&focus=1`);
   await expect(page.locator("canvas")).toBeVisible();
+  await expect(page.locator("header")).toHaveCount(0);
 
-  // Nothing is on screen to click and nothing is tabbable, so the way out has
-  // to be stated. It fades, leaving a clean recording.
-  await expect(page.getByText("esc to leave focus")).toBeVisible();
-  await expect(page.getByText("esc to leave focus")).toHaveCount(0, {
-    timeout: 8000,
-  });
+  // The song's name is presented over the empty view, then fades for a clean
+  // recording.
+  await expect(page.getByText(songName)).toBeVisible();
+  await expect(page.getByText(songName)).toHaveCount(0, { timeout: 8000 });
 
-  await page.keyboard.press("Escape");
+  // A phone has no Escape key, so a tap target leaves focus.
+  await page.getByRole("button", { name: "Leave focus" }).click();
   await expect(page.locator("header")).toHaveCount(1);
+  await expect(page).not.toHaveURL(/focus=1/);
 });
 
 test("a settled write does not undo focus mode", async ({ page }) => {
@@ -334,17 +337,45 @@ test("a settled write does not undo focus mode", async ({ page }) => {
   await expect(page).toHaveURL(/speed=0.5/);
 });
 
-test("a mode that scores cannot hide its own chrome", async ({ page }) => {
+test("a focus link whose song fails still offers a way out", async ({
+  page,
+}) => {
+  // No fixture route, so the MIDI 404s and the loading frame is what shows.
+  await page.addInitScript(() => {
+    for (const mode of ["watch", "learn", "multiplayer"]) {
+      localStorage.setItem(`kinesthesia:tour:${mode}`, "1");
+    }
+  });
+  await page.goto(`/watch?${playerQuery()}&focus=1`);
+
+  // The song never resolves, but the way out is there anyway.
+  const leave = page.getByRole("button", { name: "Leave focus" });
+  await expect(leave).toBeVisible({ timeout: 15_000 });
+  await leave.click();
+  await expect(leave).toHaveCount(0);
+  await expect(page).not.toHaveURL(/focus=1/);
+});
+
+test("learn can be recorded in focus mode too", async ({ page }) => {
   await serveFixture(page);
   await page.goto(`/learn?${playerQuery()}&focus=1`);
   await expect(page.locator("canvas")).toBeVisible();
 
-  await expect(page.locator("header")).toHaveCount(1);
-  await expect(page.locator("footer")).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "Focus mode" })).toHaveCount(0);
+  await expect(page.locator("header")).toHaveCount(0);
+  await expect(page.locator("footer")).toHaveCount(0);
 
-  // The guard would be worth nothing if the mode switch handed focus on.
-  await expect(
-    page.getByRole("link", { name: "Switch to Watch" }),
-  ).not.toHaveAttribute("href", /focus=1/);
+  await page.getByRole("button", { name: "Leave focus" }).click();
+  await expect(page.locator("header")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Focus mode" })).toBeVisible();
+});
+
+test("a match does not start with its setup hidden", async ({ page }) => {
+  await serveFixture(page);
+  await page.goto(`/multiplayer?${playerQuery()}&focus=1`);
+  await expect(page.locator("canvas").first()).toBeVisible();
+
+  // A match's invite and setup live in the chrome, so a link cannot open it
+  // already focused. The visible button proves the chrome is up, and is the way
+  // to focus by hand.
+  await expect(page.getByRole("button", { name: "Focus mode" })).toBeVisible();
 });

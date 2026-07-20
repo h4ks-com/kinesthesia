@@ -1,6 +1,6 @@
 "use client";
 
-import { Volume2 } from "lucide-react";
+import { Minimize, Volume2 } from "lucide-react";
 import {
   forwardRef,
   type ReactNode,
@@ -140,9 +140,9 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const [simplified, setSimplified] = useState(params.simplified);
   const [melodyRate, setMelodyRate] = useState(params.melodyRate);
   const [transpose, setTranspose] = useState(params.transpose);
-  // Only watch has nothing to report, so no mode can hide its own scoring.
-  const focusable = mode === "watch";
-  const [focus, setFocus] = useState(focusable && params.focus);
+  // A crafted link auto-focuses a solo view, but not a match, whose setup and
+  // invite live in the chrome focus mode hides.
+  const [focus, setFocus] = useState(mode !== "multiplayer" && params.focus);
   const focusRef = useRef(focus);
   focusRef.current = focus;
 
@@ -259,20 +259,19 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     return () => window.removeEventListener("keydown", onKey);
   }, [focus, changeFocus]);
 
-  // Focus mode leaves nothing on screen to click and nothing to tab to, so
-  // arriving on a focused link has to say how to get back out. It fades so a
-  // recording started a moment later is clean.
+  // Entering focus presents the song's name over the empty view, then fades so
+  // a recording started a moment later is clean.
   const stage = useRef<HTMLDivElement | null>(null);
-  const [wayOut, setWayOut] = useState(false);
+  const [titleUp, setTitleUp] = useState(false);
   const rollUp = song !== null;
   useEffect(() => {
     if (!focus || !rollUp) {
-      setWayOut(false);
+      setTitleUp(false);
       return;
     }
-    setWayOut(true);
+    setTitleUp(true);
     stage.current?.focus();
-    const timer = setTimeout(() => setWayOut(false), 4000);
+    const timer = setTimeout(() => setTitleUp(false), 4000);
     return () => clearTimeout(timer);
   }, [focus, rollUp]);
 
@@ -647,6 +646,24 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     });
   }
 
+  // Focus hides every other control, so its own way out rides along with it,
+  // including over the loading and failed frames where a phone has no Escape.
+  const focusExit = focus ? (
+    <div className="fixed top-4 right-4 z-30">
+      <button
+        type="button"
+        onClick={() => changeFocus(false)}
+        data-tip="Leave focus"
+        data-tip-side="bottom"
+        data-tip-align="right"
+        aria-label="Leave focus"
+        className="rounded-lg border border-line-strong bg-panel/60 p-2 text-muted backdrop-blur transition-colors hover:border-accent hover:text-accent"
+      >
+        <Minimize className="size-4" aria-hidden="true" />
+      </button>
+    </div>
+  ) : null;
+
   // The frame stays up while the song loads or fails, because a match hangs its
   // other half, its overlay and its invite off it and would go dark with it.
   if (song === null) {
@@ -667,6 +684,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             {footerExtra}
           </TransportBar>
         )}
+        {focusExit}
       </div>
     );
   }
@@ -685,7 +703,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                 simplified,
                 melodyRate,
                 transpose,
-                focus: focusable && focus,
+                focus,
               }}
               tracks={song.tracks}
               hiddenTracks={hiddenTracks}
@@ -715,7 +733,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                 onAdopt: sound.adopt,
                 onReset: sound.reset,
               }}
-              onFocus={focusable ? () => changeFocus(true) : null}
+              onFocus={() => changeFocus(true)}
               onHelp={tour.start}
             />
           )}
@@ -742,14 +760,6 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             {gates.waiting ? (
               <p className="rise -translate-x-1/2 absolute top-6 left-1/2 rounded-full border border-accent/40 bg-panel/90 px-4 py-1.5 font-mono text-accent text-xs backdrop-blur">
                 waiting for you
-              </p>
-            ) : null}
-            {wayOut ? (
-              <p
-                aria-live="polite"
-                className="fade-out -translate-x-1/2 absolute bottom-[22%] left-1/2 rounded-full border border-line-strong bg-panel/90 px-4 py-1.5 font-mono text-muted text-xs backdrop-blur"
-              >
-                esc to leave focus
               </p>
             ) : null}
             {playback.soundReady || mode === "multiplayer" ? null : (
@@ -790,6 +800,15 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
           {footerExtra}
         </TransportBar>
       )}
+
+      {focusExit}
+      {focus && titleUp && params.name !== "" ? (
+        <div className="pointer-events-none fixed inset-0 z-20 flex items-center justify-center px-8">
+          <p className="fade-out line-clamp-3 max-w-3xl text-balance text-center font-semibold text-3xl text-text leading-tight sm:text-5xl">
+            {params.name}
+          </p>
+        </div>
+      ) : null}
 
       {tour.open ? (
         <Walkthrough steps={tourFor(mode)} onClose={tour.close} />

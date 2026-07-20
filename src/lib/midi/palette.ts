@@ -4,15 +4,18 @@ export type NoteColor = {
   readonly shade: string;
   readonly glow: string;
   readonly core: string;
+  /** One muted tone for the plain style, which fills a note flat instead of
+   * ramping it. */
+  readonly flat: string;
 };
 
 const trackColors: readonly NoteColor[] = [
-  { shade: "#1f8f6d", glow: "#35d6a4", core: "#8ff0d0" },
-  { shade: "#1f6f9c", glow: "#38a8e8", core: "#9ad8f5" },
-  { shade: "#a3701f", glow: "#f0a93a", core: "#ffd694" },
-  { shade: "#a32b5f", glow: "#f04b93", core: "#ff9dc4" },
-  { shade: "#5f42a3", glow: "#9a6af0", core: "#c9b3f7" },
-  { shade: "#808f22", glow: "#c3d63c", core: "#e2ed95" },
+  { shade: "#1f8f6d", glow: "#35d6a4", core: "#8ff0d0", flat: "#4f9e86" },
+  { shade: "#1f6f9c", glow: "#38a8e8", core: "#9ad8f5", flat: "#5089b0" },
+  { shade: "#a3701f", glow: "#f0a93a", core: "#ffd694", flat: "#b0894f" },
+  { shade: "#a32b5f", glow: "#f04b93", core: "#ff9dc4", flat: "#b05f80" },
+  { shade: "#5f42a3", glow: "#9a6af0", core: "#c9b3f7", flat: "#7d6bb0" },
+  { shade: "#808f22", glow: "#c3d63c", core: "#e2ed95", flat: "#93a05a" },
 ];
 
 const pitchColors: readonly string[] = [
@@ -32,7 +35,14 @@ const pitchColors: readonly string[] = [
 
 export function trackColor(track: number): NoteColor {
   const color = trackColors[track % trackColors.length];
-  return color ?? { shade: "#1f8f6d", glow: "#35d6a4", core: "#8ff0d0" };
+  return (
+    color ?? {
+      shade: "#1f8f6d",
+      glow: "#35d6a4",
+      core: "#8ff0d0",
+      flat: "#4f9e86",
+    }
+  );
 }
 
 export function pitchColor(pitch: number): string {

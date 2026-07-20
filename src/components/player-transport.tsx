@@ -33,6 +33,10 @@ type PlayerTransportProps = {
   onLatencyOffset: (value: number) => void;
   measuredLatency: number;
   showLatency: boolean;
+  keyLabels: boolean | null;
+  onKeyLabels: (show: boolean) => void;
+  plainStyle: boolean;
+  onPlainStyle: (plain: boolean) => void;
   /** Null once a round owns the clock, leaving the bar to report it. */
   onToggle: (() => void) | null;
   onSeek: ((position: number) => void) | null;
@@ -55,6 +59,10 @@ export function PlayerTransport({
   onLatencyOffset,
   measuredLatency,
   showLatency,
+  keyLabels,
+  onKeyLabels,
+  plainStyle,
+  onPlainStyle,
   onToggle,
   onSeek,
   onOctave,
@@ -216,6 +224,10 @@ export function PlayerTransport({
           onLatencyOffset={onLatencyOffset}
           measuredLatency={measuredLatency}
           showLatency={showLatency}
+          keyLabels={keyLabels}
+          onKeyLabels={onKeyLabels}
+          plainStyle={plainStyle}
+          onPlainStyle={onPlainStyle}
         />
       </div>
     </>

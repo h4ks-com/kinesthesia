@@ -55,6 +55,26 @@ export function reachFor(octave: number): Reach {
   return { low, high: low + highestSemitone };
 }
 
+function keyLabel(code: string): string {
+  if (code.startsWith("Key")) {
+    return code.slice(3);
+  }
+  if (code.startsWith("Digit")) {
+    return code.slice(5);
+  }
+  return ",";
+}
+
+/** What to print on each key at this octave. Where two codes reach the same
+ * pitch the later one wins, which keeps the upper row reading as one run. */
+export function keyLabelsFor(octave: number): ReadonlyMap<number, string> {
+  const labels = new Map<number, string>();
+  for (const [code, semitone] of semitoneByCode) {
+    labels.set((octave + 1) * 12 + semitone, keyLabel(code));
+  }
+  return labels;
+}
+
 export function pitchForCode(code: string, octave: number): number | null {
   const semitone = semitoneByCode.get(code);
   if (semitone === undefined) {

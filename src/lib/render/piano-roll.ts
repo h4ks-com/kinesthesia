@@ -63,6 +63,12 @@ export type Frame = {
   /** What the computer keyboard can reach from here, marked over the keys so
    * the octave keys have something to move. */
   readonly reach: Reach | null;
+  /** Which computer key plays each pitch, printed on the keys themselves.
+   * Null leaves them bare. */
+  readonly keyLabels: ReadonlyMap<number, string> | null;
+  /** Fills flat and drops the glow, the sparks and the ramps, for anyone who
+   * would rather read the notes than watch them. */
+  readonly plain: boolean;
 };
 
 export class PianoRollRenderer {
@@ -156,7 +162,7 @@ export class PianoRollRenderer {
     ctx.fillStyle = "#060709";
     ctx.fillRect(0, 0, width, height);
     ctx.translate(-this.pan, 0);
-    this.paintBackground(total, height, keyboardTop, whiteWidth);
+    this.paintBackground(total, height, keyboardTop, whiteWidth, frame.plain);
 
     const active = new Map<number, NoteColor>();
     this.paintNotes(frame, keyboardTop, whiteWidth, active);
@@ -165,8 +171,15 @@ export class PianoRollRenderer {
     }
 
     this.paintKeyboardShadow(total, keyboardTop);
-    this.paintGlow(active, keyboardTop, whiteWidth);
-    this.emitSparks(frame, active, keyboardTop, whiteWidth);
+    if (frame.plain) {
+      // emitSparks is what advances these, so keep them current here or turning
+      // the effects back on would fire a burst for every note already sounding.
+      this.previouslyActive = new Set(active.keys());
+      this.previouslyPressed = new Set(frame.pressed);
+    } else {
+      this.paintGlow(active, keyboardTop, whiteWidth);
+      this.emitSparks(frame, active, keyboardTop, whiteWidth);
+    }
     this.paintKeyboard(
       frame,
       active,
@@ -222,14 +235,19 @@ export class PianoRollRenderer {
     height: number,
     keyboardTop: number,
     whiteWidth: number,
+    plain: boolean,
   ): void {
     const ctx = this.context;
-    // Deepest at the strike line, so a bright note head has the most to sit
-    // against exactly where it is being read.
-    const background = ctx.createLinearGradient(0, 0, 0, height);
-    background.addColorStop(0, "#0c1020");
-    background.addColorStop(1, "#040509");
-    ctx.fillStyle = background;
+    if (plain) {
+      ctx.fillStyle = "#080a10";
+    } else {
+      // Deepest at the strike line, so a bright note head has the most to sit
+      // against exactly where it is being read.
+      const background = ctx.createLinearGradient(0, 0, 0, height);
+      background.addColorStop(0, "#0c1020");
+      background.addColorStop(1, "#040509");
+      ctx.fillStyle = background;
+    }
     ctx.fillRect(0, 0, width, height);
 
     ctx.strokeStyle = "rgba(150,180,255,0.055)";
@@ -294,7 +312,7 @@ export class PianoRollRenderer {
             Math.min(isBlackKey(note.pitch) ? blackNote : whiteNote, 13) / 2;
           const centre = keyCenter(note.pitch, whiteWidth);
           ctx.globalAlpha = ghost ? 0.22 : 0.74 + note.velocity * 0.26;
-          ctx.fillStyle = color.glow;
+          ctx.fillStyle = frame.plain ? color.flat : color.glow;
           ctx.beginPath();
           ctx.moveTo(centre, strike - half * 1.6);
           ctx.lineTo(centre + half, strike);
@@ -324,8 +342,12 @@ export class PianoRollRenderer {
       // The hue holds across the body and only lifts in the last of the bar,
       // so the leading edge reads as lit without the note becoming a ramp. A
       // note being played drops the deep end and burns at its core instead.
-      const gradient = ctx.createLinearGradient(0, y, 0, y + noteHeight);
-      if (sounding) {
+      const gradient = frame.plain
+        ? null
+        : ctx.createLinearGradient(0, y, 0, y + noteHeight);
+      if (gradient === null) {
+        // Flat, but a note being played still has to read as different.
+      } else if (sounding) {
         gradient.addColorStop(0, color.glow);
         gradient.addColorStop(0.4, color.core);
         gradient.addColorStop(1, color.core);
@@ -339,7 +361,7 @@ export class PianoRollRenderer {
       // all carry one velocity must not end up a uniformly dim roll.
       const punch = 0.74 + note.velocity * 0.26;
       ctx.globalAlpha = ghost ? 0.22 : punch;
-      ctx.fillStyle = gradient;
+      ctx.fillStyle = gradient ?? (sounding ? color.glow : color.flat);
       roundRect(ctx, x, y, noteWidth, noteHeight, 4);
       ctx.fill();
       ctx.globalAlpha = 1;
@@ -488,6 +510,46 @@ export class PianoRollRenderer {
     ctx.shadowBlur = 0;
     ctx.fillStyle = "#161c26";
     ctx.fillRect(0, keyboardTop - 2, width, 2);
+
+    if (frame.keyLabels !== null) {
+      this.paintKeyLabels(
+        frame.keyLabels,
+        keyboardTop,
+        keyboardHeight,
+        whiteWidth,
+      );
+    }
+  }
+
+  /** The letter that plays each key, sat near the front of the key where a
+   * hand is not covering it. Skipped once the keys are too narrow to read. */
+  private paintKeyLabels(
+    labels: ReadonlyMap<number, string>,
+    keyboardTop: number,
+    keyboardHeight: number,
+    whiteWidth: number,
+  ): void {
+    if (whiteWidth < 15) {
+      return;
+    }
+    const ctx = this.context;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.font = "600 9px ui-monospace, SFMono-Regular, monospace";
+    for (const [pitch, label] of labels) {
+      if (pitch < lowestPitch || pitch > highestPitch) {
+        continue;
+      }
+      const black = isBlackKey(pitch);
+      ctx.fillStyle = black ? "rgba(198,208,224,0.72)" : "rgba(58,68,86,0.8)";
+      ctx.fillText(
+        label,
+        keyCenter(pitch, whiteWidth),
+        black
+          ? keyboardTop + keyboardHeight * 0.6 - 6
+          : keyboardTop + keyboardHeight - 7,
+      );
+    }
   }
 
   /** A shadow cast up the roll, so the keys read as standing in front of the
@@ -525,6 +587,11 @@ export class PianoRollRenderer {
     if (color === undefined) {
       ctx.shadowBlur = 0;
       ctx.fillStyle = restingColor;
+      return;
+    }
+    if (frame.plain) {
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = frame.pressed.has(pitch) ? "#ffffff" : color.flat;
       return;
     }
     if (!frame.pressed.has(pitch)) {

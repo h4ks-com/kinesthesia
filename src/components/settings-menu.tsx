@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/ui/popover";
 import { SliderRow } from "@/components/ui/slider-row";
+import { Toggle } from "@/components/ui/toggle";
 import { latencyAdvice, latencyRange } from "@/lib/audio/latency";
 import type { InputStatus } from "@/lib/input/use-note-input";
 import { keyWidthRange } from "@/lib/render/keyboard";
@@ -21,6 +22,12 @@ type SettingsMenuProps = {
   onLatencyOffset: (value: number) => void;
   measuredLatency: number;
   showLatency: boolean;
+  /** Null on a device with no pointer fine enough to imply a keyboard, where
+   * lettering the keys would only be clutter. */
+  keyLabels: boolean | null;
+  onKeyLabels: (show: boolean) => void;
+  plainStyle: boolean;
+  onPlainStyle: (plain: boolean) => void;
 };
 
 export function SettingsMenu({
@@ -33,6 +40,10 @@ export function SettingsMenu({
   onLatencyOffset,
   measuredLatency,
   showLatency,
+  keyLabels,
+  onKeyLabels,
+  plainStyle,
+  onPlainStyle,
 }: SettingsMenuProps) {
   const advice = latencyAdvice(measuredLatency);
 
@@ -70,6 +81,29 @@ export function SettingsMenu({
           />
           <Note>Widen the keys to tap them, then drag the roll sideways.</Note>
         </Section>
+
+        <Section title="Style">
+          <Toggle
+            label="plain notes"
+            checked={plainStyle}
+            onChange={onPlainStyle}
+          />
+          <Note>Flat colour, no glow and no sparks.</Note>
+        </Section>
+
+        {keyLabels === null ? null : (
+          <Section title="Keyboard">
+            <Toggle
+              label="letters on keys"
+              checked={keyLabels}
+              onChange={onKeyLabels}
+            />
+            <Note>
+              Prints the key that plays each note, for the octave under your
+              hands.
+            </Note>
+          </Section>
+        )}
 
         {octave === null ? null : (
           <Section title="Octave">

@@ -19,7 +19,7 @@ import { Walkthrough } from "@/components/walkthrough";
 import { clampLatency, judgedPosition } from "@/lib/audio/latency";
 import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
 import { useSongVoicing } from "@/lib/audio/use-song-voicing";
-import { reachFor } from "@/lib/input/keyboard-map";
+import { keyLabelsFor, reachFor } from "@/lib/input/keyboard-map";
 import { useNoteInput } from "@/lib/input/use-note-input";
 import {
   clampMelodyRate,
@@ -137,6 +137,10 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const [speed, setSpeed] = useState(params.speed);
   const [latencyOffset, setLatencyOffset] = useState(0);
   const [keyWidth, setKeyWidth] = useState(defaultKeyWidth);
+  const [showKeyLabels, setShowKeyLabels] = useState(true);
+  const [plainStyle, setPlainStyle] = useState(false);
+  // A device with no fine pointer has no keyboard to letter the keys for.
+  const [hasKeyboard, setHasKeyboard] = useState(false);
   const [simplified, setSimplified] = useState(params.simplified);
   const [melodyRate, setMelodyRate] = useState(params.melodyRate);
   const [transpose, setTranspose] = useState(params.transpose);
@@ -287,10 +291,13 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     const explicit = explicitSongSettings(
       new URLSearchParams(window.location.search),
     );
+    setHasKeyboard(window.matchMedia("(any-pointer: fine)").matches);
     void loadGlobalSettings().then((stored) => {
       if (stored !== null) {
         setKeyWidth(clampKeyWidth(stored.keyWidth));
         setLatencyOffset(clampLatency(stored.latencyOffset));
+        setShowKeyLabels(stored.showKeyLabels ?? true);
+        setPlainStyle(stored.plainStyle ?? false);
       }
     });
     if (locked) {
@@ -594,7 +601,12 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     settleTimer.current = setTimeout(() => commit(next), 250);
   }
 
-  function settleGlobal(keyWidthNext: number, latencyNext: number) {
+  function settleGlobal(
+    keyWidthNext: number,
+    latencyNext: number,
+    labelsNext: boolean,
+    plainNext: boolean,
+  ) {
     if (globalTimer.current !== null) {
       clearTimeout(globalTimer.current);
     }
@@ -603,6 +615,8 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
         void saveGlobalSettings({
           keyWidth: keyWidthNext,
           latencyOffset: latencyNext,
+          showKeyLabels: labelsNext,
+          plainStyle: plainNext,
         }),
       250,
     );
@@ -611,13 +625,23 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   function changeKeyWidth(next: number) {
     const width = clampKeyWidth(next);
     setKeyWidth(width);
-    settleGlobal(width, latencyOffset);
+    settleGlobal(width, latencyOffset, showKeyLabels, plainStyle);
   }
 
   function changeLatency(next: number) {
     const offset = clampLatency(next);
     setLatencyOffset(offset);
-    settleGlobal(keyWidth, offset);
+    settleGlobal(keyWidth, offset, showKeyLabels, plainStyle);
+  }
+
+  function changeKeyLabels(next: boolean) {
+    setShowKeyLabels(next);
+    settleGlobal(keyWidth, latencyOffset, next, plainStyle);
+  }
+
+  function changePlainStyle(next: boolean) {
+    setPlainStyle(next);
+    settleGlobal(keyWidth, latencyOffset, showKeyLabels, next);
   }
 
   function changeSimplified(next: boolean) {
@@ -770,6 +794,12 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
               getOwed={gates.owed}
               getYours={yours}
               reach={interactive ? reachFor(input.octave) : null}
+              keyLabels={
+                interactive && hasKeyboard && showKeyLabels
+                  ? keyLabelsFor(input.octave)
+                  : null
+              }
+              plain={plainStyle}
               onStrike={(pitch) => input.press(pitch, 0.8)}
               onRelease={input.release}
             />
@@ -808,6 +838,10 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             onLatencyOffset={(next) => changeLatency(next)}
             measuredLatency={playback.latency()}
             showLatency={interactive}
+            keyLabels={interactive && hasKeyboard ? showKeyLabels : null}
+            onKeyLabels={changeKeyLabels}
+            plainStyle={plainStyle}
+            onPlainStyle={changePlainStyle}
             inputStatus={input.status}
             // A running match owns the clock, so nobody plays or seeks by hand.
             onToggle={matchActive ? null : () => void playback.toggle()}

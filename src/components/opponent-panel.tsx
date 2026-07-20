@@ -17,6 +17,7 @@ import { usePartRoll } from "@/lib/midi/use-part-roll";
 import type { Opponent } from "@/lib/multiplayer/protocol";
 import { defaultKeyWidth } from "@/lib/render/keyboard";
 import type { Hit } from "@/lib/scoring/use-gates";
+import { loadGlobalSettings } from "@/lib/storage/settings";
 
 type OpponentPanelProps = {
   song: Song;
@@ -55,6 +56,12 @@ export function OpponentPanel({
   const [hidden, setHidden] = useState<ReadonlySet<number>>(nothingHidden);
   // Their roll rides the shared timeline, so scrubbing reads ahead on both.
   const roll = usePartRoll(song, part, getPosition);
+  const [plain, setPlain] = useState(false);
+  useEffect(() => {
+    void loadGlobalSettings().then((stored) =>
+      setPlain(stored?.plainStyle ?? false),
+    );
+  }, []);
   const theirs = part?.tracks ?? [];
   const simplified = part?.simplified ?? false;
 
@@ -152,6 +159,7 @@ export function OpponentPanel({
           getPressed={roll.getPressed}
           getOwed={roll.getOwed}
           getYours={roll.getYours}
+          plain={plain}
         />
         <HitFlag hit={state === "playing" ? hit : null} />
         {state === "gone" ? (

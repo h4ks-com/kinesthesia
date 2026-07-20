@@ -27,6 +27,8 @@ type PianoRollViewProps = {
   /** What the computer keyboard reaches from the current octave, or null where
    * there is nothing to play. */
   reach?: Reach | null;
+  keyLabels?: ReadonlyMap<number, string> | null;
+  plain?: boolean;
   onStrike?: (pitch: number) => void;
   onRelease?: (pitch: number) => void;
 };
@@ -41,6 +43,8 @@ export function PianoRollView({
   getOwed,
   getYours,
   reach = null,
+  keyLabels = null,
+  plain = false,
   onStrike,
   onRelease,
 }: PianoRollViewProps) {
@@ -52,6 +56,10 @@ export function PianoRollView({
   keyWidthRef.current = keyWidth;
   const reachRef = useRef(reach);
   reachRef.current = reach;
+  const labelsRef = useRef(keyLabels);
+  labelsRef.current = keyLabels;
+  const plainRef = useRef(plain);
+  plainRef.current = plain;
   const gestures = useRef(new Map<number, Gesture>());
   // A rebuilt renderer starts on the lowest keys, so it is framed on creation
   // as well as on a move: the pitch itself often has not changed.
@@ -77,6 +85,8 @@ export function PianoRollView({
         owed: getOwed(),
         yours: getYours(),
         reach: reachRef.current,
+        keyLabels: labelsRef.current,
+        plain: plainRef.current,
       });
       frame = requestAnimationFrame(loop);
     });

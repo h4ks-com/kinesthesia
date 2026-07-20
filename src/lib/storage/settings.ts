@@ -18,6 +18,10 @@ export type SongSettings = {
 export type GlobalSettings = {
   readonly keyWidth: number;
   readonly latencyOffset: number;
+  /** Absent on rows written before the keys could be lettered. */
+  readonly showKeyLabels?: boolean;
+  /** Absent on rows written before the plain style existed. */
+  readonly plainStyle?: boolean;
 };
 
 const globalKey = "global";

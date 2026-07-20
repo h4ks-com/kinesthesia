@@ -67,6 +67,10 @@ export class PianoRollRenderer {
   private readonly particles: Particle[] = [];
   private previouslyActive = new Set<number>();
   private previouslyPressed = new Set<number>();
+  private drumTracks: ReadonlySet<number> = new Set();
+  private drumsFrom: Song | null = null;
+  private shadow: CanvasGradient | null = null;
+  private shadowAt = -1;
   private pan = 0;
   private keyWidth: number;
 
@@ -248,11 +252,17 @@ export class PianoRollRenderer {
     const { position } = frame;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    const drums = new Set(
-      frame.song.tracks
-        .filter((track) => track.percussion)
-        .map((track) => track.index),
-    );
+    // Which tracks are drums cannot change without the song changing, so it is
+    // worked out per file rather than per frame.
+    if (this.drumsFrom !== frame.song) {
+      this.drumsFrom = frame.song;
+      this.drumTracks = new Set(
+        frame.song.tracks
+          .filter((track) => track.percussion)
+          .map((track) => track.index),
+      );
+    }
+    const drums = this.drumTracks;
 
     for (const note of frame.song.notes) {
       if (note.start > position + lookAhead) {
@@ -266,6 +276,32 @@ export class PianoRollRenderer {
       const sounding = note.start <= position;
       if (sounding && !ghost) {
         active.set(note.pitch, color);
+      }
+
+      // A drum is an impulse, and the note-off a MIDI gives it is arbitrary, so
+      // the mark falls to the line and is spent there rather than being held.
+      const drum = drums.has(note.track);
+      if (drum) {
+        const strike =
+          (keyboardTop * (position - note.start + lookAhead)) / lookAhead;
+        if (strike <= keyboardTop) {
+          const noteWidth = isBlackKey(note.pitch)
+            ? blackKeyWidth(whiteWidth)
+            : whiteWidth * 0.86;
+          const centre = keyCenter(note.pitch, whiteWidth);
+          const half = Math.min(noteWidth, 13) / 2;
+          ctx.globalAlpha = ghost ? 0.22 : 0.74 + note.velocity * 0.26;
+          ctx.fillStyle = color.glow;
+          ctx.beginPath();
+          ctx.moveTo(centre, strike - half * 1.6);
+          ctx.lineTo(centre + half, strike);
+          ctx.lineTo(centre, strike + half * 1.6);
+          ctx.lineTo(centre - half, strike);
+          ctx.closePath();
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        continue;
       }
 
       const bottom = Math.min(
@@ -299,28 +335,11 @@ export class PianoRollRenderer {
       const punch = 0.74 + note.velocity * 0.26;
       ctx.globalAlpha = ghost ? 0.22 : punch;
       ctx.fillStyle = gradient;
-      // A drum has neither pitch nor length to show, so it is struck as a
-      // single mark at the moment it lands rather than held as a bar.
-      const drum = drums.has(note.track);
-      if (drum) {
-        const half = Math.min(noteWidth, 13) / 2;
-        const hit = Math.min(bottom, keyboardTop);
-        ctx.fillStyle = color.glow;
-        ctx.beginPath();
-        ctx.moveTo(x + noteWidth / 2, hit - half * 1.6);
-        ctx.lineTo(x + noteWidth / 2 + half, hit);
-        ctx.lineTo(x + noteWidth / 2, hit + half * 1.6);
-        ctx.lineTo(x + noteWidth / 2 - half, hit);
-        ctx.closePath();
-        ctx.fill();
-      } else {
-        roundRect(ctx, x, y, noteWidth, noteHeight, 4);
-        ctx.fill();
-      }
+      roundRect(ctx, x, y, noteWidth, noteHeight, 4);
+      ctx.fill();
       ctx.globalAlpha = 1;
 
       if (
-        !drum &&
         !ghost &&
         position < note.start &&
         noteWidth >= 17 &&
@@ -476,15 +495,19 @@ export class PianoRollRenderer {
   private paintKeyboardShadow(width: number, keyboardTop: number): void {
     const ctx = this.context;
     const depth = 18;
-    const shadow = ctx.createLinearGradient(
-      0,
-      keyboardTop - depth,
-      0,
-      keyboardTop,
-    );
-    shadow.addColorStop(0, "rgba(0,0,0,0)");
-    shadow.addColorStop(1, "rgba(0,0,0,0.55)");
-    ctx.fillStyle = shadow;
+    if (this.shadow === null || this.shadowAt !== keyboardTop) {
+      const shadow = ctx.createLinearGradient(
+        0,
+        keyboardTop - depth,
+        0,
+        keyboardTop,
+      );
+      shadow.addColorStop(0, "rgba(0,0,0,0)");
+      shadow.addColorStop(1, "rgba(0,0,0,0.55)");
+      this.shadow = shadow;
+      this.shadowAt = keyboardTop;
+    }
+    ctx.fillStyle = this.shadow;
     ctx.fillRect(0, keyboardTop - depth, width, depth);
   }
 

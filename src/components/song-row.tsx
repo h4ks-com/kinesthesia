@@ -76,7 +76,9 @@ export function SongRow({
           {name}
         </Link>
         <div className="mt-0.5 flex min-w-0 items-center gap-2 font-mono text-faint text-xs">
-          {source !== null && sourceUrl !== null ? (
+          {source === null || local ? (
+            <span className="truncate">{source}</span>
+          ) : sourceUrl !== null ? (
             <a
               href={sourceUrl}
               target="_blank"
@@ -87,7 +89,12 @@ export function SongRow({
               <ExternalLink className="size-3 shrink-0" aria-hidden="true" />
             </a>
           ) : (
-            <span className="truncate">{source}</span>
+            <Link
+              href="/sources"
+              className="truncate transition-colors hover:text-accent"
+            >
+              {source}
+            </Link>
           )}
           {plays === null ? null : (
             <span className="shrink-0">{plays.toLocaleString()} plays</span>

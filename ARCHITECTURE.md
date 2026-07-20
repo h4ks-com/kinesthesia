@@ -9,6 +9,7 @@ and the MCP tools.
 ```
 src/app/
   page.tsx                    search home
+  sources/page.tsx            the sources a search runs over, and their licensing
   watch|learn|multiplayer/page.tsx  read the URL, hand params to the player
   api/[[...route]]/route.ts   mounts the Hono app at /api
 src/server/
@@ -26,7 +27,9 @@ src/server/
     types.ts                  MidiSource contract and result shapes
     registry.ts               sources available to search
     bitmidi.ts                BitMidi adapter
-    search.ts                 searches sources and attaches player links
+    mutopia.ts                Mutopia adapter
+    id.ts                     rejects a file id that could climb out of its path
+    search.ts                 searches sources, proxies files and attaches links
     analyse.ts                reads a .mid and reports what it holds
 src/components/
   song-row.tsx                one song with its favourite and mode links
@@ -154,6 +157,8 @@ the other player's points with no winner.
 ```
 GET  /api/midi/search         search across sources
 GET  /api/midi/sources        list sources
+GET  /api/midi/file           stream a source's file by source and id
+GET  /api/midi/info           read a file by source and id
 POST /api/multiplayer/rooms        open a room
 GET  /api/multiplayer/rooms/{code} look one up
 GET  /api/openapi.json        generated spec
@@ -188,14 +193,16 @@ button. A match joiner is never auto shown it.
 
 ## Adding a MIDI source
 
-Implement `MidiSource` in `src/server/midi/`, then add it to `registry.ts`.
-Search, the spec and the MCP tool all read the registry, so nothing else changes.
+Implement `MidiSource` in `src/server/midi/`, giving it a `fileUrl(id)`, then add
+it to `registry.ts`. Search, the spec and the MCP tool all read the registry, so
+nothing else changes.
 
 ## Notes
 
-Browsers fetch `.mid` files straight from the source, so playback needs no
-proxy. Only server side search does, and only when the host IP is blocked, which
-is what `MIDI_SOURCE_PROXY_URL` is for.
+A song is named by its source and id. `/api/midi/file` streams the bytes through
+our origin, so a source that sends no cross origin headers still plays in the
+browser and every source is fetched the same way. `MIDI_SOURCE_PROXY_URL` is a
+separate outbound proxy for when a source blocks the server's own IP.
 
 Multiplayer rooms live in memory, so they are lost on restart and do not span
 replicas. Web MIDI is unavailable in Safari, which is why the computer keyboard

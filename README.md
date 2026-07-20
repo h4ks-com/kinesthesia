@@ -63,4 +63,4 @@ or with JSON config:
 
 Swap in `http://localhost:3000/api/mcp` when running locally.
 
-MIDI files come from [BitMidi](https://bitmidi.com).
+MIDI files come from several sources, listed at `/sources`.

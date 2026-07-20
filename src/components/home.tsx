@@ -1,6 +1,7 @@
 "use client";
 
 import { BookOpen, Code2, Loader2, Search, Upload, X } from "lucide-react";
+import Link from "next/link";
 import {
   type ReactNode,
   useCallback,
@@ -186,7 +187,7 @@ export function Home({
 
         {shown.length > 0 ? (
           <Section
-            title={trimmed === "" ? "Results" : "From bitmidi"}
+            title={trimmed === "" ? "Results" : "From the sources"}
             dim={state.status === "searching"}
           >
             {shown.map((result) => (
@@ -358,14 +359,9 @@ export function Home({
           <Code2 className="size-3.5" aria-hidden="true" />
           source
         </a>
-        <a
-          href="https://bitmidi.com"
-          target="_blank"
-          rel="noreferrer"
-          className="transition-colors hover:text-accent"
-        >
-          midi from bitmidi
-        </a>
+        <Link href="/sources" className="transition-colors hover:text-accent">
+          midi sources
+        </Link>
 
         <span className="ml-auto flex items-center gap-4">
           {homeLink === null ? null : (

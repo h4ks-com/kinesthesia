@@ -20,9 +20,11 @@ import {
 import { currentViewer } from "@/server/auth";
 import { config } from "@/server/config";
 import type { Score } from "@/server/db/schema";
+import { sourceFetch } from "@/server/http/fetch";
 import { analyseMidi } from "@/server/midi/analyse";
-import { midiSourceIds, midiSources } from "@/server/midi/registry";
-import { searchMidi } from "@/server/midi/search";
+import { isSafeId } from "@/server/midi/id";
+import { findSource, midiSourceIds, midiSources } from "@/server/midi/registry";
+import { fileEndpoint, searchMidi } from "@/server/midi/search";
 import {
   closeRoom,
   createRoom,
@@ -70,7 +72,13 @@ const searchResponseSchema = z
 const sourcesResponseSchema = z
   .object({
     sources: z.array(
-      z.object({ id: z.enum(midiSourceIds), label: z.string() }),
+      z.object({
+        id: z.enum(midiSourceIds),
+        label: z.string(),
+        blurb: z.string(),
+        homeUrl: z.string(),
+        license: z.string(),
+      }),
     ),
   })
   .openapi("SourcesResponse");
@@ -124,7 +132,8 @@ const midiSummarySchema = z.object({
 });
 
 const infoInputShape = {
-  url: z.string().url().describe("Direct link to the .mid file"),
+  source: z.enum(midiSourceIds).describe("Provider the id came from"),
+  id: z.string().min(1).describe("The file's id within that source"),
   name: z.string().default("").describe("Name to report it under"),
 };
 
@@ -133,7 +142,7 @@ const infoRoute = createRoute({
   path: "/midi/info",
   summary: "Read a MIDI file",
   description:
-    "Downloads a .mid and reports how long it runs, how many notes it holds and what is on each track.",
+    "Reads a source's file and reports how long it runs, how many notes it holds and what is on each track. Take the source and id from a search result.",
   request: { query: z.object(infoInputShape) },
   responses: {
     200: {
@@ -170,9 +179,13 @@ api.openapi(searchRoute, async (c) => {
 });
 
 api.openapi(infoRoute, async (c) => {
-  const { url, name } = c.req.valid("query");
+  const { source, id, name } = c.req.valid("query");
+  const provider = findSource(source);
+  if (provider === null || !isSafeId(id)) {
+    return c.json({ error: "Unknown source or id" }, 502);
+  }
   try {
-    const summary = await analyseMidi(url, name);
+    const summary = await analyseMidi(provider.fileUrl(id), name);
     return c.json({ ...summary, tracks: [...summary.tracks] }, 200);
   } catch (error) {
     return c.json(
@@ -183,8 +196,44 @@ api.openapi(infoRoute, async (c) => {
 });
 
 api.openapi(sourcesRoute, (c) =>
-  c.json({ sources: midiSources.map(({ id, label }) => ({ id, label })) }, 200),
+  c.json(
+    {
+      sources: midiSources.map(({ id, label, blurb, homeUrl, license }) => ({
+        id,
+        label,
+        blurb,
+        homeUrl,
+        license,
+      })),
+    },
+    200,
+  ),
 );
+
+/** Streams a source's file through our own origin, so a provider that sends no
+ * cross origin headers still plays in a browser. Binary, so it is a plain route
+ * rather than a documented JSON one. */
+api.get("/midi/file", async (c) => {
+  const source = c.req.query("source") ?? "";
+  const id = c.req.query("id") ?? "";
+  const provider = findSource(source);
+  if (provider === null || !isSafeId(id)) {
+    return c.json({ error: "Unknown source or id" }, 400);
+  }
+  try {
+    const upstream = await sourceFetch(provider.fileUrl(id));
+    if (!upstream.ok) {
+      return c.json({ error: "The file could not be fetched" }, 502);
+    }
+    return c.body(await upstream.arrayBuffer(), 200, {
+      "content-type": "audio/midi",
+      "access-control-allow-origin": "*",
+      "cache-control": "public, max-age=86400",
+    });
+  } catch {
+    return c.json({ error: "The file could not be fetched" }, 502);
+  }
+});
 
 const roomSchema = z
   .object({
@@ -604,12 +653,9 @@ api.get(
 );
 
 const playerLinkShape = {
-  url: z.string().url().describe("Direct link to the .mid file"),
+  source: z.enum(midiSourceIds).describe("Provider the id came from"),
+  id: z.string().min(1).describe("The song's id within that source"),
   name: z.string().default("").describe("Song name to show in the player"),
-  source: z
-    .string()
-    .optional()
-    .describe("Provider the file came from, from search_midi"),
   mode: z
     .enum(playerModes)
     .default("watch")
@@ -660,9 +706,9 @@ const playerLinkShape = {
 };
 
 type PlayerLinkInput = {
-  readonly url: string;
+  readonly source: (typeof midiSourceIds)[number];
+  readonly id: string;
   readonly name: string;
-  readonly source?: string;
   readonly mode: PlayerMode;
   readonly speed?: number;
   readonly transpose?: number;
@@ -678,8 +724,8 @@ type PlayerLink = { ok: true; url: string } | { ok: false; why: string };
 /** Every value goes through the same clamp the player uses, so a link this
  * returns cannot ask for a speed or a key the player would refuse. */
 function playerLink(input: PlayerLinkInput): PlayerLink {
-  if (!/^https?:\/\//i.test(input.url)) {
-    return { ok: false, why: "the song must be an http or https .mid URL" };
+  if (findSource(input.source) === null) {
+    return { ok: false, why: `unknown source: ${input.source}` };
   }
   if (
     input.speed !== undefined &&
@@ -695,9 +741,9 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
   }
   const built = new URL(
     buildPlayerUrl(config.appBaseUrl, input.mode, {
-      url: input.url,
+      url: fileEndpoint(input.source, input.id),
       name: input.name,
-      source: input.source ?? null,
+      source: input.source,
       tracks: input.tracks ?? null,
       speed: asSpeed(input.speed ?? defaultSpeed),
       simplified: input.simplified ?? false,
@@ -728,20 +774,21 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
   return { ok: true, url: built.toString() };
 }
 
-const mcpInstructions = `Kinesthesia is a MIDI file search engine. Look up songs
-by name and get, for every match, a direct .mid download URL that any program
-reading MIDI can fetch. Use it whenever someone wants a MIDI file for a song.
-Each match also carries a player link that opens the song in a browser: /watch
-plays it back, /learn waits for the player to hit each note, /multiplayer plays
-it with two people together.
+const mcpInstructions = `Kinesthesia is a MIDI file search engine over several
+sources. search_midi looks a song up by name and returns, for every match, the
+source it came from and its id within that source, a downloadUrl any program
+reading MIDI can fetch, and player links that open it in a browser: /watch plays
+it back, /learn waits for the player to hit each note, /multiplayer plays it with
+two people together.
 
-Search only knows a song's name. midi_info reads the file itself and reports how
-long it runs, how many notes it holds and what is on each track, which is how to
-answer how long or how hard a song is, and how to pick a track to play.
+A song is named by its source and id everywhere. midi_info takes a source and id
+and reports how long the file runs, how many notes it holds and what is on each
+track, which is how to answer how long or how hard a song is and how to pick a
+track to play.
 
-Those links take the song as it comes. To open one at a different speed, in
-another key, on chosen tracks, partway through, or stripped back for recording,
-build the link with player_link rather than editing the query string by hand: it
+Those player links take the song as it comes. To open one at a different speed,
+in another key, on chosen tracks, partway through, or stripped back for
+recording, build it with player_link, passing the same source and id: it
 validates every value and refuses a combination the player would ignore.`;
 
 function createMcpServer(): McpServer {
@@ -755,7 +802,7 @@ function createMcpServer(): McpServer {
     {
       title: "Search MIDI files",
       description:
-        "Find MIDI files by song name. Returns, for each match, the source, a direct .mid download URL to fetch the file, and browser links to play it back (playUrl), practise it (learnUrl) or play it with someone (multiplayerUrl).",
+        "Find MIDI files by song name across every source. Returns, for each match, its source and id, a downloadUrl to fetch the .mid, and browser links to play it back (playUrl), practise it (learnUrl) or play it with someone (multiplayerUrl). Pass the source and id to midi_info or player_link.",
       inputSchema: searchInputShape,
     },
     async ({ q, source, limit }) => {
@@ -775,12 +822,19 @@ function createMcpServer(): McpServer {
     {
       title: "Read a MIDI file",
       description:
-        "Download a .mid and report how long it runs, how many notes it holds, and what is on each track. Use it to answer how long or how hard a song is, and to choose the tracks argument for player_link rather than guessing.",
+        "Read a source's file and report how long it runs, how many notes it holds, and what is on each track. Use it to answer how long or how hard a song is, and to choose the tracks argument for player_link rather than guessing. Take the source and id from search_midi.",
       inputSchema: infoInputShape,
     },
-    async ({ url, name }) => {
+    async ({ source, id, name }) => {
+      const provider = findSource(source);
+      if (provider === null || !isSafeId(id)) {
+        return {
+          content: [{ type: "text", text: `Unknown source or id: ${source}` }],
+          isError: true,
+        };
+      }
       try {
-        const summary = await analyseMidi(url, name);
+        const summary = await analyseMidi(provider.fileUrl(id), name);
         return {
           content: [{ type: "text", text: JSON.stringify(summary, null, 2) }],
         };
@@ -803,7 +857,7 @@ function createMcpServer(): McpServer {
     {
       title: "Build a player link",
       description:
-        "Turn a .mid URL into a browser link that opens it exactly as asked: the mode to open in, the speed, the key, which tracks the player owes, whether the part is reduced to one note at a time, how many seconds in to start, and whether the page is stripped back to the keys and the falling notes for recording. Take the .mid URL from search_midi.",
+        "Turn a source and id into a browser link that opens the song exactly as asked: the mode to open in, the speed, the key, which tracks the player owes, whether the part is reduced to one note at a time, how many seconds in to start, and whether the page is stripped back to the keys and the falling notes for recording. Take the source and id from search_midi.",
       inputSchema: playerLinkShape,
     },
     async (input) => {

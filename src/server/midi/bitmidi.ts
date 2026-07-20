@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { sourceFetch } from "@/server/http/fetch";
-import type { MidiSearchResult, MidiSource } from "@/server/midi/types";
+import type { MidiListing, MidiSource } from "@/server/midi/types";
 
 const siteBase = "https://bitmidi.com";
 const searchEndpoint = `${siteBase}/api/midi/search`;
@@ -28,6 +28,14 @@ function toAbsolute(path: string): string {
 export const bitmidiSource: MidiSource = {
   id: "bitmidi",
   label: "BitMidi",
+  blurb:
+    "A large open catalogue of user submitted MIDI files, mostly popular songs and games.",
+  homeUrl: siteBase,
+  license: "User submitted; check each song's own rights before reuse.",
+
+  fileUrl(id) {
+    return `${siteBase}/uploads/${id}.mid`;
+  },
 
   async search(query, limit) {
     const url = `${searchEndpoint}?q=${encodeURIComponent(query)}`;
@@ -39,14 +47,13 @@ export const bitmidiSource: MidiSource = {
     }
 
     const reply = bitmidiReplySchema.parse(await response.json());
-    const results: MidiSearchResult[] = reply.result.results
+    const results: MidiListing[] = reply.result.results
       .filter((entry) => entry.downloadUrl !== "")
       .map((entry) => ({
         id: String(entry.id),
         source: "bitmidi" as const,
         name: entry.name,
         plays: entry.plays,
-        downloadUrl: toAbsolute(entry.downloadUrl),
         sourceUrl: toAbsolute(entry.url),
       }));
 

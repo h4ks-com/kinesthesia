@@ -31,13 +31,16 @@ vi.mock("@/server/midi/analyse", () => ({
 }));
 
 vi.mock("@/server/midi/search", () => ({
+  fileEndpoint: (source: string, id: string) =>
+    `https://kinesthesia.h4ks.com/api/midi/file?source=${source}&id=${id}`,
   searchMidi: vi.fn(async () => [
     {
       id: "1",
       source: "bitmidi",
       name: "A song.mid",
       plays: 1,
-      downloadUrl: "https://bitmidi.com/uploads/1.mid",
+      downloadUrl:
+        "https://kinesthesia.h4ks.com/api/midi/file?source=bitmidi&id=1",
       sourceUrl: "https://bitmidi.com/a-song-mid",
       playUrl: "https://kinesthesia.h4ks.com/watch?url=x",
       learnUrl: "https://kinesthesia.h4ks.com/learn?url=x",
@@ -108,7 +111,8 @@ describe("mcp endpoint", () => {
       throw new Error("the tool returned no content");
     }
     const [match] = JSON.parse(first.text).results;
-    expect(match.downloadUrl).toMatch(/\.mid$/);
+    expect(match.source).toBe("bitmidi");
+    expect(match.downloadUrl).toContain("/api/midi/file?source=bitmidi");
     expect(match.playUrl).toContain("/watch");
     expect(match.learnUrl).toContain("/learn");
     expect(match.multiplayerUrl).toContain("/multiplayer");
@@ -135,9 +139,9 @@ describe("player_link", () => {
 
   it("carries every setting the player reads", async () => {
     const { text } = await build({
-      url: "https://bitmidi.com/uploads/87216.mid",
-      name: "Queen - Bohemian Rhapsody.mid",
       source: "bitmidi",
+      id: "87216",
+      name: "Queen - Bohemian Rhapsody.mid",
       mode: "watch",
       tracks: [4],
       speed: 1,
@@ -158,7 +162,8 @@ describe("player_link", () => {
 
   it("refuses an offset before the beginning", async () => {
     const { isError } = await build({
-      url: "https://bitmidi.com/uploads/87216.mid",
+      source: "bitmidi",
+      id: "87216",
       mode: "watch",
       start: -5,
     });
@@ -168,7 +173,8 @@ describe("player_link", () => {
 
   it("opens a song plainly when nothing is asked for", async () => {
     const { text } = await build({
-      url: "https://bitmidi.com/uploads/87216.mid",
+      source: "bitmidi",
+      id: "87216",
       mode: "learn",
     });
 
@@ -181,7 +187,8 @@ describe("player_link", () => {
   // that was named has to be written down even at its default.
   it("writes down a setting that was named even at its default", async () => {
     const { text } = await build({
-      url: "https://bitmidi.com/uploads/1.mid",
+      source: "bitmidi",
+      id: "1",
       speed: 1,
       transpose: 0,
       simplified: false,
@@ -194,7 +201,8 @@ describe("player_link", () => {
 
   it("holds a key inside what the player accepts", async () => {
     const { text } = await build({
-      url: "https://bitmidi.com/uploads/1.mid",
+      source: "bitmidi",
+      id: "1",
       transpose: 99,
     });
     expect(text).toContain("transpose=12");
@@ -202,7 +210,8 @@ describe("player_link", () => {
 
   it("refuses a speed the player has no setting for", async () => {
     const { text, isError } = await build({
-      url: "https://bitmidi.com/uploads/1.mid",
+      source: "bitmidi",
+      id: "1",
       speed: 3,
     });
     expect(isError).toBe(true);
@@ -211,7 +220,8 @@ describe("player_link", () => {
 
   it("refuses to strip the chrome off a mode that scores", async () => {
     const { isError } = await build({
-      url: "https://bitmidi.com/uploads/1.mid",
+      source: "bitmidi",
+      id: "1",
       mode: "learn",
       focus: true,
     });
@@ -230,7 +240,7 @@ describe("midi_info", () => {
   it("reports the length and the tracks", async () => {
     const response = await rpc("tools/call", {
       name: "midi_info",
-      arguments: { url: "https://bitmidi.com/uploads/1.mid", name: "A song" },
+      arguments: { source: "bitmidi", id: "1", name: "A song" },
     });
     const content = (await result(response)).content as { text: string }[];
     const summary = JSON.parse(content[0]?.text ?? "{}");
@@ -243,7 +253,7 @@ describe("midi_info", () => {
   it("says so when the file cannot be read", async () => {
     const response = await rpc("tools/call", {
       name: "midi_info",
-      arguments: { url: "https://bitmidi.com/uploads/missing.mid" },
+      arguments: { source: "bitmidi", id: "missing" },
     });
     const body = await result(response);
     expect(body.isError).toBe(true);

@@ -257,7 +257,8 @@ export class PianoRollRenderer {
       }
       const ghost = frame.yours !== null && !frame.yours.has(note.id);
       const color = trackColor(note.track);
-      if (note.start <= position && !ghost) {
+      const sounding = note.start <= position;
+      if (sounding && !ghost) {
         active.set(note.pitch, color);
       }
 
@@ -274,13 +275,23 @@ export class PianoRollRenderer {
       const noteHeight = Math.max(2, bottom - y);
 
       // The hue holds across the body and only lifts in the last of the bar,
-      // so the leading edge reads as lit without the note becoming a ramp.
+      // so the leading edge reads as lit without the note becoming a ramp. A
+      // note being played drops the deep end and burns at its core instead.
       const gradient = ctx.createLinearGradient(0, y, 0, y + noteHeight);
-      gradient.addColorStop(0, color.shade);
-      gradient.addColorStop(0.3, color.glow);
-      gradient.addColorStop(0.82, color.glow);
-      gradient.addColorStop(1, color.core);
-      ctx.globalAlpha = ghost ? 0.22 : 1;
+      if (sounding) {
+        gradient.addColorStop(0, color.glow);
+        gradient.addColorStop(0.4, color.core);
+        gradient.addColorStop(1, color.core);
+      } else {
+        gradient.addColorStop(0, color.shade);
+        gradient.addColorStop(0.3, color.glow);
+        gradient.addColorStop(0.82, color.glow);
+        gradient.addColorStop(1, color.core);
+      }
+      // Velocity only sets how firmly the note sits, since a MIDI whose notes
+      // all carry one velocity must not end up a uniformly dim roll.
+      const punch = 0.74 + note.velocity * 0.26;
+      ctx.globalAlpha = ghost ? 0.22 : punch;
       ctx.fillStyle = gradient;
       roundRect(ctx, x, y, noteWidth, noteHeight, 4);
       ctx.fill();

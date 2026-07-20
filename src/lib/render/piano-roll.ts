@@ -156,6 +156,7 @@ export class PianoRollRenderer {
       active.set(pitch, active.get(pitch) ?? trackColor(0));
     }
 
+    this.paintKeyboardShadow(total, keyboardTop);
     this.paintGlow(active, keyboardTop, whiteWidth);
     this.emitSparks(frame, active, keyboardTop, whiteWidth);
     this.paintKeyboard(
@@ -247,6 +248,11 @@ export class PianoRollRenderer {
     const { position } = frame;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+    const drums = new Set(
+      frame.song.tracks
+        .filter((track) => track.percussion)
+        .map((track) => track.index),
+    );
 
     for (const note of frame.song.notes) {
       if (note.start > position + lookAhead) {
@@ -293,11 +299,28 @@ export class PianoRollRenderer {
       const punch = 0.74 + note.velocity * 0.26;
       ctx.globalAlpha = ghost ? 0.22 : punch;
       ctx.fillStyle = gradient;
-      roundRect(ctx, x, y, noteWidth, noteHeight, 4);
-      ctx.fill();
+      // A drum has neither pitch nor length to show, so it is struck as a
+      // single mark at the moment it lands rather than held as a bar.
+      const drum = drums.has(note.track);
+      if (drum) {
+        const half = Math.min(noteWidth, 13) / 2;
+        const hit = Math.min(bottom, keyboardTop);
+        ctx.fillStyle = color.glow;
+        ctx.beginPath();
+        ctx.moveTo(x + noteWidth / 2, hit - half * 1.6);
+        ctx.lineTo(x + noteWidth / 2 + half, hit);
+        ctx.lineTo(x + noteWidth / 2, hit + half * 1.6);
+        ctx.lineTo(x + noteWidth / 2 - half, hit);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        roundRect(ctx, x, y, noteWidth, noteHeight, 4);
+        ctx.fill();
+      }
       ctx.globalAlpha = 1;
 
       if (
+        !drum &&
         !ghost &&
         position < note.start &&
         noteWidth >= 17 &&
@@ -306,17 +329,16 @@ export class PianoRollRenderer {
         const centerX = x + noteWidth / 2;
         const centerY = Math.min(y + noteHeight - 13, keyboardTop - 13);
         const label = noteName(note.pitch);
+        // The chip reads against the note rather than competing with it: the
+        // pitch keeps its colour, but only as the ring.
         ctx.beginPath();
         ctx.arc(centerX, centerY, 9, 0, Math.PI * 2);
-        ctx.fillStyle = pitchColor(note.pitch);
+        ctx.fillStyle = "rgba(6,8,13,0.82)";
         ctx.fill();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = pitchColor(note.pitch);
+        ctx.stroke();
         ctx.font = `${label.length > 1 ? "700 9px" : "700 11px"} system-ui, sans-serif`;
-        // The outline carries the white label over the pale pitch colours,
-        // where white alone is unreadable.
-        ctx.lineWidth = 2.5;
-        ctx.lineJoin = "round";
-        ctx.strokeStyle = "rgba(6,8,13,0.9)";
-        ctx.strokeText(label, centerX, centerY);
         ctx.fillStyle = "#ffffff";
         ctx.fillText(label, centerX, centerY);
       }
@@ -447,6 +469,23 @@ export class PianoRollRenderer {
     ctx.shadowBlur = 0;
     ctx.fillStyle = "#161c26";
     ctx.fillRect(0, keyboardTop - 2, width, 2);
+  }
+
+  /** A shadow cast up the roll, so the keys read as standing in front of the
+   * falling notes rather than butting into them. */
+  private paintKeyboardShadow(width: number, keyboardTop: number): void {
+    const ctx = this.context;
+    const depth = 18;
+    const shadow = ctx.createLinearGradient(
+      0,
+      keyboardTop - depth,
+      0,
+      keyboardTop,
+    );
+    shadow.addColorStop(0, "rgba(0,0,0,0)");
+    shadow.addColorStop(1, "rgba(0,0,0,0.55)");
+    ctx.fillStyle = shadow;
+    ctx.fillRect(0, keyboardTop - depth, width, depth);
   }
 
   /** A pressed key goes white so the player can tell their own hit from a note

@@ -1,6 +1,6 @@
 "use client";
 
-import { Minimize, Volume2 } from "lucide-react";
+import { Minimize, Piano, Volume2 } from "lucide-react";
 import {
   forwardRef,
   type ReactNode,
@@ -140,6 +140,8 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const [simplified, setSimplified] = useState(params.simplified);
   const [melodyRate, setMelodyRate] = useState(params.melodyRate);
   const [transpose, setTranspose] = useState(params.transpose);
+  // The file extension is noise on the presented title.
+  const songTitle = params.name.replace(/\.midi?$/i, "");
   // A crafted link auto-focuses a solo view, but not a match, whose setup and
   // invite live in the chrome focus mode hides.
   const [focus, setFocus] = useState(mode !== "multiplayer" && params.focus);
@@ -803,12 +805,18 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
 
       {focusExit}
       {focus && params.name !== "" ? (
-        <div className="pointer-events-none fixed inset-0 z-20 flex items-center justify-center px-8">
-          <p
-            className={`line-clamp-3 max-w-3xl text-balance text-center font-semibold text-3xl text-text leading-tight transition-opacity duration-700 sm:text-5xl ${titleUp ? "opacity-100" : "opacity-0"}`}
+        <div className="pointer-events-none fixed inset-0 z-20 flex items-center justify-center px-6">
+          <div
+            className={`max-w-[90vw] rounded-2xl border border-line-strong bg-panel/85 px-8 py-6 text-center shadow-[0_24px_70px_-15px_rgba(0,0,0,0.95)] backdrop-blur-md transition-opacity duration-700 ${titleUp ? "opacity-100" : "opacity-0"}`}
           >
-            {params.name}
-          </p>
+            <Piano
+              className="mx-auto mb-3 size-6 text-accent"
+              aria-hidden="true"
+            />
+            <p className="line-clamp-3 text-balance font-semibold text-3xl text-text leading-tight sm:text-5xl">
+              {songTitle}
+            </p>
+          </div>
         </div>
       ) : null}
 

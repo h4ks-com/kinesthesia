@@ -311,9 +311,9 @@ test("a focused link presents the song and offers a way out", async ({
   // The song's name is presented over the empty view, then fades for a clean
   // recording. It fades by opacity, so visibility never rode on a motion
   // preference the way an animation would.
-  const title = page.getByText(songName);
-  await expect(title).toHaveCSS("opacity", "1");
-  await expect(title).toHaveCSS("opacity", "0", { timeout: 8000 });
+  const card = page.getByText(songName).locator("xpath=..");
+  await expect(card).toHaveCSS("opacity", "1");
+  await expect(card).toHaveCSS("opacity", "0", { timeout: 8000 });
 
   // A phone has no Escape key, so a tap target leaves focus.
   await page.getByRole("button", { name: "Leave focus" }).click();
@@ -332,10 +332,10 @@ test("the focus title holds visible under reduced motion", async ({
 
   // With reduced motion the fade is instant, so the title must not depend on an
   // animation for its visible spell.
-  const title = page.getByText(songName);
-  await expect(title).toHaveCSS("opacity", "1");
+  const card = page.getByText(songName).locator("xpath=..");
+  await expect(card).toHaveCSS("opacity", "1");
   await page.waitForTimeout(1500);
-  await expect(title).toHaveCSS("opacity", "1");
+  await expect(card).toHaveCSS("opacity", "1");
   await context.close();
 });
 

@@ -9,31 +9,10 @@
 ![Kinesthesia playing a song](public/screenshot.png)
 
 A piano roll for the web, inspired by [Synthesia](https://synthesiagame.com/).
-Search for any song, and it pulls the MIDI straight from the source and drops
-the notes down onto an 88 key piano.
+Search a song and its MIDI falls onto an 88 key piano to watch, learn, or play
+someone else.
 
 Live at [kinesthesia.h4ks.com](https://kinesthesia.h4ks.com).
-
-## Three ways to play
-
-Search on the home page, pick a song, then choose how you want it.
-
-- **Watch** plays the song to you, every track falling in its own colour.
-- **Learn** hands you a track. The notes stop at the keys and wait until you hit
-  the right ones, so the song moves at your pace. Use a real MIDI keyboard, or
-  the computer keyboard: the bottom two rows are laid out like a piano, with the
-  black keys sitting above the white ones, and the arrow keys shift octave.
-- **Battle** puts you against someone else on the same song. The music never
-  stops there, so a note you miss is simply missed. You hear only yourself and
-  watch their score climb next to yours. Open a room, send them the code, and the
-  game runs peer to peer.
-
-Watch and learn can be slowed down, and you can play the keys with a MIDI
-keyboard, the computer keyboard, or by tapping the on screen piano. On a narrow
-screen the keys stay big and the keyboard drags sideways.
-
-Everything about a session lives in the URL, so copying the address bar hands
-someone the exact same song, mode and track selection.
 
 ## Run it
 
@@ -43,52 +22,23 @@ bun install
 bun run dev
 ```
 
-Or with Docker, either building it here:
+With Docker, built here:
 
 ```
 docker compose up
 ```
 
-or straight from the published image, which is built for amd64 and arm64:
+or from the published image, built for amd64 and arm64:
 
 ```
 docker run -p 3000:3000 -v kinesthesia:/app/data ghcr.io/h4ks-com/kinesthesia:latest
 ```
 
-Every setting lives in `.env`, and `.env.example` documents all of them.
-
-You never have to sign in to play. Recent songs and favourites are kept in your
-browser. If you fill in the Logto values a sign in button appears, and finished
-runs go to a leaderboard anyone can read. Point the Logto redirect URI at
-`APP_BASE_URL` + `/callback`, and generate `LOGTO_COOKIE_SECRET` yourself since
-it encrypts this app's own session cookie rather than coming from Logto.
+`.env.example` documents every setting.
 
 ## API
 
-The search API is public and self documenting.
+The API documents itself at `/api/docs`, with the OpenAPI spec at
+`/api/openapi.json` and the same tools over MCP at `/api/mcp`.
 
-```
-GET  /api/midi/search?q=<song>   search across sources
-GET  /api/midi/sources           list the sources it can search
-POST /api/battle/rooms           open a battle room
-GET  /api/battle/rooms/{code}    look one up
-GET  /api/scores                 public leaderboard
-POST /api/scores                 record a run, needs a signed in player
-GET  /api/openapi.json           OpenAPI 3.1 spec
-GET  /api/docs                   browsable reference
-ALL  /api/mcp                    the same tools over MCP
-```
-
-Every result carries the source it came from, a direct link to the `.mid` file
-and a link that opens it in the player. Sources are pluggable, so more can be
-added without touching the API.
-
-## Credits
-
-MIDI files come from [BitMidi](https://bitmidi.com). The falling note idea comes
-from [Synthesia](https://synthesiagame.com/). Piano samples come from
-[smplr](https://github.com/danigb/smplr), and the peer to peer side uses
-[PeerJS](https://peerjs.com/).
-
-MIT licensed. Copyright 2026 Matheus Fillipe.
-[github.com/h4ks-com/kinesthesia](https://github.com/h4ks-com/kinesthesia)
+MIDI files come from [BitMidi](https://bitmidi.com). MIT licensed. Copyright 2026

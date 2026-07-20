@@ -39,6 +39,28 @@ docker run -p 3000:3000 -v kinesthesia:/app/data ghcr.io/h4ks-com/kinesthesia:la
 ## API
 
 The API documents itself at `/api/docs`, with the OpenAPI spec at
-`/api/openapi.json` and the same tools over MCP at `/api/mcp`.
+`/api/openapi.json`.
 
-MIDI files come from [BitMidi](https://bitmidi.com). MIT licensed. Copyright 2026
+## MCP
+
+The same tools run over MCP at `/api/mcp` (streamable HTTP), so an agent can
+search for songs, read a file's length and tracks, and build player links. Add
+it to a client:
+
+```
+claude mcp add --transport http kinesthesia https://kinesthesia.h4ks.com/api/mcp
+```
+
+or with JSON config:
+
+```json
+{
+  "mcpServers": {
+    "kinesthesia": { "type": "http", "url": "https://kinesthesia.h4ks.com/api/mcp" }
+  }
+}
+```
+
+Swap in `http://localhost:3000/api/mcp` when running locally.
+
+MIDI files come from [BitMidi](https://bitmidi.com).

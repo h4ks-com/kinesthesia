@@ -145,6 +145,7 @@ describe("player_link", () => {
       melodyRate: 7,
       transpose: 0,
       focus: true,
+      start: 90,
     });
 
     expect(text).toContain("/watch?");
@@ -152,6 +153,17 @@ describe("player_link", () => {
     expect(text).toContain("simple=1");
     expect(text).toContain("rate=7");
     expect(text).toContain("focus=1");
+    expect(text).toContain("start=90");
+  });
+
+  it("refuses an offset before the beginning", async () => {
+    const { isError } = await build({
+      url: "https://bitmidi.com/uploads/87216.mid",
+      mode: "watch",
+      start: -5,
+    });
+
+    expect(isError).toBe(true);
   });
 
   it("opens a song plainly when nothing is asked for", async () => {

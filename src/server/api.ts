@@ -650,6 +650,13 @@ const playerLinkShape = {
     .describe(
       "Strip the page back to the keys and the falling notes, for recording. Watch only",
     ),
+  start: z
+    .number()
+    .min(0)
+    .optional()
+    .describe(
+      "Seconds into the song to open at, so the link starts partway through. Use midi_info to find the point",
+    ),
 };
 
 type PlayerLinkInput = {
@@ -663,6 +670,7 @@ type PlayerLinkInput = {
   readonly simplified?: boolean;
   readonly melodyRate?: number;
   readonly focus?: boolean;
+  readonly start?: number;
 };
 
 type PlayerLink = { ok: true; url: string } | { ok: false; why: string };
@@ -696,7 +704,7 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
       melodyRate: clampMelodyRate(input.melodyRate ?? defaultMelodyRate),
       transpose: clampTranspose(input.transpose ?? defaultTranspose),
       focus: input.focus ?? false,
-      start: defaultStart,
+      start: input.start ?? defaultStart,
     }),
   );
   // A setting left at its default is otherwise dropped, which hands it back to
@@ -732,9 +740,9 @@ long it runs, how many notes it holds and what is on each track, which is how to
 answer how long or how hard a song is, and how to pick a track to play.
 
 Those links take the song as it comes. To open one at a different speed, in
-another key, on chosen tracks, or stripped back for recording, build the link
-with player_link rather than editing the query string by hand: it validates
-every value and refuses a combination the player would ignore.`;
+another key, on chosen tracks, partway through, or stripped back for recording,
+build the link with player_link rather than editing the query string by hand: it
+validates every value and refuses a combination the player would ignore.`;
 
 function createMcpServer(): McpServer {
   const mcp = new McpServer(
@@ -795,7 +803,7 @@ function createMcpServer(): McpServer {
     {
       title: "Build a player link",
       description:
-        "Turn a .mid URL into a browser link that opens it exactly as asked: the mode to open in, the speed, the key, which tracks the player owes, whether the part is reduced to one note at a time, and whether the page is stripped back to the keys and the falling notes for recording. Take the .mid URL from search_midi.",
+        "Turn a .mid URL into a browser link that opens it exactly as asked: the mode to open in, the speed, the key, which tracks the player owes, whether the part is reduced to one note at a time, how many seconds in to start, and whether the page is stripped back to the keys and the falling notes for recording. Take the .mid URL from search_midi.",
       inputSchema: playerLinkShape,
     },
     async (input) => {

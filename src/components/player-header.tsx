@@ -90,6 +90,7 @@ export function PlayerHeader({
       <Link
         href="/"
         data-tip="Back to search"
+        data-tip-align="left"
         aria-label="Back to search"
         className="flex shrink-0 items-center gap-2 rounded-lg px-1.5 py-1 font-semibold tracking-tight transition-colors hover:text-accent"
       >
@@ -156,6 +157,7 @@ export function PlayerHeader({
         data-tour="focus"
         onClick={onFocus}
         data-tip="Just the keys and the notes"
+        data-tip-align="right"
         aria-label="Focus mode"
         className="shrink-0 rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"
       >
@@ -172,6 +174,7 @@ export function PlayerHeader({
                 aria-disabled="true"
                 onClick={(event) => event.preventDefault()}
                 data-tip="Uploaded files can't be shared"
+                data-tip-align="right"
                 aria-label="Multiplayer unavailable for uploaded files"
                 className="cursor-not-allowed rounded-lg border border-line p-2 text-line-strong"
               >
@@ -182,6 +185,7 @@ export function PlayerHeader({
                 key={target}
                 href={playerPath(target, params)}
                 data-tip={`Switch to ${label.toLowerCase()}`}
+                data-tip-align="right"
                 aria-label={`Switch to ${label}`}
                 className="rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"
               >
@@ -196,6 +200,7 @@ export function PlayerHeader({
         type="button"
         onClick={onHelp}
         data-tip="Walk me through it"
+        data-tip-align="right"
         aria-label="Tutorial"
         className="shrink-0 rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"
       >

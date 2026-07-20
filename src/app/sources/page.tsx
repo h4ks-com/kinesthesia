@@ -1,25 +1,26 @@
-import { ArrowUpRight, Piano } from "lucide-react";
-import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
+import { TopBar } from "@/components/top-bar";
+import {
+  authEnabled,
+  currentViewer,
+  startSignIn,
+  startSignOut,
+} from "@/server/auth";
 import { midiSources } from "@/server/midi/registry";
 
 export const metadata = {
   title: "Sources — Kinesthesia",
 };
 
-export default function SourcesPage() {
+export default async function SourcesPage() {
   return (
     <>
-      <header className="border-line border-b bg-panel/60">
-        <div className="mx-auto flex w-full max-w-3xl items-center px-5 py-4">
-          <Link
-            href="/"
-            className="flex items-center gap-2 font-semibold tracking-tight transition-colors hover:text-accent"
-          >
-            <Piano className="size-[18px] text-accent" aria-hidden="true" />
-            Kinesthesia
-          </Link>
-        </div>
-      </header>
+      <TopBar
+        viewer={await currentViewer()}
+        authEnabled={await authEnabled()}
+        signIn={startSignIn}
+        signOut={startSignOut}
+      />
 
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-5 py-14">
         <div className="flex flex-col gap-3">

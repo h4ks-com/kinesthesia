@@ -38,7 +38,7 @@ export const mutopiaSource: MidiSource = {
   id: "mutopia",
   label: "Mutopia",
   blurb:
-    "Sheet music engraved by volunteers, offered as free public domain and Creative Commons scores.",
+    "Classical scores engraved by volunteers, free as public domain or Creative Commons. Search a composer or a piece; it has no pop or game music.",
   homeUrl: siteBase,
   license:
     "Public domain or Creative Commons; free to download, perform and redistribute.",

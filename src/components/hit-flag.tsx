@@ -9,8 +9,8 @@ const label: Record<Judgement, string> = {
 };
 
 const tone: Record<Judgement, string> = {
-  perfect: "border-warn/40 bg-warn/15 text-warn",
-  good: "border-good/40 bg-good/15 text-good",
+  perfect: "border-good/40 bg-good/15 text-good",
+  good: "border-warn/40 bg-warn/15 text-warn",
   miss: "border-danger/40 bg-danger/15 text-danger",
 };
 

@@ -3,6 +3,7 @@ import { defaultTranspose } from "@/lib/midi/song";
 import {
   buildPlayerUrl,
   defaultSpeed,
+  defaultStart,
   type PlayerMode,
 } from "@/lib/player-url";
 import { config } from "@/server/config";
@@ -43,6 +44,7 @@ export async function searchMidi({
           melodyRate: defaultMelodyRate,
           transpose: defaultTranspose,
           focus: false,
+          start: defaultStart,
         });
       return {
         ...result,

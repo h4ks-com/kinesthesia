@@ -438,6 +438,21 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     [seekPlayback],
   );
 
+  // The engine resets to zero whenever the file changes, so the opening offset
+  // is re-applied per file rather than once per mount.
+  const startedFrom = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      song === null ||
+      params.start <= 0 ||
+      startedFrom.current === params.url
+    ) {
+      return;
+    }
+    startedFrom.current = params.url;
+    seek(Math.min(params.start, song.duration));
+  }, [song, params.start, params.url, seek]);
+
   const offsetRef = useRef(latencyOffset);
   offsetRef.current = latencyOffset;
   const ownedTrack = [...playerTracks][0] ?? 0;

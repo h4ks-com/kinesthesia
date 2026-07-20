@@ -25,6 +25,7 @@ import {
 } from "@/lib/multiplayer/protocol";
 import {
   asSpeed,
+  defaultStart,
   type PlayerParams,
   parsePlayerParams,
 } from "@/lib/player-url";
@@ -430,6 +431,7 @@ export function Multiplayer({
         melodyRate: clampMelodyRate(room.melodyRate),
         transpose: clampTranspose(room.transpose ?? defaultTranspose),
         focus: false,
+        start: defaultStart,
       });
       const { Peer } = await import("peerjs");
       peerRef.current?.destroy();

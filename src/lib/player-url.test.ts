@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildPlayerUrl,
+  defaultStart,
   type PlayerParams,
   parsePlayerParams,
   playerPath,
@@ -16,6 +17,7 @@ const song: PlayerParams = {
   melodyRate: 6,
   transpose: 0,
   focus: false,
+  start: defaultStart,
 };
 
 describe("buildPlayerUrl", () => {
@@ -104,5 +106,31 @@ describe("focus", () => {
       new URLSearchParams(path.slice(path.indexOf("?"))),
     );
     expect(params?.focus).toBe(true);
+  });
+});
+
+describe("start", () => {
+  it("rides in the link only past zero", () => {
+    expect(playerPath("watch", song)).not.toContain("start");
+    expect(playerPath("watch", { ...song, start: 42.5 })).toContain(
+      "start=42.5",
+    );
+  });
+
+  it("is read back off the link", () => {
+    const path = playerPath("watch", { ...song, start: 42.5 });
+    const params = parsePlayerParams(
+      new URLSearchParams(path.slice(path.indexOf("?"))),
+    );
+    expect(params?.start).toBe(42.5);
+  });
+
+  it("falls back to the start for a missing or nonsense offset", () => {
+    const read = (query: string): number | undefined =>
+      parsePlayerParams(new URLSearchParams(`?url=https://x/a.mid${query}`))
+        ?.start;
+    expect(read("")).toBe(0);
+    expect(read("&start=-5")).toBe(0);
+    expect(read("&start=abc")).toBe(0);
   });
 });

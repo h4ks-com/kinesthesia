@@ -32,7 +32,11 @@ export type PlayerParams = {
   readonly transpose: Transpose;
   /** Strips the page back to the keys and the falling notes, for recording. */
   readonly focus: boolean;
+  /** Seconds the playhead opens at, so a link can start partway through. */
+  readonly start: number;
 };
+
+export const defaultStart = 0;
 
 function isSpeed(value: number): value is Speed {
   return speeds.some((option) => option === value);
@@ -81,6 +85,11 @@ function readRate(raw: string | null): MelodyRate {
   return Number.isFinite(value) ? clampMelodyRate(value) : defaultMelodyRate;
 }
 
+function readStart(raw: string | null): number {
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : defaultStart;
+}
+
 function isPlayableUrl(url: string): boolean {
   return /^https?:\/\//i.test(url) || /^local:[a-z0-9-]+$/.test(url);
 }
@@ -118,6 +127,9 @@ export function buildPlayerUrl(
   }
   if (params.focus) {
     target.searchParams.set("focus", "1");
+  }
+  if (params.start > 0) {
+    target.searchParams.set("start", String(params.start));
   }
   return target.toString();
 }
@@ -160,5 +172,6 @@ export function parsePlayerParams(
     melodyRate: readRate(searchParams.get("rate")),
     transpose: clampTranspose(transpose),
     focus: searchParams.get("focus") === "1",
+    start: readStart(searchParams.get("start")),
   };
 }

@@ -12,6 +12,7 @@ import {
   asSpeed,
   buildPlayerUrl,
   defaultSpeed,
+  defaultStart,
   type PlayerMode,
   playerModes,
   speeds,
@@ -695,6 +696,7 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
       melodyRate: clampMelodyRate(input.melodyRate ?? defaultMelodyRate),
       transpose: clampTranspose(input.transpose ?? defaultTranspose),
       focus: input.focus ?? false,
+      start: defaultStart,
     }),
   );
   // A setting left at its default is otherwise dropped, which hands it back to

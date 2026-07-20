@@ -23,6 +23,10 @@ import {
 
 const lookAhead = 3.5;
 const maxDevicePixelRatio = 1.5;
+/** How long a struck drum keeps its key lit. The note-off a MIDI writes for a
+ * drum is arbitrary and often runs for a beat, which would hold the key long
+ * after the hit it stands for. */
+const drumDecay = 0.09;
 
 type SparkKind = "note" | "strike" | "bloom";
 
@@ -263,6 +267,8 @@ export class PianoRollRenderer {
       );
     }
     const drums = this.drumTracks;
+    const blackNote = blackKeyWidth(whiteWidth);
+    const whiteNote = whiteWidth * 0.86;
 
     for (const note of frame.song.notes) {
       if (note.start > position + lookAhead) {
@@ -274,22 +280,19 @@ export class PianoRollRenderer {
       const ghost = frame.yours !== null && !frame.yours.has(note.id);
       const color = trackColor(note.track);
       const sounding = note.start <= position;
-      if (sounding && !ghost) {
-        active.set(note.pitch, color);
-      }
 
-      // A drum is an impulse, and the note-off a MIDI gives it is arbitrary, so
-      // the mark falls to the line and is spent there rather than being held.
-      const drum = drums.has(note.track);
-      if (drum) {
-        const strike =
-          (keyboardTop * (position - note.start + lookAhead)) / lookAhead;
+      // A drum is an impulse: the mark falls to the line and is spent there,
+      // and the key it lights decays on its own rather than on the note-off.
+      if (drums.has(note.track)) {
+        const struck = position - note.start;
+        if (!ghost && struck >= 0 && struck < drumDecay) {
+          active.set(note.pitch, color);
+        }
+        const strike = (keyboardTop * (struck + lookAhead)) / lookAhead;
         if (strike <= keyboardTop) {
-          const noteWidth = isBlackKey(note.pitch)
-            ? blackKeyWidth(whiteWidth)
-            : whiteWidth * 0.86;
+          const half =
+            Math.min(isBlackKey(note.pitch) ? blackNote : whiteNote, 13) / 2;
           const centre = keyCenter(note.pitch, whiteWidth);
-          const half = Math.min(noteWidth, 13) / 2;
           ctx.globalAlpha = ghost ? 0.22 : 0.74 + note.velocity * 0.26;
           ctx.fillStyle = color.glow;
           ctx.beginPath();
@@ -304,14 +307,16 @@ export class PianoRollRenderer {
         continue;
       }
 
+      if (sounding && !ghost) {
+        active.set(note.pitch, color);
+      }
+
       const bottom = Math.min(
         keyboardTop,
         (keyboardTop * (position - note.start + lookAhead)) / lookAhead,
       );
       const top = (keyboardTop * (position - note.end + lookAhead)) / lookAhead;
-      const noteWidth = isBlackKey(note.pitch)
-        ? blackKeyWidth(whiteWidth)
-        : whiteWidth * 0.86;
+      const noteWidth = isBlackKey(note.pitch) ? blackNote : whiteNote;
       const x = keyCenter(note.pitch, whiteWidth) - noteWidth / 2;
       const y = Math.min(top, bottom);
       const noteHeight = Math.max(2, bottom - y);
@@ -339,14 +344,9 @@ export class PianoRollRenderer {
       ctx.fill();
       ctx.globalAlpha = 1;
 
-      if (
-        !ghost &&
-        position < note.start &&
-        noteWidth >= 17 &&
-        noteHeight >= 20
-      ) {
+      if (!ghost && !sounding && noteWidth >= 17 && noteHeight >= 20) {
         const centerX = x + noteWidth / 2;
-        const centerY = Math.min(y + noteHeight - 13, keyboardTop - 13);
+        const centerY = y + noteHeight - 13;
         const label = noteName(note.pitch);
         // The chip reads against the note rather than competing with it: the
         // pitch keeps its colour, but only as the ring.

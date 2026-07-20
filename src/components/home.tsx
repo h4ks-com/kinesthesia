@@ -1,7 +1,13 @@
 "use client";
 
-import { BookOpen, Code2, Loader2, Search, X } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { BookOpen, Code2, Loader2, Search, Upload, X } from "lucide-react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { LibrarySection } from "@/components/library-section";
 import { SongRow } from "@/components/song-row";
 import { TopBar } from "@/components/top-bar";
@@ -13,8 +19,10 @@ import {
   type LibraryEntry,
   listFavourites,
   listRecent,
+  recordPlay,
   toggleFavourite,
 } from "@/lib/storage/library";
+import { storeUpload } from "@/lib/storage/uploads";
 import { shortestQuery, useLiveSearch } from "@/lib/use-live-search";
 import type { Viewer } from "@/server/auth";
 
@@ -38,6 +46,9 @@ export function Home({
   const [query, setQuery] = useState("");
   const [recent, setRecent] = useState<readonly LibraryEntry[]>([]);
   const [favorites, setFavorites] = useState<readonly LibraryEntry[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const state = useLiveSearch(query);
 
   const refreshLibrary = useCallback(() => {
@@ -46,6 +57,29 @@ export function Home({
   }, []);
 
   useEffect(refreshLibrary, [refreshLibrary]);
+
+  const addFiles = useCallback(
+    async (files: FileList | null) => {
+      const midis = Array.from(files ?? []).filter((file) =>
+        /\.midi?$/i.test(file.name),
+      );
+      if (midis.length === 0) {
+        setUploadError("That doesn't look like a MIDI file.");
+        return;
+      }
+      setUploadError(null);
+      try {
+        for (const file of midis) {
+          const url = await storeUpload(await file.arrayBuffer());
+          await recordPlay({ url, name: file.name, source: "local" });
+        }
+      } catch {
+        setUploadError("Could not save that file on this device.");
+      }
+      refreshLibrary();
+    },
+    [refreshLibrary],
+  );
 
   const favoriteKeys = new Set(favorites.map((entry) => entry.key));
 
@@ -122,6 +156,45 @@ export function Home({
               </button>
             ) : null}
           </div>
+        </div>
+
+        <div>
+          <button
+            type="button"
+            onClick={() => fileInput.current?.click()}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragging(false);
+              void addFiles(event.dataTransfer.files);
+            }}
+            className={`flex w-full items-center justify-center gap-2 rounded-xl border border-dashed py-4 font-mono text-xs transition-colors ${
+              dragging
+                ? "border-accent bg-accent-soft/30 text-accent"
+                : "border-line text-faint hover:border-line-strong hover:text-muted"
+            }`}
+          >
+            <Upload className="size-4" aria-hidden="true" />
+            drop a midi file here, or click to choose
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".mid,.midi,audio/midi"
+            multiple
+            className="hidden"
+            onChange={(event) => {
+              void addFiles(event.target.files);
+              event.target.value = "";
+            }}
+          />
+          {uploadError === null ? null : (
+            <p className="mt-2 text-danger text-sm">{uploadError}</p>
+          )}
         </div>
 
         {state.status === "failed" ? (

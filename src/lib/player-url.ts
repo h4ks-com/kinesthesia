@@ -82,7 +82,7 @@ function readRate(raw: string | null): MelodyRate {
 }
 
 function isPlayableUrl(url: string): boolean {
-  return /^https?:\/\//i.test(url);
+  return /^https?:\/\//i.test(url) || /^local:[a-z0-9-]+$/.test(url);
 }
 
 /** Explicit spells out every song setting even at its default, so a link
@@ -128,8 +128,9 @@ export function playerPath(mode: PlayerMode, params: PlayerParams): string {
   return buildPlayerUrl(localBase, mode, params).slice(localBase.length);
 }
 
-/** Returns null when the url is absent or not http(s), which keeps a crafted
- * `javascript:` link from ever reaching an audio loader or an anchor. */
+/** Returns null unless the url is http(s) or our opaque `local:` upload id,
+ * which keeps a crafted `javascript:` link from ever reaching an audio loader
+ * or an anchor. */
 export function parsePlayerParams(
   searchParams: URLSearchParams,
 ): PlayerParams | null {

@@ -1,4 +1,5 @@
 import { Midi } from "@tonejs/midi";
+import { isLocalUrl, readUpload } from "@/lib/storage/uploads";
 
 export const noteNames = [
   "C",
@@ -188,6 +189,9 @@ export function transposeSong(song: Song, semitones: Transpose): Song {
 }
 
 export async function loadSong(url: string, name: string): Promise<Song> {
+  if (isLocalUrl(url)) {
+    return parseSong(await readUpload(url), name);
+  }
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Could not download that MIDI (status ${response.status})`);

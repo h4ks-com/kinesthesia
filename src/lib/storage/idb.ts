@@ -1,10 +1,11 @@
 const databaseName = "kinesthesia";
-const databaseVersion = 2;
+const databaseVersion = 3;
 
 export const stores = {
   recent: "recent",
   favourite: "favourite",
   settings: "settings",
+  uploads: "uploads",
 } as const;
 
 export type StoreName = (typeof stores)[keyof typeof stores];

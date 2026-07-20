@@ -86,6 +86,7 @@ src/lib/
   storage/library.ts          recents and favourites, and the word filter the
                               home page runs over them
   storage/settings.ts         remembered settings, per song and global
+  storage/uploads.ts          bytes of uploaded MIDI files, keyed by local: url
 ```
 
 ## How playback stays in time

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { defaultMelodyRate } from "@/lib/midi/melody";
 import { defaultTranspose } from "@/lib/midi/song";
 import { defaultSpeed, type PlayerMode, playerPath } from "@/lib/player-url";
+import { isLocalUrl } from "@/lib/storage/uploads";
 
 const modes = [
   { mode: "watch", label: "Watch", icon: Eye, tip: "Watch it play" },
@@ -46,6 +47,7 @@ export function SongRow({
   favorite,
   onToggleFavorite,
 }: SongRowProps) {
+  const local = isLocalUrl(url);
   const watchHref = playerPath("watch", {
     url,
     name,
@@ -102,28 +104,43 @@ export function SongRow({
             aria-hidden="true"
           />
         </button>
-        {modes.map(({ mode, label, icon: Icon, tip }) => (
-          <Link
-            key={mode}
-            href={playerPath(mode, {
-              url,
-              name,
-              source,
-              tracks: null,
-              speed: defaultSpeed,
-              simplified: false,
-              melodyRate: defaultMelodyRate,
-              transpose: defaultTranspose,
-              focus: false,
-            })}
-            data-tip={tip}
-            data-tip-side="top"
-            aria-label={`${label} ${name}`}
-            className="rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"
-          >
-            <Icon className="size-4" aria-hidden="true" />
-          </Link>
-        ))}
+        {modes.map(({ mode, label, icon: Icon, tip }) =>
+          local && mode === "multiplayer" ? (
+            <button
+              key={mode}
+              type="button"
+              aria-disabled="true"
+              onClick={(event) => event.preventDefault()}
+              data-tip="Uploaded files can't be shared"
+              data-tip-side="top"
+              aria-label="Multiplayer unavailable for uploaded files"
+              className="cursor-not-allowed rounded-lg border border-line p-2 text-line-strong"
+            >
+              <Icon className="size-4" aria-hidden="true" />
+            </button>
+          ) : (
+            <Link
+              key={mode}
+              href={playerPath(mode, {
+                url,
+                name,
+                source,
+                tracks: null,
+                speed: defaultSpeed,
+                simplified: false,
+                melodyRate: defaultMelodyRate,
+                transpose: defaultTranspose,
+                focus: false,
+              })}
+              data-tip={tip}
+              data-tip-side="top"
+              aria-label={`${label} ${name}`}
+              className="rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"
+            >
+              <Icon className="size-4" aria-hidden="true" />
+            </Link>
+          ),
+        )}
       </div>
     </li>
   );

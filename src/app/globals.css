@@ -148,6 +148,16 @@ body {
   translate: 0 0;
 }
 
+/* A roomy tooltip for a sentence of explanation, so a control's help lives on
+   hover instead of crowding the panel it sits in. */
+[data-tip-wide]::after {
+  white-space: normal;
+  width: max-content;
+  max-width: 15rem;
+  text-align: left;
+  line-height: 1.45;
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* biome-ignore-start lint/complexity/noImportantStyles: this override has to beat every animation declared elsewhere */
   *,

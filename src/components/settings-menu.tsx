@@ -79,16 +79,15 @@ export function SettingsMenu({
             valueText={`${keyWidth}px`}
             onChange={onKeyWidth}
           />
-          <Note>Widen the keys to tap them, then drag the roll sideways.</Note>
         </Section>
 
         <Section title="Style">
           <Toggle
-            label="plain notes"
+            label="simplify style"
             checked={plainStyle}
             onChange={onPlainStyle}
+            tip="Flat colour with no glow or sparks. Calmer to read, and lighter on a slow device."
           />
-          <Note>Flat colour, no glow and no sparks.</Note>
         </Section>
 
         {keyLabels === null ? null : (
@@ -97,11 +96,8 @@ export function SettingsMenu({
               label="letters on keys"
               checked={keyLabels}
               onChange={onKeyLabels}
+              tip="Prints the computer key that plays each piano key, for the octave under your hands."
             />
-            <Note>
-              Prints the key that plays each note, for the octave under your
-              hands.
-            </Note>
           </Section>
         )}
 

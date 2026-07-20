@@ -535,20 +535,24 @@ export class PianoRollRenderer {
     const ctx = this.context;
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
-    ctx.font = "600 9px ui-monospace, SFMono-Regular, monospace";
+    ctx.font = "700 11px ui-monospace, SFMono-Regular, monospace";
     for (const [pitch, label] of labels) {
       if (pitch < lowestPitch || pitch > highestPitch) {
         continue;
       }
       const black = isBlackKey(pitch);
-      ctx.fillStyle = black ? "rgba(198,208,224,0.72)" : "rgba(58,68,86,0.8)";
-      ctx.fillText(
-        label,
-        keyCenter(pitch, whiteWidth),
-        black
-          ? keyboardTop + keyboardHeight * 0.6 - 6
-          : keyboardTop + keyboardHeight - 7,
-      );
+      const centre = keyCenter(pitch, whiteWidth);
+      const baseline = black
+        ? keyboardTop + keyboardHeight * 0.6 - 7
+        : keyboardTop + keyboardHeight - 8;
+      // A held key covers its own letter and the song lights keys the whole
+      // time, so each letter carries its own contrasting edge to stay readable.
+      ctx.lineWidth = 3;
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = black ? "rgba(6,8,13,0.85)" : "rgba(233,238,246,0.9)";
+      ctx.strokeText(label, centre, baseline);
+      ctx.fillStyle = black ? "#e9eef6" : "#161c27";
+      ctx.fillText(label, centre, baseline);
     }
   }
 

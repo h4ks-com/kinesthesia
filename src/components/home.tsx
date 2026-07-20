@@ -158,45 +158,6 @@ export function Home({
           </div>
         </div>
 
-        <div>
-          <button
-            type="button"
-            onClick={() => fileInput.current?.click()}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setDragging(true);
-            }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={(event) => {
-              event.preventDefault();
-              setDragging(false);
-              void addFiles(event.dataTransfer.files);
-            }}
-            className={`flex w-full items-center justify-center gap-2 rounded-xl border border-dashed py-4 font-mono text-xs transition-colors ${
-              dragging
-                ? "border-accent bg-accent-soft/30 text-accent"
-                : "border-line text-faint hover:border-line-strong hover:text-muted"
-            }`}
-          >
-            <Upload className="size-4" aria-hidden="true" />
-            drop a midi file here, or click to choose
-          </button>
-          <input
-            ref={fileInput}
-            type="file"
-            accept=".mid,.midi,audio/midi"
-            multiple
-            className="hidden"
-            onChange={(event) => {
-              void addFiles(event.target.files);
-              event.target.value = "";
-            }}
-          />
-          {uploadError === null ? null : (
-            <p className="mt-2 text-danger text-sm">{uploadError}</p>
-          )}
-        </div>
-
         {state.status === "failed" ? (
           <p className="text-danger text-sm">{state.message}</p>
         ) : null}
@@ -300,6 +261,45 @@ export function Home({
             ))}
           </LibrarySection>
         ) : null}
+
+        <div className="mt-auto">
+          <button
+            type="button"
+            onClick={() => fileInput.current?.click()}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragging(false);
+              void addFiles(event.dataTransfer.files);
+            }}
+            className={`flex w-full items-center justify-center gap-2 rounded-xl border border-dashed py-4 font-mono text-xs transition-colors ${
+              dragging
+                ? "border-accent bg-accent-soft/30 text-accent"
+                : "border-line text-faint hover:border-line-strong hover:text-muted"
+            }`}
+          >
+            <Upload className="size-4" aria-hidden="true" />
+            drop a midi file here, or click to choose
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".mid,.midi,audio/midi"
+            multiple
+            className="hidden"
+            onChange={(event) => {
+              void addFiles(event.target.files);
+              event.target.value = "";
+            }}
+          />
+          {uploadError === null ? null : (
+            <p className="mt-2 text-danger text-sm">{uploadError}</p>
+          )}
+        </div>
       </main>
 
       <footer className="mx-auto flex w-full max-w-3xl items-center gap-4 px-5 pb-10 font-mono text-faint text-xs">

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronUp } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 const previewSize = 5;
@@ -29,31 +29,29 @@ export function LibrarySection({
         <span className="font-mono text-faint text-xs">{count}</span>
         <div className="ml-auto flex items-center gap-1">
           {action}
-          {overflows ? (
+          {overflows && expanded ? (
             <button
               type="button"
-              onClick={() => setExpanded((current) => !current)}
+              onClick={() => setExpanded(false)}
               aria-expanded={expanded}
               className="inline-flex items-center gap-1 rounded-md px-2 py-1 font-mono text-faint text-xs transition-colors hover:text-accent"
             >
-              {expanded ? "show less" : `show all ${count}`}
-              <ChevronDown
-                className={`size-3 transition-transform ${expanded ? "rotate-180" : ""}`}
-                aria-hidden="true"
-              />
+              show less
+              <ChevronUp className="size-3" aria-hidden="true" />
             </button>
           ) : null}
         </div>
       </div>
-      <ul
-        className={`flex flex-col ${
-          expanded
-            ? "max-h-[26rem] overflow-y-auto rounded-xl border border-line pr-1"
-            : ""
-        }`}
-      >
-        {shown}
-      </ul>
+      <ul className="flex flex-col">{shown}</ul>
+      {overflows && !expanded ? (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="mx-3 mt-1 rounded-xl border border-line border-dashed py-2 font-mono text-faint text-xs transition-colors hover:border-accent hover:text-accent"
+        >
+          show {count - previewSize} more
+        </button>
+      ) : null}
     </section>
   );
 }

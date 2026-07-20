@@ -309,14 +309,34 @@ test("a focused link presents the song and offers a way out", async ({
   await expect(page.locator("header")).toHaveCount(0);
 
   // The song's name is presented over the empty view, then fades for a clean
-  // recording.
-  await expect(page.getByText(songName)).toBeVisible();
-  await expect(page.getByText(songName)).toHaveCount(0, { timeout: 8000 });
+  // recording. It fades by opacity, so visibility never rode on a motion
+  // preference the way an animation would.
+  const title = page.getByText(songName);
+  await expect(title).toHaveCSS("opacity", "1");
+  await expect(title).toHaveCSS("opacity", "0", { timeout: 8000 });
 
   // A phone has no Escape key, so a tap target leaves focus.
   await page.getByRole("button", { name: "Leave focus" }).click();
   await expect(page.locator("header")).toHaveCount(1);
   await expect(page).not.toHaveURL(/focus=1/);
+});
+
+test("the focus title holds visible under reduced motion", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({ reducedMotion: "reduce" });
+  const page = await context.newPage();
+  await serveFixture(page);
+  await page.goto(`/watch?${playerQuery()}&focus=1`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  // With reduced motion the fade is instant, so the title must not depend on an
+  // animation for its visible spell.
+  const title = page.getByText(songName);
+  await expect(title).toHaveCSS("opacity", "1");
+  await page.waitForTimeout(1500);
+  await expect(title).toHaveCSS("opacity", "1");
+  await context.close();
 });
 
 test("a settled write does not undo focus mode", async ({ page }) => {

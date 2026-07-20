@@ -802,9 +802,11 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
       )}
 
       {focusExit}
-      {focus && titleUp && params.name !== "" ? (
+      {focus && params.name !== "" ? (
         <div className="pointer-events-none fixed inset-0 z-20 flex items-center justify-center px-8">
-          <p className="fade-out line-clamp-3 max-w-3xl text-balance text-center font-semibold text-3xl text-text leading-tight sm:text-5xl">
+          <p
+            className={`line-clamp-3 max-w-3xl text-balance text-center font-semibold text-3xl text-text leading-tight transition-opacity duration-700 sm:text-5xl ${titleUp ? "opacity-100" : "opacity-0"}`}
+          >
             {params.name}
           </p>
         </div>

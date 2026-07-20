@@ -215,13 +215,15 @@ export class PianoRollRenderer {
     whiteWidth: number,
   ): void {
     const ctx = this.context;
+    // Deepest at the strike line, so a bright note head has the most to sit
+    // against exactly where it is being read.
     const background = ctx.createLinearGradient(0, 0, 0, height);
-    background.addColorStop(0, "#080a12");
-    background.addColorStop(1, "#05060a");
+    background.addColorStop(0, "#0c1020");
+    background.addColorStop(1, "#040509");
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, width, height);
 
-    ctx.strokeStyle = "rgba(255,255,255,0.03)";
+    ctx.strokeStyle = "rgba(150,180,255,0.055)";
     ctx.lineWidth = 1;
     for (const pitch of whiteKeys) {
       if (pitch % 12 !== 0) {
@@ -271,10 +273,13 @@ export class PianoRollRenderer {
       const y = Math.min(top, bottom);
       const noteHeight = Math.max(2, bottom - y);
 
+      // The hue holds across the body and only lifts in the last of the bar,
+      // so the leading edge reads as lit without the note becoming a ramp.
       const gradient = ctx.createLinearGradient(0, y, 0, y + noteHeight);
-      gradient.addColorStop(0, color.core);
-      gradient.addColorStop(0.5, color.glow);
-      gradient.addColorStop(1, color.glow);
+      gradient.addColorStop(0, color.shade);
+      gradient.addColorStop(0.3, color.glow);
+      gradient.addColorStop(0.82, color.glow);
+      gradient.addColorStop(1, color.core);
       ctx.globalAlpha = ghost ? 0.22 : 1;
       ctx.fillStyle = gradient;
       roundRect(ctx, x, y, noteWidth, noteHeight, 4);

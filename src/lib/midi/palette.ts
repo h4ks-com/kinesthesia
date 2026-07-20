@@ -1,15 +1,18 @@
 export type NoteColor = {
+  /** The deep end of the hue, carrying the trailing edge of a note so the bar
+   * has tonal range rather than reading as one flat colour. */
+  readonly shade: string;
   readonly glow: string;
   readonly core: string;
 };
 
 const trackColors: readonly NoteColor[] = [
-  { glow: "#3ad19c", core: "#e7fff5" },
-  { glow: "#3a9cd1", core: "#e3f5ff" },
-  { glow: "#e0a83a", core: "#fff2d6" },
-  { glow: "#e03a8f", core: "#ffd6ec" },
-  { glow: "#9c5ad1", core: "#ecd9ff" },
-  { glow: "#c9d13a", core: "#f8ffd6" },
+  { shade: "#1f8f6d", glow: "#35d6a4", core: "#8ff0d0" },
+  { shade: "#1f6f9c", glow: "#38a8e8", core: "#9ad8f5" },
+  { shade: "#a3701f", glow: "#f0a93a", core: "#ffd694" },
+  { shade: "#a32b5f", glow: "#f04b93", core: "#ff9dc4" },
+  { shade: "#5f42a3", glow: "#9a6af0", core: "#c9b3f7" },
+  { shade: "#808f22", glow: "#c3d63c", core: "#e2ed95" },
 ];
 
 const pitchColors: readonly string[] = [
@@ -29,7 +32,7 @@ const pitchColors: readonly string[] = [
 
 export function trackColor(track: number): NoteColor {
   const color = trackColors[track % trackColors.length];
-  return color ?? { glow: "#3ad19c", core: "#e7fff5" };
+  return color ?? { shade: "#1f8f6d", glow: "#35d6a4", core: "#8ff0d0" };
 }
 
 export function pitchColor(pitch: number): string {

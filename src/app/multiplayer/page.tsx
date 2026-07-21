@@ -24,6 +24,7 @@ export default async function MultiplayerPage({
       viewerId={viewer?.id ?? null}
       playerName={query.get("player") ?? "Player"}
       joinCode={joinCode}
+      trustedOrigins={config.trustedMidiOrigins}
       ice={iceServers(
         config.turnUrl,
         config.turnUsername,

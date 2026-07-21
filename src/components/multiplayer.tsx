@@ -28,7 +28,6 @@ import {
   defaultStart,
   type PlayerParams,
   parsePlayerParams,
-  parseTrustedOrigins,
 } from "@/lib/player-url";
 import {
   accuracy,
@@ -56,6 +55,9 @@ type MultiplayerProps = {
   playerName: string;
   ice: readonly IceServer[];
   joinCode: string | null;
+  /** Origins a raw song url may come from, resolved server side so it holds at
+   * runtime rather than being baked into the bundle. */
+  trustedOrigins: readonly string[];
   viewerId?: string | null;
 };
 
@@ -85,14 +87,14 @@ function matchKey(match: PlayerParams): string {
 
 /** The player publishes its settings to the URL, so the address bar is the
  * host's live truth for what a room carries. */
-function settingsFromUrl(fallback: PlayerParams | null): PlayerParams | null {
+function settingsFromUrl(
+  fallback: PlayerParams | null,
+  trustedOrigins: readonly string[],
+): PlayerParams | null {
   if (typeof window === "undefined") {
     return fallback;
   }
-  const allowed = [
-    window.location.origin,
-    ...parseTrustedOrigins(process.env.NEXT_PUBLIC_MIDI_TRUSTED_ORIGINS),
-  ];
+  const allowed = [window.location.origin, ...trustedOrigins];
   return (
     parsePlayerParams(new URLSearchParams(window.location.search), allowed) ??
     fallback
@@ -104,6 +106,7 @@ export function Multiplayer({
   playerName,
   ice,
   joinCode,
+  trustedOrigins,
   viewerId = null,
 }: MultiplayerProps) {
   const isHost = joinCode === null;
@@ -162,8 +165,9 @@ export function Multiplayer({
   const agreedRef = useRef(agreed);
   agreedRef.current = agreed;
   const currentSettings = useCallback(
-    (): PlayerParams | null => agreedRef.current ?? settingsFromUrl(params),
-    [params],
+    (): PlayerParams | null =>
+      agreedRef.current ?? settingsFromUrl(params, trustedOrigins),
+    [params, trustedOrigins],
   );
 
   const send = useCallback((message: MatchMessage): void => {

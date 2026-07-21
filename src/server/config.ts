@@ -39,10 +39,11 @@ export const authConfig: AuthConfig | null =
 export const config = {
   appBaseUrl,
   // A raw ?url= plays only from our own origin plus these, so the paste service
-  // a deployment trusts works while a crafted link to any host does not.
+  // a deployment trusts works while a crafted link to any host does not. Read
+  // at runtime, so it can be set on the deployment without a rebuild.
   trustedMidiOrigins: [
     new URL(appBaseUrl).origin,
-    ...parseTrustedOrigins(process.env.NEXT_PUBLIC_MIDI_TRUSTED_ORIGINS),
+    ...parseTrustedOrigins(process.env.MIDI_TRUSTED_ORIGINS),
   ],
   // Some sources block datacenter IPs. Self-hosters on a blocked host set this;
   // everyone else goes direct.

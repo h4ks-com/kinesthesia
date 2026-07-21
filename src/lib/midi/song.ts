@@ -19,6 +19,10 @@ export const noteNames = [
 export const lowestPitch = 21;
 export const highestPitch = 108;
 
+/** Seconds of runway before the first note when a song would otherwise open on
+ * the strike line. */
+const startLeadIn = 2.5;
+
 export type SongNote = {
   readonly id: number;
   readonly pitch: number;
@@ -104,10 +108,24 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
 
   notes.sort((left, right) => left.start - right.start);
 
+  // A song whose first note sits at zero would open with it already on the
+  // strike line, so everything is nudged forward to give the notes a runway to
+  // fall in. A song that already opens with a gap is left alone.
+  const firstStart = notes[0]?.start ?? startLeadIn;
+  const shift = firstStart < startLeadIn ? startLeadIn - firstStart : 0;
+  const runwayNotes =
+    shift === 0
+      ? notes
+      : notes.map((note) => ({
+          ...note,
+          start: note.start + shift,
+          end: note.end + shift,
+        }));
+
   return {
     name,
-    duration: midi.duration,
-    notes,
+    duration: midi.duration + shift,
+    notes: runwayNotes,
     tracks,
   };
 }

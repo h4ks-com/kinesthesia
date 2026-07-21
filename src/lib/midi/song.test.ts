@@ -1,12 +1,22 @@
+import { Midi } from "@tonejs/midi";
 import { describe, expect, it } from "vitest";
 import {
   clampTranspose,
   highestPitch,
   lowestPitch,
+  parseSong,
   type Song,
   type SongNote,
   transposeSong,
 } from "@/lib/midi/song";
+
+function midiStartingAt(firstNoteAt: number): ArrayBuffer {
+  const midi = new Midi();
+  const track = midi.addTrack();
+  track.addNote({ midi: 60, time: firstNoteAt, duration: 0.5 });
+  track.addNote({ midi: 64, time: firstNoteAt + 1, duration: 0.5 });
+  return midi.toArray().buffer as ArrayBuffer;
+}
 
 function note(pitch: number, track: number): SongNote {
   return { id: pitch, pitch, start: 0, end: 1, velocity: 1, track };
@@ -47,6 +57,22 @@ function pitches(result: Song, track: number): number[] {
 function intervals(line: readonly number[]): number[] {
   return line.slice(1).map((pitch, index) => pitch - (line[index] ?? 0));
 }
+
+describe("parseSong lead-in", () => {
+  it("gives a song that opens at zero a runway to fall in", () => {
+    const parsed = parseSong(midiStartingAt(0), "x");
+    expect(parsed.notes[0]?.start).toBeCloseTo(2.5);
+    // the gap between the two notes is preserved, only the whole thing moves
+    expect(
+      (parsed.notes[1]?.start ?? 0) - (parsed.notes[0]?.start ?? 0),
+    ).toBeCloseTo(1);
+  });
+
+  it("leaves a song that already opens with a gap alone", () => {
+    const parsed = parseSong(midiStartingAt(4), "x");
+    expect(parsed.notes[0]?.start).toBeCloseTo(4);
+  });
+});
 
 describe("transposeSong", () => {
   it("moves pitched tracks by the given semitones", () => {

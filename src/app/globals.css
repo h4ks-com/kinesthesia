@@ -207,6 +207,20 @@ body {
   animation: pop 0.2s ease both;
 }
 
+/* A bar that marches across its track, for a stage whose length is unknown. */
+@keyframes marching {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(350%);
+  }
+}
+
+.marching {
+  animation: marching 1.1s ease-in-out infinite;
+}
+
 ::selection {
   background: var(--accent-soft);
   color: var(--text);

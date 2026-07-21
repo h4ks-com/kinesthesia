@@ -27,9 +27,11 @@ const immediateScheduler: Scheduler = {
 };
 
 /** Schedules every note offline through the same voicing the live engine uses,
- * so the export sounds like what plays on screen. */
+ * so the export sounds like what plays on screen. onStage names the slow parts,
+ * neither of which reports progress, so the caller can show which is running. */
 export async function renderSongAudio(
   config: RenderConfig,
+  onStage?: (stage: string) => void,
 ): Promise<AudioBuffer> {
   const { song, voicing, hiddenTracks, rate } = config;
   const byIndex = new Map(song.tracks.map((track) => [track.index, track]));
@@ -37,6 +39,7 @@ export async function renderSongAudio(
 
   const result = await renderOffline(
     async (context) => {
+      onStage?.("Loading instruments");
       const bank = new InstrumentBank(context, immediateScheduler);
       await bank.warm(
         audible.map((track) => ({
@@ -44,6 +47,8 @@ export async function renderSongAudio(
           percussion: track.percussion,
         })),
       );
+      onStage?.("Rendering sound");
+      let placed = 0;
       for (const note of song.notes) {
         const track = byIndex.get(note.track);
         if (track === undefined || hiddenTracks.has(note.track)) {
@@ -58,6 +63,12 @@ export async function renderSongAudio(
           ...scheduledNote(note, shaped, rate),
           time: note.start / rate,
         });
+        // A dense song is thousands of nodes built up front; yielding keeps the
+        // scheduling from blocking the main thread in one burst.
+        placed += 1;
+        if (placed % 256 === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
       }
     },
     { duration: renderDuration(config), sampleRate, channels: 2 },

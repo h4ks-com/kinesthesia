@@ -78,11 +78,17 @@ export function RenderMenu({
     setJob({
       kind,
       phase: "working",
-      stage: "Rendering sound",
+      stage: "Loading instruments",
       progress: null,
     });
+    const setStage = (stage: string): void =>
+      setJob((current) =>
+        current?.phase === "working"
+          ? { ...current, stage, progress: null }
+          : current,
+      );
     try {
-      const audio = await renderSongAudio(config);
+      const audio = await renderSongAudio(config, setStage);
       if (controller.signal.aborted) {
         return;
       }
@@ -331,7 +337,7 @@ function Working({
           className="h-1.5 overflow-hidden rounded-full bg-raised"
         >
           {job.progress === null ? (
-            <div className="h-full w-1/3 animate-pulse rounded-full bg-accent" />
+            <div className="marching h-full w-1/3 rounded-full bg-accent" />
           ) : (
             <div
               className="h-full rounded-full bg-accent transition-[width] duration-150"

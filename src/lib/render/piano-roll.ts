@@ -81,6 +81,9 @@ export class PianoRollRenderer {
   private drumsFrom: Song | null = null;
   private shadow: CanvasGradient | null = null;
   private shadowAt = -1;
+  private whiteFace: CanvasGradient | null = null;
+  private blackFace: CanvasGradient | null = null;
+  private facesAt = -1;
   private pan = 0;
   private keyWidth: number;
 
@@ -489,25 +492,38 @@ export class PianoRollRenderer {
     width: number,
   ): void {
     const ctx = this.context;
+    this.ensureKeyFaces(keyboardTop, keyboardHeight);
+    const blackHeight = keyboardHeight * 0.6;
 
     for (const pitch of whiteKeys) {
       const x = whiteKeyLeft(pitch, whiteWidth);
-      this.setKeyPaint(frame, active, pitch, "#dfe4ec", 20);
-      ctx.fillRect(x + 0.5, keyboardTop, whiteWidth - 1, keyboardHeight);
+      // A lit key sinks a couple pixels, exposing the keybed above it.
+      const sink = active.has(pitch) ? 2 : 0;
+      this.setKeyPaint(frame, active, pitch, this.whiteFace ?? "#dfe4ec", 20);
+      ctx.fillRect(
+        x + 0.5,
+        keyboardTop + sink,
+        whiteWidth - 1,
+        keyboardHeight - sink,
+      );
+      ctx.shadowBlur = 0;
     }
 
-    ctx.shadowBlur = 0;
     for (let pitch = lowestPitch; pitch <= highestPitch; pitch += 1) {
       if (!isBlackKey(pitch)) {
         continue;
       }
       const blackWidth = blackKeyWidth(whiteWidth);
       const x = blackKeyLeft(pitch, whiteWidth);
-      this.setKeyPaint(frame, active, pitch, "#0b0e15", 16);
-      ctx.fillRect(x, keyboardTop, blackWidth, keyboardHeight * 0.6);
+      // The shadow a raised black key casts on the whites just past its tip.
+      ctx.fillStyle = "rgba(0,0,0,0.28)";
+      ctx.fillRect(x - 1, keyboardTop + blackHeight, blackWidth + 2, 4);
+      const sink = active.has(pitch) ? 2 : 0;
+      this.setKeyPaint(frame, active, pitch, this.blackFace ?? "#0b0e15", 16);
+      ctx.fillRect(x, keyboardTop + sink, blackWidth, blackHeight - sink);
+      ctx.shadowBlur = 0;
     }
 
-    ctx.shadowBlur = 0;
     ctx.fillStyle = "#161c26";
     ctx.fillRect(0, keyboardTop - 2, width, 2);
 
@@ -577,20 +593,54 @@ export class PianoRollRenderer {
     ctx.fillRect(0, keyboardTop - depth, width, depth);
   }
 
+  /** Fake depth without a 3D pass: the key faces are shaded top to bottom so a
+   * white key rounds toward a darker front lip and a black key reads as raised.
+   * Cached because the shading only changes when the keyboard band moves. */
+  private ensureKeyFaces(keyboardTop: number, keyboardHeight: number): void {
+    if (this.whiteFace !== null && this.facesAt === keyboardTop) {
+      return;
+    }
+    const ctx = this.context;
+    const white = ctx.createLinearGradient(
+      0,
+      keyboardTop,
+      0,
+      keyboardTop + keyboardHeight,
+    );
+    white.addColorStop(0, "#f5f7fb");
+    white.addColorStop(0.08, "#e8ecf3");
+    white.addColorStop(0.82, "#d2d8e3");
+    white.addColorStop(1, "#b7c0cf");
+    this.whiteFace = white;
+
+    const black = ctx.createLinearGradient(
+      0,
+      keyboardTop,
+      0,
+      keyboardTop + keyboardHeight * 0.6,
+    );
+    black.addColorStop(0, "#39414d");
+    black.addColorStop(0.14, "#161d27");
+    black.addColorStop(0.85, "#090c12");
+    black.addColorStop(1, "#05070b");
+    this.blackFace = black;
+    this.facesAt = keyboardTop;
+  }
+
   /** A pressed key goes white so the player can tell their own hit from a note
    * the song is already playing, and blooms when the hit is one they owe. */
   private setKeyPaint(
     frame: Frame,
     active: ReadonlyMap<number, NoteColor>,
     pitch: number,
-    restingColor: string,
+    restingFill: string | CanvasGradient,
     blur: number,
   ): void {
     const ctx = this.context;
     const color = active.get(pitch);
     if (color === undefined) {
       ctx.shadowBlur = 0;
-      ctx.fillStyle = restingColor;
+      ctx.fillStyle = restingFill;
       return;
     }
     if (frame.plain) {

@@ -30,6 +30,26 @@ export function soundingPitches(
   return pitches;
 }
 
+/** Which channels have a note sounding at the position, skipping hidden ones,
+ * so the track list can light what is playing. */
+export function soundingTracks(
+  notes: readonly SongNote[],
+  position: number,
+  hidden: ReadonlySet<number>,
+): ReadonlySet<number> {
+  const tracks = new Set<number>();
+  for (const note of notes) {
+    if (
+      note.start <= position &&
+      position < note.end &&
+      !hidden.has(note.track)
+    ) {
+      tracks.add(note.track);
+    }
+  }
+  return tracks;
+}
+
 /** Where a set of notes sits on the keyboard, so a roll opens on them instead
  * of the lowest keys. */
 export function medianPitch(notes: readonly SongNote[]): number | null {

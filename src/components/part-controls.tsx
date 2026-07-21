@@ -6,10 +6,12 @@ import { Popover } from "@/components/ui/popover";
 import { SliderRow } from "@/components/ui/slider-row";
 import type { SongVoicing, Voicing } from "@/lib/audio/voicing";
 import { type MelodyRate, melodyRateRange } from "@/lib/midi/melody";
-import type { SongTrack } from "@/lib/midi/song";
+import type { SongNote, SongTrack } from "@/lib/midi/song";
 
 type PartControlsProps = {
   tracks: readonly SongTrack[];
+  notes: readonly SongNote[];
+  getPosition: () => number;
   hidden: ReadonlySet<number>;
   mine: ReadonlySet<number>;
   onToggleVisible: (index: number) => void;
@@ -32,6 +34,8 @@ type PartControlsProps = {
 
 export function PartControls({
   tracks,
+  notes,
+  getPosition,
   hidden,
   mine,
   onToggleVisible,
@@ -60,6 +64,8 @@ export function PartControls({
     <>
       <TrackMenu
         tracks={tracks}
+        notes={notes}
+        getPosition={getPosition}
         hidden={hidden}
         mine={mine}
         interactive

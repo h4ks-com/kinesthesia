@@ -105,6 +105,8 @@ export function OpponentPanel({
 
         <PartControls
           tracks={song.tracks}
+          notes={song.notes}
+          getPosition={getPosition}
           hidden={hidden}
           mine={new Set(theirs)}
           onToggleVisible={(index) =>

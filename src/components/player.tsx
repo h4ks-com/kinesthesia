@@ -748,6 +748,8 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                 focus,
               }}
               tracks={song.tracks}
+              notes={song.notes}
+              getPosition={playback.getPosition}
               hiddenTracks={hiddenTracks}
               playerTracks={playerTracks}
               interactive={interactive}

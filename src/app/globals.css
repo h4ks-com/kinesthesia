@@ -207,6 +207,19 @@ body {
   animation: pop 0.2s ease both;
 }
 
+/* A track's colour dot swells and brightens while a note on that channel is
+   sounding, so the list shows what is playing at a glance. */
+.track-dot {
+  transition:
+    transform 0.09s ease,
+    filter 0.09s ease;
+}
+
+.track-dot[data-live] {
+  transform: scale(1.5);
+  filter: brightness(1.5);
+}
+
 /* A bar that marches across its track, for a stage whose length is unknown. */
 @keyframes marching {
   from {

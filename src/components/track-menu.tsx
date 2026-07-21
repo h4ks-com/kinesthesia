@@ -17,10 +17,14 @@ import {
   type Voicing,
 } from "@/lib/audio/voicing";
 import { trackColor } from "@/lib/midi/palette";
-import type { SongTrack } from "@/lib/midi/song";
+import { soundingTracks } from "@/lib/midi/part";
+import type { SongNote, SongTrack } from "@/lib/midi/song";
 
 type TrackMenuProps = {
   tracks: readonly SongTrack[];
+  /** Every note, so the list can light the channel a sounding one belongs to. */
+  notes: readonly SongNote[];
+  getPosition: () => number;
   hidden: ReadonlySet<number>;
   mine: ReadonlySet<number>;
   interactive: boolean;
@@ -48,6 +52,8 @@ export type SoundSharing = {
 
 export function TrackMenu({
   tracks,
+  notes,
+  getPosition,
   hidden,
   mine,
   interactive,
@@ -62,6 +68,7 @@ export function TrackMenu({
   const [shaping, setShaping] = useState<number | null>(null);
   const [returning, setReturning] = useState<number | null>(null);
   const shapeButtons = useRef(new Map<number, HTMLButtonElement>());
+  const liveDots = useRef(new Map<number, HTMLSpanElement>());
 
   // Coming back from the sound view rebuilds the list, so the row that was
   // opened takes the reading position again.
@@ -72,6 +79,14 @@ export function TrackMenu({
     shapeButtons.current.get(returning)?.focus();
     setReturning(null);
   }, [returning]);
+
+  const registerDot = (index: number) => (node: HTMLSpanElement | null) => {
+    if (node === null) {
+      liveDots.current.delete(index);
+      return;
+    }
+    liveDots.current.set(index, node);
+  };
 
   // One track has nothing to show, hide, solo or claim, but its instrument and
   // shaping are still worth reaching, so the menu stays for the sound alone.
@@ -114,6 +129,12 @@ export function TrackMenu({
     >
       {shaped === null || onVoicing === null ? (
         <div data-tour="track-list" className="w-[19rem] max-sm:w-auto">
+          <DotPulse
+            notes={notes}
+            getPosition={getPosition}
+            dots={liveDots.current}
+            hidden={hidden}
+          />
           {tracks.map((track) => {
             const visible = !hidden.has(track.index);
             const claimed = mine.has(track.index);
@@ -126,7 +147,8 @@ export function TrackMenu({
                 {single ? (
                   <span className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-2 text-left">
                     <span
-                      className="size-2.5 shrink-0 rounded-full"
+                      ref={registerDot(track.index)}
+                      className="track-dot size-2.5 shrink-0 rounded-full"
                       style={{
                         background: color.glow,
                         boxShadow: `0 0 10px ${color.glow}`,
@@ -148,7 +170,8 @@ export function TrackMenu({
                     style={{ opacity: visible ? 1 : 0.4 }}
                   >
                     <span
-                      className="size-2.5 shrink-0 rounded-full"
+                      ref={registerDot(track.index)}
+                      className="track-dot size-2.5 shrink-0 rounded-full"
                       style={{
                         background: visible ? color.glow : "transparent",
                         boxShadow: visible ? `0 0 10px ${color.glow}` : "none",
@@ -293,4 +316,41 @@ export function TrackMenu({
       )}
     </Popover>
   );
+}
+
+/** Pulses the track dots straight from the playback clock rather than React
+ * state, so the list keeps pace with the roll without re-rendering. It lives
+ * inside the open menu, so the loop only runs while the dots are on screen. */
+function DotPulse({
+  notes,
+  getPosition,
+  dots,
+  hidden,
+}: {
+  notes: readonly SongNote[];
+  getPosition: () => number;
+  dots: Map<number, HTMLSpanElement>;
+  hidden: ReadonlySet<number>;
+}): null {
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    let frame = 0;
+    let last = 0;
+    const tick = (now: number) => {
+      frame = requestAnimationFrame(tick);
+      if (now - last < 40) {
+        return;
+      }
+      last = now;
+      const live = soundingTracks(notes, getPosition(), hidden);
+      for (const [index, node] of dots) {
+        node.toggleAttribute("data-live", live.has(index));
+      }
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [notes, getPosition, dots, hidden]);
+  return null;
 }

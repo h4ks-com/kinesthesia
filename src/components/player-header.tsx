@@ -15,7 +15,7 @@ import { type SoundSharing, TrackMenu } from "@/components/track-menu";
 import { ScoreReadout } from "@/components/ui/score-readout";
 import type { SongVoicing, Voicing } from "@/lib/audio/voicing";
 import type { MelodyRate } from "@/lib/midi/melody";
-import type { SongTrack } from "@/lib/midi/song";
+import type { SongNote, SongTrack } from "@/lib/midi/song";
 import {
   type PlayerMode,
   type PlayerParams,
@@ -38,6 +38,8 @@ type PlayerHeaderProps = {
   mode: PlayerMode;
   params: PlayerParams;
   tracks: readonly SongTrack[];
+  notes: readonly SongNote[];
+  getPosition: () => number;
   hiddenTracks: ReadonlySet<number>;
   playerTracks: ReadonlySet<number>;
   interactive: boolean;
@@ -65,6 +67,8 @@ export function PlayerHeader({
   mode,
   params,
   tracks,
+  notes,
+  getPosition,
   hiddenTracks,
   playerTracks,
   interactive,
@@ -127,6 +131,8 @@ export function PlayerHeader({
       {interactive ? (
         <PartControls
           tracks={tracks}
+          notes={notes}
+          getPosition={getPosition}
           hidden={hiddenTracks}
           mine={playerTracks}
           onToggleVisible={onToggleVisible}
@@ -144,6 +150,8 @@ export function PlayerHeader({
       ) : (
         <TrackMenu
           tracks={tracks}
+          notes={notes}
+          getPosition={getPosition}
           hidden={hiddenTracks}
           mine={playerTracks}
           interactive={false}

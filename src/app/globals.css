@@ -207,29 +207,19 @@ body {
   animation: pop 0.2s ease both;
 }
 
-/* A track's colour dot pulses while a note on that channel is sounding, held a
-   moment past each note so a short one still reads. Reduced motion collapses the
-   keyframes to a plain lit state through the global override above. */
+/* A track's colour dot holds enlarged and bright the whole time a note on that
+   channel is sounding, so the list shows what is playing. It eases in and out
+   rather than blinking, and is held a moment past each note so a run of short
+   ones stays lit instead of flickering. */
 .track-dot {
   transition:
-    transform 0.12s ease,
-    filter 0.12s ease;
+    transform 0.1s ease-out,
+    filter 0.1s ease-out;
 }
 
 .track-dot[data-live] {
-  animation: dot-live 0.55s ease-in-out infinite;
-}
-
-@keyframes dot-live {
-  0%,
-  100% {
-    transform: scale(1.3);
-    filter: brightness(1.4);
-  }
-  50% {
-    transform: scale(2.2);
-    filter: brightness(2);
-  }
+  transform: scale(1.9);
+  filter: brightness(1.9);
 }
 
 /* A bar that marches across its track, for a stage whose length is unknown. */

@@ -29,11 +29,11 @@ function keyFor({ program, percussion }: VoiceRequest): string {
 }
 
 export class InstrumentBank {
-  private readonly context: AudioContext;
+  private readonly context: BaseAudioContext;
   private readonly voices = new Map<string, Voice>();
   private readonly loading = new Map<string, Promise<Voice | null>>();
 
-  constructor(context: AudioContext) {
+  constructor(context: BaseAudioContext) {
     this.context = context;
   }
 

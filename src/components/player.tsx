@@ -15,6 +15,7 @@ import { HitFlag } from "@/components/hit-flag";
 import { PianoRollView } from "@/components/piano-roll-view";
 import { PlayerHeader } from "@/components/player-header";
 import { PlayerTransport, TransportBar } from "@/components/player-transport";
+import { RenderMenu } from "@/components/render-menu";
 import { Walkthrough } from "@/components/walkthrough";
 import { clampLatency, judgedPosition } from "@/lib/audio/latency";
 import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
@@ -774,6 +775,18 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                 onAdopt: sound.adopt,
                 onReset: sound.reset,
               }}
+              renderTool={
+                mode === "watch" ? (
+                  <RenderMenu
+                    song={song}
+                    voicing={sound.voicing}
+                    hiddenTracks={hiddenTracks}
+                    plain={plainStyle}
+                    speed={speed}
+                    title={songTitle}
+                  />
+                ) : null
+              }
               onFocus={() => changeFocus(true)}
               onHelp={tour.start}
             />

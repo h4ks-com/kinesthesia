@@ -9,6 +9,7 @@ import {
   Swords,
 } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { PartControls } from "@/components/part-controls";
 import { type SoundSharing, TrackMenu } from "@/components/track-menu";
 import { ScoreReadout } from "@/components/ui/score-readout";
@@ -53,6 +54,9 @@ type PlayerHeaderProps = {
   voicing: SongVoicing;
   onVoicing: ((track: number, voicing: Voicing) => void) | null;
   sound: SoundSharing | null;
+  /** The render control, present only where a plain watch view can be captured
+   * cleanly. */
+  renderTool?: ReactNode;
   onFocus: () => void;
   onHelp: () => void;
 };
@@ -74,6 +78,7 @@ export function PlayerHeader({
   voicing,
   onVoicing,
   sound,
+  renderTool = null,
   onFocus,
   onHelp,
   onToggleVisible,
@@ -151,6 +156,8 @@ export function PlayerHeader({
           sound={sound}
         />
       )}
+
+      {renderTool}
 
       <button
         type="button"

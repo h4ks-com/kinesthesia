@@ -40,6 +40,7 @@ src/components/
   part-controls.tsx           tracks, simplify and note density for one side
   player-transport.tsx        play, clock, scrubber, speed, key and settings
   settings-menu.tsx           key size, octave, timing and input
+  render-menu.tsx             render the watch view to a video or audio file
   piano-roll-view.tsx         canvas, the frame loop, touch input and panning
   track-menu.tsx              show, hide, solo and claim tracks, and the way
                               into how each one sounds
@@ -75,6 +76,9 @@ src/lib/
   tour/use-walkthrough.ts     first-run auto play and the replay it hands back
   render/keyboard.ts          key geometry, sizing and the pitch under a point
   render/piano-roll.ts        draws notes, keyboard, glow and sparks
+  render/export.ts            the watch view as a render job: size, frame, files
+  render/audio.ts             offline audio render to a WAV, at the live voicing
+  render/video.ts             offline video render, WebCodecs with a recorder fallback
   input/keyboard-map.ts       computer keyboard to pitch
   input/web-midi.ts           MIDI devices, including hot plug
   scoring/judge.ts            hit windows, combo and accuracy

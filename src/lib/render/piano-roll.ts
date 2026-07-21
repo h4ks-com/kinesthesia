@@ -71,9 +71,18 @@ export type Frame = {
   readonly plain: boolean;
 };
 
+/** A fixed drawing surface for an offline render, where there is no laid-out
+ * canvas to read a size or device ratio from. */
+export type FixedSurface = {
+  readonly width: number;
+  readonly height: number;
+  readonly ratio: number;
+};
+
 export class PianoRollRenderer {
   private readonly canvas: HTMLCanvasElement;
   private readonly context: CanvasRenderingContext2D;
+  private readonly fixed: FixedSurface | null;
   private readonly particles: Particle[] = [];
   private previouslyActive = new Set<number>();
   private previouslyPressed = new Set<number>();
@@ -87,18 +96,38 @@ export class PianoRollRenderer {
   private pan = 0;
   private keyWidth: number;
 
-  constructor(canvas: HTMLCanvasElement, keyWidth: number = defaultKeyWidth) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    keyWidth: number = defaultKeyWidth,
+    fixed: FixedSurface | null = null,
+  ) {
     const context = canvas.getContext("2d");
     if (context === null) {
       throw new Error("Canvas 2D context is unavailable");
     }
     this.canvas = canvas;
     this.context = context;
+    this.fixed = fixed;
     this.keyWidth = clampKeyWidth(keyWidth);
   }
 
+  private get viewWidth(): number {
+    return this.fixed?.width ?? this.canvas.clientWidth;
+  }
+
+  private get viewHeight(): number {
+    return this.fixed?.height ?? this.canvas.clientHeight;
+  }
+
+  private get ratio(): number {
+    if (this.fixed !== null) {
+      return this.fixed.ratio;
+    }
+    return Math.min(window.devicePixelRatio, maxDevicePixelRatio);
+  }
+
   get metrics(): KeyboardMetrics {
-    return keyboardMetrics(this.canvas.clientWidth, this.keyWidth);
+    return keyboardMetrics(this.viewWidth, this.keyWidth);
   }
 
   get panOffset(): number {
@@ -113,32 +142,32 @@ export class PianoRollRenderer {
    * of the keyboard in view. */
   setKeyWidth(value: number): void {
     const previous = this.metrics;
-    const centre = (this.pan + this.canvas.clientWidth / 2) / previous.total;
+    const centre = (this.pan + this.viewWidth / 2) / previous.total;
     this.keyWidth = clampKeyWidth(value);
     const next = this.metrics;
-    this.setPan(centre * next.total - this.canvas.clientWidth / 2);
+    this.setPan(centre * next.total - this.viewWidth / 2);
   }
 
   /** Brings a pitch into view, since a narrow screen shows a window onto the
    * keyboard and the part being played is rarely the part it opens on. */
   centreOn(pitch: number): void {
     const { whiteWidth } = this.metrics;
-    this.setPan(keyCenter(pitch, whiteWidth) - this.canvas.clientWidth / 2);
+    this.setPan(keyCenter(pitch, whiteWidth) - this.viewWidth / 2);
   }
 
   pitchAt(x: number, y: number): number | null {
     return pitchAtPoint(x, y, {
-      width: this.canvas.clientWidth,
-      height: this.canvas.clientHeight,
+      width: this.viewWidth,
+      height: this.viewHeight,
       keyWidth: this.keyWidth,
       pan: this.pan,
     });
   }
 
   resize(): void {
-    const ratio = Math.min(window.devicePixelRatio, maxDevicePixelRatio);
-    const pixelWidth = Math.round(this.canvas.clientWidth * ratio);
-    const pixelHeight = Math.round(this.canvas.clientHeight * ratio);
+    const ratio = this.ratio;
+    const pixelWidth = Math.round(this.viewWidth * ratio);
+    const pixelHeight = Math.round(this.viewHeight * ratio);
     if (
       this.canvas.width !== pixelWidth ||
       this.canvas.height !== pixelHeight
@@ -150,9 +179,9 @@ export class PianoRollRenderer {
 
   draw(frame: Frame): void {
     const ctx = this.context;
-    const ratio = Math.min(window.devicePixelRatio, maxDevicePixelRatio);
-    const width = this.canvas.clientWidth;
-    const height = this.canvas.clientHeight;
+    const ratio = this.ratio;
+    const width = this.viewWidth;
+    const height = this.viewHeight;
     this.resize();
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
 

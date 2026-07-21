@@ -33,6 +33,7 @@
     "drizzle-orm": "0.45.2",
     "hono": "4.12.30",
     "lucide-react": "^1.25.0",
+    "mp4-muxer": "^5.2.2",
     "next": "16.2.10",
     "peerjs": "1.5.5",
     "react": "19.2.4",

@@ -207,19 +207,16 @@ body {
   animation: pop 0.2s ease both;
 }
 
-/* A track's colour dot holds enlarged and bright the whole time a note on that
-   channel is sounding, so the list shows what is playing. It eases in and out
-   rather than blinking, and is held a moment past each note so a run of short
-   ones stays lit instead of flickering. */
+/* A track's colour dot blooms brighter the whole time a note on that channel is
+   sounding, so the list shows what is playing. It eases in and out rather than
+   blinking, and is held a moment past each note so a run of short ones stays lit
+   instead of flickering. */
 .track-dot {
-  transition:
-    transform 0.1s ease-out,
-    filter 0.1s ease-out;
+  transition: filter 0.12s ease-out;
 }
 
 .track-dot[data-live] {
-  transform: scale(1.9);
-  filter: brightness(1.9);
+  filter: brightness(2.1);
 }
 
 /* A bar that marches across its track, for a stage whose length is unknown. */

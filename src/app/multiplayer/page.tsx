@@ -12,7 +12,7 @@ export default async function MultiplayerPage({
   searchParams: Promise<RouteSearchParams>;
 }) {
   const query = toSearchParams(await searchParams);
-  const params = parsePlayerParams(query);
+  const params = parsePlayerParams(query, config.trustedMidiOrigins);
   const joinCode = query.get("join");
   if (params === null && joinCode === null) {
     return <MissingSong />;

@@ -182,7 +182,10 @@ export function Home({
         ) : null}
 
         {state.status === "done" && state.results.length === 0 ? (
-          <p className="text-muted">Nothing matched that. Try fewer words.</p>
+          <p className="text-muted">
+            Nothing matched that. Try fewer words, or drop your own MIDI file at
+            the bottom of the page.
+          </p>
         ) : null}
 
         {shown.length > 0 ? (

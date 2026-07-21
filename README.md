@@ -63,4 +63,6 @@ or with JSON config:
 
 Swap in `http://localhost:3000/api/mcp` when running locally.
 
-MIDI files come from several sources, listed at `/sources`.
+MIDI files come from several sources, listed at `/sources`. A `?url=` player
+link also plays a direct `.mid` from the app's own origin or an origin set in
+`NEXT_PUBLIC_MIDI_TRUSTED_ORIGINS`; `player_link` accepts such a url too.

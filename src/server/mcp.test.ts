@@ -227,6 +227,24 @@ describe("player_link", () => {
     });
     expect(isError).toBe(true);
   });
+
+  it("builds a link from a trusted url in place of source and id", async () => {
+    const { text, isError } = await build({
+      url: "http://localhost:3000/paste/song.mid",
+      name: "Pasted",
+      mode: "watch",
+    });
+    expect(isError).toBe(false);
+    expect(text).toContain("/watch?");
+  });
+
+  it("refuses a url from an origin the deployment does not trust", async () => {
+    const { isError } = await build({
+      url: "https://evil.example/song.mid",
+      mode: "watch",
+    });
+    expect(isError).toBe(true);
+  });
 });
 
 describe("midi_info", () => {
@@ -258,5 +276,25 @@ describe("midi_info", () => {
     const body = await result(response);
     expect(body.isError).toBe(true);
     expect((body.content as { text: string }[])[0]?.text).toContain("404");
+  });
+});
+
+describe("multiplayer rooms url allowlist", () => {
+  function openRoom(url: string) {
+    return api.request("/api/multiplayer/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ peerId: "p1", url, name: "x" }),
+    });
+  }
+
+  it("refuses to open a room pointing at an untrusted origin", async () => {
+    expect((await openRoom("https://evil.example/x.mid")).status).toBe(400);
+  });
+
+  it("opens a room for a url on an allowed origin", async () => {
+    expect((await openRoom("http://localhost:3000/paste/x.mid")).status).toBe(
+      200,
+    );
   });
 });

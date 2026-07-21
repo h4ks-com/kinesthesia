@@ -1,3 +1,5 @@
+import { parseTrustedOrigins } from "@/lib/player-url";
+
 function optional(value: string | undefined): string | null {
   return value === undefined || value === "" ? null : value;
 }
@@ -36,6 +38,12 @@ export const authConfig: AuthConfig | null =
 
 export const config = {
   appBaseUrl,
+  // A raw ?url= plays only from our own origin plus these, so the paste service
+  // a deployment trusts works while a crafted link to any host does not.
+  trustedMidiOrigins: [
+    new URL(appBaseUrl).origin,
+    ...parseTrustedOrigins(process.env.NEXT_PUBLIC_MIDI_TRUSTED_ORIGINS),
+  ],
   // Some sources block datacenter IPs. Self-hosters on a blocked host set this;
   // everyone else goes direct.
   proxyUrl: optional(process.env.MIDI_SOURCE_PROXY_URL),

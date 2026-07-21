@@ -28,6 +28,7 @@ import {
   defaultStart,
   type PlayerParams,
   parsePlayerParams,
+  parseTrustedOrigins,
 } from "@/lib/player-url";
 import {
   accuracy,
@@ -88,8 +89,13 @@ function settingsFromUrl(fallback: PlayerParams | null): PlayerParams | null {
   if (typeof window === "undefined") {
     return fallback;
   }
+  const allowed = [
+    window.location.origin,
+    ...parseTrustedOrigins(process.env.NEXT_PUBLIC_MIDI_TRUSTED_ORIGINS),
+  ];
   return (
-    parsePlayerParams(new URLSearchParams(window.location.search)) ?? fallback
+    parsePlayerParams(new URLSearchParams(window.location.search), allowed) ??
+    fallback
   );
 }
 

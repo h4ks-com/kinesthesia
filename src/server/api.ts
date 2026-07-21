@@ -13,6 +13,7 @@ import {
   buildPlayerUrl,
   defaultSpeed,
   defaultStart,
+  isPlayableUrl,
   type PlayerMode,
   playerModes,
   speeds,
@@ -282,6 +283,12 @@ const createRoomRoute = createRoute({
       description: "The room that was opened",
       content: { "application/json": { schema: roomSchema } },
     },
+    400: {
+      description: "The song url is not from an allowed origin",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
   },
 });
 
@@ -320,9 +327,15 @@ function roomResponse(room: MultiplayerRoom) {
   return { ...room, tracks: [...room.tracks] };
 }
 
-api.openapi(createRoomRoute, (c) =>
-  c.json(roomResponse(createRoom(c.req.valid("json"))), 200),
-);
+api.openapi(createRoomRoute, (c) => {
+  const room = c.req.valid("json");
+  // A joiner loads this url straight from the room, so it is held to the same
+  // allowlist as a url typed into the address bar.
+  if (!isPlayableUrl(room.url, config.trustedMidiOrigins)) {
+    return c.json({ error: "The song url is not from an allowed origin" }, 400);
+  }
+  return c.json(roomResponse(createRoom(room)), 200);
+});
 
 api.openapi(joinRoomRoute, (c) => {
   const room = findRoom(c.req.valid("param").code);
@@ -370,7 +383,7 @@ const leaderboardRoute = createRoute({
   method: "get",
   path: "/scores",
   summary: "Top scores",
-  description: "Public leaderboard of scores from signed in players.",
+  description: "Public leaderboard of scores from authenticated users.",
   request: {
     query: z.object({
       limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -393,7 +406,7 @@ const submitScoreRoute = createRoute({
   path: "/scores",
   summary: "Record a score",
   description:
-    "Stores a finished run against the signed in player. Requires Logto to be configured and a signed in session.",
+    "Stores a finished run against the authenticated user. Requires Logto to be configured and an authenticated session.",
   request: {
     body: {
       content: {
@@ -439,7 +452,7 @@ const statsRoute = createRoute({
   method: "get",
   path: "/scores/me",
   summary: "Your totals",
-  description: "Aggregate stats for the signed in player.",
+  description: "Aggregate stats for the authenticated user.",
   responses: {
     200: {
       description: "Totals across every run you recorded",
@@ -494,11 +507,31 @@ api.openapi(submitScoreRoute, async (c) => {
 });
 
 const voicingShape = z.object({
-  program: z.number().int().min(0).max(127),
-  attack: z.number().int().min(0).max(1000),
-  release: z.number().int().min(0).max(4000),
-  brightness: z.number().int().min(200).max(20000),
-  volume: z.number().int().min(0).max(150),
+  program: z
+    .number()
+    .int()
+    .min(0)
+    .max(127)
+    .describe("General MIDI program number for the track's instrument"),
+  attack: z
+    .number()
+    .int()
+    .min(0)
+    .max(1000)
+    .describe("Amplitude envelope attack, milliseconds"),
+  release: z
+    .number()
+    .int()
+    .min(0)
+    .max(4000)
+    .describe("Amplitude envelope release, milliseconds"),
+  brightness: z
+    .number()
+    .int()
+    .min(200)
+    .max(20000)
+    .describe("Low-pass filter cutoff, hertz"),
+  volume: z.number().int().min(0).max(150).describe("Track gain, percent"),
 });
 
 const songVoicingShape = z.record(z.string(), voicingShape);
@@ -518,9 +551,9 @@ const songQuery = {
 const listVoicingsRoute = createRoute({
   method: "get",
   path: "/voicings",
-  summary: "How people made a song sound",
+  summary: "List song voicings",
   description:
-    "Every saved instrument and shaping for a song, newest first. One per person.",
+    "Per-track voicings saved for a song, newest first, one per author. A voicing sets each track's instrument, envelope, filter and gain.",
   request: { query: z.object(songQuery) },
   responses: {
     200: {
@@ -537,9 +570,9 @@ const listVoicingsRoute = createRoute({
 const saveVoicingRoute = createRoute({
   method: "put",
   path: "/voicings",
-  summary: "Save how a song sounds",
+  summary: "Save a song voicing",
   description:
-    "Stores the signed in player's instrument and shaping for a song, replacing the one they had.",
+    "Stores the authenticated user's per-track voicing for a song, replacing their previous one.",
   request: {
     body: {
       content: {
@@ -566,9 +599,9 @@ const saveVoicingRoute = createRoute({
 const deleteVoicingRoute = createRoute({
   method: "delete",
   path: "/voicings",
-  summary: "Drop how you made a song sound",
+  summary: "Delete a song voicing",
   description:
-    "Removes the signed in player's voicing, back to the file's own.",
+    "Removes the authenticated user's voicing for a song, reverting to the file's own instruments.",
   request: { query: z.object(songQuery) },
   responses: {
     200: {
@@ -653,8 +686,18 @@ api.get(
 );
 
 const playerLinkShape = {
-  source: z.enum(midiSourceIds).describe("Provider the id came from"),
-  id: z.string().min(1).describe("The song's id within that source"),
+  source: z
+    .enum(midiSourceIds)
+    .optional()
+    .describe("Provider the id came from, from search_midi"),
+  id: z.string().min(1).optional().describe("The song's id within that source"),
+  url: z
+    .string()
+    .url()
+    .optional()
+    .describe(
+      "A direct .mid url from a trusted origin, in place of source and id",
+    ),
   name: z.string().default("").describe("Song name to show in the player"),
   mode: z
     .enum(playerModes)
@@ -706,8 +749,9 @@ const playerLinkShape = {
 };
 
 type PlayerLinkInput = {
-  readonly source: (typeof midiSourceIds)[number];
-  readonly id: string;
+  readonly source?: (typeof midiSourceIds)[number];
+  readonly id?: string;
+  readonly url?: string;
   readonly name: string;
   readonly mode: PlayerMode;
   readonly speed?: number;
@@ -724,8 +768,25 @@ type PlayerLink = { ok: true; url: string } | { ok: false; why: string };
 /** Every value goes through the same clamp the player uses, so a link this
  * returns cannot ask for a speed or a key the player would refuse. */
 function playerLink(input: PlayerLinkInput): PlayerLink {
-  if (findSource(input.source) === null) {
-    return { ok: false, why: `unknown source: ${input.source}` };
+  let file: string;
+  let source: string | null;
+  if (input.url !== undefined) {
+    if (!isPlayableUrl(input.url, config.trustedMidiOrigins)) {
+      return { ok: false, why: "the url must be a .mid from a trusted origin" };
+    }
+    file = input.url;
+    source = null;
+  } else if (input.source !== undefined && input.id !== undefined) {
+    if (findSource(input.source) === null) {
+      return { ok: false, why: `unknown source: ${input.source}` };
+    }
+    file = fileEndpoint(input.source, input.id);
+    source = input.source;
+  } else {
+    return {
+      ok: false,
+      why: "pass a source and id from search_midi, or a url",
+    };
   }
   if (
     input.speed !== undefined &&
@@ -741,9 +802,9 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
   }
   const built = new URL(
     buildPlayerUrl(config.appBaseUrl, input.mode, {
-      url: fileEndpoint(input.source, input.id),
+      url: file,
       name: input.name,
-      source: input.source,
+      source,
       tracks: input.tracks ?? null,
       speed: asSpeed(input.speed ?? defaultSpeed),
       simplified: input.simplified ?? false,
@@ -789,7 +850,11 @@ track to play.
 Those player links take the song as it comes. To open one at a different speed,
 in another key, on chosen tracks, partway through, or stripped back for
 recording, build it with player_link, passing the same source and id: it
-validates every value and refuses a combination the player would ignore.`;
+validates every value and refuses a combination the player would ignore.
+
+player_link also accepts a direct .mid url in place of source and id, as long as
+the url is on an origin the deployment trusts. That is how a file from elsewhere,
+such as a paste service the deployment allows, is opened in the player.`;
 
 function createMcpServer(): McpServer {
   const mcp = new McpServer(
@@ -857,7 +922,7 @@ function createMcpServer(): McpServer {
     {
       title: "Build a player link",
       description:
-        "Turn a source and id into a browser link that opens the song exactly as asked: the mode to open in, the speed, the key, which tracks the player owes, whether the part is reduced to one note at a time, how many seconds in to start, and whether the page is stripped back to the keys and the falling notes for recording. Take the source and id from search_midi.",
+        "Turn a source and id (from search_midi), or a direct .mid url from a trusted origin, into a browser link that opens the song exactly as asked: the mode to open in, the speed, the key, which tracks the player owes, whether the part is reduced to one note at a time, how many seconds in to start, and whether the page is stripped back to the keys and the falling notes for recording.",
       inputSchema: playerLinkShape,
     },
     async (input) => {

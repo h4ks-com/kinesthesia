@@ -20,6 +20,10 @@ const song: PlayerParams = {
   start: defaultStart,
 };
 
+const allowed = ["https://bitmidi.com", "https://x", "https://x.test"];
+const parse = (searchParams: URLSearchParams): PlayerParams | null =>
+  parsePlayerParams(searchParams, allowed);
+
 describe("buildPlayerUrl", () => {
   it("encodes the song into the mode route", () => {
     const built = new URL(
@@ -58,9 +62,9 @@ describe("playerPath", () => {
     const hostile = { ...song, name: "http://player.local weirdness" };
     const path = playerPath("watch", hostile);
     expect(path.startsWith("/watch?")).toBe(true);
-    expect(
-      parsePlayerParams(new URL(path, "https://x.test").searchParams),
-    ).toEqual(hostile);
+    expect(parse(new URL(path, "https://x.test").searchParams)).toEqual(
+      hostile,
+    );
   });
 });
 
@@ -70,7 +74,7 @@ describe("parsePlayerParams", () => {
     const built = new URL(
       buildPlayerUrl("https://kinesthesia.h4ks.com", "watch", withTracks),
     );
-    expect(parsePlayerParams(built.searchParams)).toEqual(withTracks);
+    expect(parse(built.searchParams)).toEqual(withTracks);
   });
 
   it("rejects a url that is not http(s)", () => {
@@ -80,17 +84,31 @@ describe("parsePlayerParams", () => {
       "file:///etc/passwd",
     ]) {
       const params = new URLSearchParams({ url: hostile, name: "x" });
-      expect(parsePlayerParams(params)).toBeNull();
+      expect(parse(params)).toBeNull();
     }
   });
 
   it("returns null when no url is present", () => {
-    expect(parsePlayerParams(new URLSearchParams({ name: "x" }))).toBeNull();
+    expect(parse(new URLSearchParams({ name: "x" }))).toBeNull();
+  });
+
+  it("plays a url only from an allowed origin", () => {
+    const trusted = new URLSearchParams({
+      url: "https://x/a.mid",
+      name: "ok",
+    });
+    expect(parse(trusted)?.url).toBe("https://x/a.mid");
+
+    const untrusted = new URLSearchParams({
+      url: "https://evil.example/a.mid",
+      name: "no",
+    });
+    expect(parse(untrusted)).toBeNull();
   });
 
   it("drops track entries that are not positive integers", () => {
     const params = new URLSearchParams({ url: song.url, tracks: "0,abc,-2,3" });
-    expect(parsePlayerParams(params)?.tracks).toEqual([0, 3]);
+    expect(parse(params)?.tracks).toEqual([0, 3]);
   });
 });
 
@@ -102,9 +120,7 @@ describe("focus", () => {
 
   it("is read back off the link", () => {
     const path = playerPath("watch", { ...song, focus: true });
-    const params = parsePlayerParams(
-      new URLSearchParams(path.slice(path.indexOf("?"))),
-    );
+    const params = parse(new URLSearchParams(path.slice(path.indexOf("?"))));
     expect(params?.focus).toBe(true);
   });
 });
@@ -119,16 +135,13 @@ describe("start", () => {
 
   it("is read back off the link", () => {
     const path = playerPath("watch", { ...song, start: 42.5 });
-    const params = parsePlayerParams(
-      new URLSearchParams(path.slice(path.indexOf("?"))),
-    );
+    const params = parse(new URLSearchParams(path.slice(path.indexOf("?"))));
     expect(params?.start).toBe(42.5);
   });
 
   it("falls back to the start for a missing or nonsense offset", () => {
     const read = (query: string): number | undefined =>
-      parsePlayerParams(new URLSearchParams(`?url=https://x/a.mid${query}`))
-        ?.start;
+      parse(new URLSearchParams(`?url=https://x/a.mid${query}`))?.start;
     expect(read("")).toBe(0);
     expect(read("&start=-5")).toBe(0);
     expect(read("&start=abc")).toBe(0);

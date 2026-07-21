@@ -90,8 +90,52 @@ function readStart(raw: string | null): number {
   return Number.isFinite(value) && value > 0 ? value : defaultStart;
 }
 
-function isPlayableUrl(url: string): boolean {
-  return /^https?:\/\//i.test(url) || /^local:[a-z0-9-]+$/.test(url);
+/** The origins whose MIDI files are allowed to reach the player, read from a
+ * comma separated env list. The app's own origin (which serves the source
+ * proxy) is added by the caller, so the default is everything through our own
+ * server plus nothing external. */
+export function parseTrustedOrigins(raw: string | undefined): string[] {
+  const origins: string[] = [];
+  for (const entry of (raw ?? "").split(",")) {
+    const trimmed = entry.trim();
+    if (trimmed === "") {
+      continue;
+    }
+    // Normalise to a bare origin so a trailing slash or an explicit default
+    // port in the env still matches what the URL parser produces.
+    try {
+      origins.push(new URL(trimmed).origin);
+    } catch {
+      // A host with no scheme has no origin of its own; assume https.
+      try {
+        origins.push(new URL(`https://${trimmed}`).origin);
+      } catch {
+        // not a usable origin, drop it
+      }
+    }
+  }
+  return origins;
+}
+
+/** A raw url is played only from an allowed origin, so a crafted link cannot
+ * point the player at an arbitrary host. Our own upload scheme always passes. */
+export function isPlayableUrl(
+  url: string,
+  allowed: readonly string[],
+): boolean {
+  if (/^local:[a-z0-9-]+$/.test(url)) {
+    return true;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return false;
+  }
+  return allowed.includes(parsed.origin);
 }
 
 /** Explicit spells out every song setting even at its default, so a link
@@ -140,14 +184,15 @@ export function playerPath(mode: PlayerMode, params: PlayerParams): string {
   return buildPlayerUrl(localBase, mode, params).slice(localBase.length);
 }
 
-/** Returns null unless the url is http(s) or our opaque `local:` upload id,
- * which keeps a crafted `javascript:` link from ever reaching an audio loader
- * or an anchor. */
+/** Returns null unless the url is our `local:` upload id or an http(s) file
+ * from an allowed origin, which keeps a crafted link from pointing the player
+ * at an arbitrary or `javascript:` target. */
 export function parsePlayerParams(
   searchParams: URLSearchParams,
+  allowedOrigins: readonly string[],
 ): PlayerParams | null {
   const url = searchParams.get("url");
-  if (url === null || !isPlayableUrl(url)) {
+  if (url === null || !isPlayableUrl(url, allowedOrigins)) {
     return null;
   }
   const rawTracks = searchParams.get("tracks");

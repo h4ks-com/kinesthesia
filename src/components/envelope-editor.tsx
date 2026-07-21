@@ -151,9 +151,34 @@ export function EnvelopeEditor({ voicing, onChange }: EnvelopeEditorProps) {
       </svg>
 
       <div className="flex items-baseline justify-between font-mono text-[0.7rem] text-faint">
-        <span>{voicing.attack} ms in</span>
-        <span className="text-muted">{voicing.volume}%</span>
-        <span>{ringsOn ? "rings on" : `${voicing.release} ms out`}</span>
+        <span
+          data-tip="Attack: how long the note takes to fade in."
+          data-tip-side="top"
+          data-tip-align="left"
+          data-tip-wide=""
+        >
+          {voicing.attack} ms in
+        </span>
+        <span
+          className="text-muted"
+          data-tip="Volume: how loud this track plays, as a percent of the file."
+          data-tip-side="top"
+          data-tip-wide=""
+        >
+          {voicing.volume}%
+        </span>
+        <span
+          data-tip={
+            ringsOn
+              ? "Release: at the minimum the note rings for its written length."
+              : "Release: how long the note rings on after the key lifts."
+          }
+          data-tip-side="top"
+          data-tip-align="right"
+          data-tip-wide=""
+        >
+          {ringsOn ? "rings on" : `${voicing.release} ms out`}
+        </span>
       </div>
 
       <div className="sr-only [&:focus-within]:flex [&:focus-within]:flex-col [&:focus-within]:gap-1 [&:focus-within]:px-2 [&:focus-within]:text-xs">

@@ -6,6 +6,8 @@ type SliderRowProps = {
   value: number;
   valueText: string;
   onChange: (value: number) => void;
+  /** The longer explanation, kept off the panel and shown on hover. */
+  tip?: string;
 };
 
 export function SliderRow({
@@ -16,9 +18,15 @@ export function SliderRow({
   value,
   valueText,
   onChange,
+  tip,
 }: SliderRowProps) {
   return (
-    <div className="flex items-center gap-2 px-2">
+    <div
+      className="flex items-center gap-2 px-2"
+      data-tip={tip}
+      data-tip-side="top"
+      data-tip-wide={tip === undefined ? undefined : ""}
+    >
       <input
         type="range"
         min={min}

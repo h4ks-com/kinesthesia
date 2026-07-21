@@ -75,10 +75,19 @@ export function SoundView({
         />
       )}
 
-      <h4 className="label mt-2 px-2">Shape</h4>
+      <h4
+        className="label mt-2 px-2"
+        data-tip="The note's shape over time: drag the dot for how fast it fades in and how loud, the ring for how long it rings out."
+        data-tip-side="top"
+        data-tip-align="left"
+        data-tip-wide=""
+      >
+        Shape
+      </h4>
       <EnvelopeEditor voicing={voicing} onChange={onChange} />
       <SliderRow
         ariaLabel="Brightness in hertz"
+        tip="Brightness: a low-pass filter. Slide left to dull the tone; all the way right lets the whole sample through."
         min={brightnessRange.min}
         max={brightnessRange.max}
         step={100}

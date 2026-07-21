@@ -73,7 +73,10 @@ export function TrackMenu({
     setReturning(null);
   }, [returning]);
 
-  if (tracks.length <= 1) {
+  // One track has nothing to show, hide, solo or claim, but its instrument and
+  // shaping are still worth reaching, so the menu stays for the sound alone.
+  const single = tracks.length === 1;
+  if (tracks.length === 0 || (single && onVoicing === null)) {
     return null;
   }
 
@@ -87,17 +90,25 @@ export function TrackMenu({
       trigger={(open) => (
         <span
           data-tour="tracks"
-          data-tip="Show or hide tracks"
+          data-tip={
+            single ? "The instrument and shaping" : "Show or hide tracks"
+          }
           className={`inline-flex items-center gap-1.5 rounded-lg border py-2 pr-2 pl-2 transition-colors ${
             open
               ? "border-accent text-accent"
               : "border-line-strong text-muted hover:border-accent hover:text-accent"
           }`}
         >
-          <Layers className="size-4" aria-hidden="true" />
-          <span className="font-mono text-faint text-xs">
-            {tracks.length - hidden.size}/{tracks.length}
-          </span>
+          {single ? (
+            <SlidersHorizontal className="size-4" aria-hidden="true" />
+          ) : (
+            <>
+              <Layers className="size-4" aria-hidden="true" />
+              <span className="font-mono text-faint text-xs">
+                {tracks.length - hidden.size}/{tracks.length}
+              </span>
+            </>
+          )}
         </span>
       )}
     >
@@ -112,42 +123,64 @@ export function TrackMenu({
                 key={track.index}
                 className="flex min-w-0 items-center gap-0.5"
               >
-                <button
-                  type="button"
-                  onClick={() => onToggleVisible(track.index)}
-                  aria-pressed={visible}
-                  className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-raised"
-                  style={{ opacity: visible ? 1 : 0.4 }}
-                >
-                  <span
-                    className="size-2.5 shrink-0 rounded-full"
-                    style={{
-                      background: visible ? color.glow : "transparent",
-                      boxShadow: visible ? `0 0 10px ${color.glow}` : "none",
-                      border: visible ? "none" : `1.5px solid ${color.glow}`,
-                    }}
-                  />
-                  <span className="min-w-0 truncate text-sm">{track.name}</span>
-                  <span className="ml-auto shrink-0 font-mono text-faint text-[0.7rem]">
-                    {track.noteCount}
+                {single ? (
+                  <span className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-2 text-left">
+                    <span
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{
+                        background: color.glow,
+                        boxShadow: `0 0 10px ${color.glow}`,
+                      }}
+                    />
+                    <span className="min-w-0 truncate text-sm">
+                      {track.name}
+                    </span>
+                    <span className="ml-auto shrink-0 font-mono text-faint text-[0.7rem]">
+                      {track.noteCount}
+                    </span>
                   </span>
-                </button>
-                <button
-                  type="button"
-                  data-tour="track-solo"
-                  onClick={() => onSolo(track.index)}
-                  aria-pressed={soloed === track.index}
-                  aria-label={`Show only ${track.name}`}
-                  data-tip={soloed === track.index ? "Show all" : "Solo"}
-                  className={`shrink-0 rounded-lg p-1.5 transition-colors ${
-                    soloed === track.index
-                      ? "text-accent"
-                      : "text-faint hover:bg-raised hover:text-accent"
-                  }`}
-                >
-                  <Radio className="size-4" aria-hidden="true" />
-                </button>
-                {interactive && canClaim ? (
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onToggleVisible(track.index)}
+                    aria-pressed={visible}
+                    className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-raised"
+                    style={{ opacity: visible ? 1 : 0.4 }}
+                  >
+                    <span
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{
+                        background: visible ? color.glow : "transparent",
+                        boxShadow: visible ? `0 0 10px ${color.glow}` : "none",
+                        border: visible ? "none" : `1.5px solid ${color.glow}`,
+                      }}
+                    />
+                    <span className="min-w-0 truncate text-sm">
+                      {track.name}
+                    </span>
+                    <span className="ml-auto shrink-0 font-mono text-faint text-[0.7rem]">
+                      {track.noteCount}
+                    </span>
+                  </button>
+                )}
+                {single ? null : (
+                  <button
+                    type="button"
+                    data-tour="track-solo"
+                    onClick={() => onSolo(track.index)}
+                    aria-pressed={soloed === track.index}
+                    aria-label={`Show only ${track.name}`}
+                    data-tip={soloed === track.index ? "Show all" : "Solo"}
+                    className={`shrink-0 rounded-lg p-1.5 transition-colors ${
+                      soloed === track.index
+                        ? "text-accent"
+                        : "text-faint hover:bg-raised hover:text-accent"
+                    }`}
+                  >
+                    <Radio className="size-4" aria-hidden="true" />
+                  </button>
+                )}
+                {interactive && canClaim && !single ? (
                   <button
                     type="button"
                     data-tour="track-claim"

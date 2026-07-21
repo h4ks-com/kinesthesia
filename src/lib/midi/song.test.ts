@@ -4,6 +4,7 @@ import {
   clampTranspose,
   highestPitch,
   lowestPitch,
+  maxMidiBytes,
   parseSong,
   type Song,
   type SongNote,
@@ -71,6 +72,28 @@ describe("parseSong lead-in", () => {
   it("leaves a song that already opens with a gap alone", () => {
     const parsed = parseSong(midiStartingAt(4), "x");
     expect(parsed.notes[0]?.start).toBeCloseTo(4);
+  });
+});
+
+describe("parseSong rejects bad input", () => {
+  it("throws on bytes that are not a MIDI", () => {
+    expect(() => parseSong(new Uint8Array([1, 2, 3, 4]).buffer, "x")).toThrow(
+      "not a valid MIDI",
+    );
+  });
+
+  it("throws when a valid MIDI carries no notes", () => {
+    const empty = new Midi();
+    empty.addTrack();
+    expect(() => parseSong(empty.toArray().buffer as ArrayBuffer, "x")).toThrow(
+      "no playable notes",
+    );
+  });
+
+  it("throws when the file is too large", () => {
+    expect(() => parseSong(new ArrayBuffer(maxMidiBytes + 1), "x")).toThrow(
+      "too large",
+    );
   });
 });
 

@@ -23,6 +23,21 @@ export const highestPitch = 108;
  * the strike line. */
 const startLeadIn = 2.5;
 
+/** A real MIDI is kilobytes; this only stops a hostile or mistaken file from
+ * exhausting the tab's memory as it parses. */
+export const maxMidiBytes = 5 * 1024 * 1024;
+
+function decodeMidi(data: ArrayBuffer): Midi {
+  if (data.byteLength > maxMidiBytes) {
+    throw new Error("That MIDI file is too large to play.");
+  }
+  try {
+    return new Midi(data);
+  } catch {
+    throw new Error("That file is not a valid MIDI.");
+  }
+}
+
 export type SongNote = {
   readonly id: number;
   readonly pitch: number;
@@ -78,7 +93,7 @@ function trackLabel(
 }
 
 export function parseSong(data: ArrayBuffer, name: string): Song {
-  const midi = new Midi(data);
+  const midi = decodeMidi(data);
   const notes: SongNote[] = [];
   const tracks: SongTrack[] = [];
 
@@ -104,6 +119,10 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
         track: index,
       });
     }
+  }
+
+  if (tracks.length === 0) {
+    throw new Error("That MIDI has no playable notes.");
   }
 
   notes.sort((left, right) => left.start - right.start);
@@ -213,6 +232,10 @@ export async function loadSong(url: string, name: string): Promise<Song> {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Could not download that MIDI (status ${response.status})`);
+  }
+  const declaredBytes = Number(response.headers.get("content-length") ?? "");
+  if (Number.isFinite(declaredBytes) && declaredBytes > maxMidiBytes) {
+    throw new Error("That MIDI file is too large to play.");
   }
   return parseSong(await response.arrayBuffer(), name);
 }

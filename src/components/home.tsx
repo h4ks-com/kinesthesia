@@ -12,6 +12,7 @@ import {
 import { LibrarySection } from "@/components/library-section";
 import { SongRow } from "@/components/song-row";
 import { TopBar } from "@/components/top-bar";
+import { ConfirmButton } from "@/components/ui/confirm-button";
 import {
   clearFavourites,
   clearRecent,
@@ -24,6 +25,7 @@ import {
 } from "@/lib/storage/library";
 import {
   clearUploads,
+  deleteUpload,
   isLocalUrl,
   listUploads,
   storeUpload,
@@ -221,9 +223,12 @@ export function Home({
             title="Favorites"
             count={matchedFavorites.length}
             action={
-              <ClearButton
-                label="Clear favorites"
-                onClear={async () => {
+              <ConfirmButton
+                label="clear"
+                ariaLabel="Clear favorites"
+                message="Remove all favorites?"
+                confirmLabel="clear all"
+                onConfirm={async () => {
                   await clearFavourites();
                   refreshLibrary();
                 }}
@@ -250,9 +255,12 @@ export function Home({
             title="Uploads"
             count={matchedUploads.length}
             action={
-              <ClearButton
-                label="Clear uploads"
-                onClear={async () => {
+              <ConfirmButton
+                label="clear"
+                ariaLabel="Clear uploads"
+                message="Delete all uploaded files?"
+                confirmLabel="delete all"
+                onConfirm={async () => {
                   await clearUploads();
                   refreshLibrary();
                 }}
@@ -269,6 +277,9 @@ export function Home({
                 plays={null}
                 favorite={favoriteKeys.has(entry.key)}
                 onToggleFavorite={() => void onToggleFavorite(entry)}
+                onRemove={() =>
+                  void deleteUpload(entry.url).then(refreshLibrary)
+                }
               />
             ))}
           </LibrarySection>
@@ -279,9 +290,12 @@ export function Home({
             title="Recently played"
             count={matchedRecent.length}
             action={
-              <ClearButton
-                label="Clear history"
-                onClear={async () => {
+              <ConfirmButton
+                label="clear"
+                ariaLabel="Clear history"
+                message="Clear your play history?"
+                confirmLabel="clear all"
+                onConfirm={async () => {
                   await clearRecent();
                   refreshLibrary();
                 }}
@@ -390,26 +404,6 @@ export function Home({
         </span>
       </footer>
     </>
-  );
-}
-
-function ClearButton({
-  label,
-  onClear,
-}: {
-  label: string;
-  onClear: () => Promise<void>;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => void onClear()}
-      aria-label={label}
-      data-tip={label}
-      className="rounded-md px-2 py-1 font-mono text-faint text-xs transition-colors hover:text-danger"
-    >
-      clear
-    </button>
   );
 }
 

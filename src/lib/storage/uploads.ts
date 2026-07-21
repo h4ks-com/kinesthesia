@@ -59,6 +59,12 @@ export async function listUploads(): Promise<LibraryEntry[]> {
     .sort((left, right) => right.playedAt - left.playedAt);
 }
 
+export async function deleteUpload(url: string): Promise<void> {
+  await run(uploadStore, "readwrite", (store) =>
+    store.delete(url.slice(scheme.length)),
+  );
+}
+
 export async function clearUploads(): Promise<void> {
   await run(uploadStore, "readwrite", (store) => store.clear());
 }

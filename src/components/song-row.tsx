@@ -1,6 +1,13 @@
 "use client";
 
-import { ExternalLink, Eye, GraduationCap, Star, Swords } from "lucide-react";
+import {
+  ExternalLink,
+  Eye,
+  GraduationCap,
+  Star,
+  Swords,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { defaultMelodyRate } from "@/lib/midi/melody";
 import { defaultTranspose } from "@/lib/midi/song";
@@ -41,6 +48,8 @@ type SongRowProps = {
   plays: number | null;
   favorite: boolean;
   onToggleFavorite: () => void;
+  /** When set, a remove control drops this one entry, used for uploads. */
+  onRemove?: () => void;
 };
 
 export function SongRow({
@@ -51,6 +60,7 @@ export function SongRow({
   plays,
   favorite,
   onToggleFavorite,
+  onRemove,
 }: SongRowProps) {
   const local = isLocalUrl(url);
   const watchHref = playerPath("watch", {
@@ -103,6 +113,18 @@ export function SongRow({
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
+        {onRemove === undefined ? null : (
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label={`Remove ${name}`}
+            data-tip="Remove"
+            data-tip-side="top"
+            className="rounded-lg p-2 text-muted transition-colors hover:bg-raised hover:text-danger"
+          >
+            <Trash2 className="size-4" aria-hidden="true" />
+          </button>
+        )}
         <button
           type="button"
           onClick={onToggleFavorite}

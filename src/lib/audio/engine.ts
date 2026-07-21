@@ -1,7 +1,13 @@
 import { InstrumentBank, type Voice } from "@/lib/audio/instruments";
 import { unmuteWebAudio } from "@/lib/audio/ios-unmute";
 import { Transport } from "@/lib/audio/transport";
-import { type SongVoicing, shapingFor, velocityFor } from "@/lib/audio/voicing";
+import {
+  programFor,
+  type SongVoicing,
+  scheduledNote,
+  shapingFor,
+  velocityFor,
+} from "@/lib/audio/voicing";
 import type { Song, SongNote } from "@/lib/midi/song";
 
 const lookAhead = 0.2;
@@ -77,7 +83,10 @@ export class PlaybackEngine {
     await this.wake();
     await this.bank?.warm(
       song.tracks.map((track) => ({
-        program: this.voicing.get(track.index)?.program ?? track.program,
+        program: programFor(
+          this.voicing.get(track.index) ?? null,
+          track.program,
+        ),
         percussion: track.percussion,
       })),
     );
@@ -158,7 +167,7 @@ export class PlaybackEngine {
       return null;
     }
     return this.bank.voiceFor({
-      program: this.voicing.get(track)?.program ?? definition.program,
+      program: programFor(this.voicing.get(track) ?? null, definition.program),
       percussion: definition.percussion,
     });
   }
@@ -209,11 +218,8 @@ export class PlaybackEngine {
     const rate = this.transport?.rate ?? 1;
     const shaped = this.voicing.get(note.track) ?? null;
     voice.start({
-      note: note.pitch,
+      ...scheduledNote(note, shaped, rate),
       time: context.currentTime + Math.max(0, note.start - position) / rate,
-      duration: Math.max(0.05, (note.end - note.start) / rate),
-      velocity: velocityFor(note.velocity, shaped),
-      ...shapingFor(shaped),
     });
     return true;
   }

@@ -120,10 +120,10 @@ export class PianoRollRenderer {
   }
 
   private get ratio(): number {
-    if (this.fixed !== null) {
-      return this.fixed.ratio;
-    }
-    return Math.min(window.devicePixelRatio, maxDevicePixelRatio);
+    return (
+      this.fixed?.ratio ??
+      Math.min(window.devicePixelRatio, maxDevicePixelRatio)
+    );
   }
 
   get metrics(): KeyboardMetrics {

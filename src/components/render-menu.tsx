@@ -9,7 +9,7 @@ import {
   Film,
   Loader2,
 } from "lucide-react";
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Popover } from "@/components/ui/popover";
 import type { SongVoicing } from "@/lib/audio/voicing";
@@ -60,11 +60,18 @@ export function RenderMenu({
   const abort = useRef<AbortController | null>(null);
   const lastShown = useRef(0);
 
-  function config(): RenderConfig {
-    return { song, voicing, hiddenTracks, plain, rate: speed };
-  }
+  // A render outlives a click, so an unmount mid-render has to stop it or it
+  // keeps encoding detached and downloads a file into a page the user has left.
+  useEffect(() => () => abort.current?.abort(), []);
 
   async function run(kind: JobKind): Promise<void> {
+    const config: RenderConfig = {
+      song,
+      voicing,
+      hiddenTracks,
+      plain,
+      rate: speed,
+    };
     const controller = new AbortController();
     abort.current = controller;
     lastShown.current = 0;
@@ -75,7 +82,7 @@ export function RenderMenu({
       progress: null,
     });
     try {
-      const audio = await renderSongAudio(config());
+      const audio = await renderSongAudio(config);
       if (controller.signal.aborted) {
         return;
       }
@@ -85,7 +92,7 @@ export function RenderMenu({
       }
       setJob({ kind, phase: "working", stage: "Encoding video", progress: 0 });
       const video = await renderSongVideo(
-        config(),
+        config,
         audio,
         (fraction) => {
           if (fraction < 1 && fraction - lastShown.current < 0.01) {
@@ -203,17 +210,67 @@ function RenderDialog({
   onCancel: () => void;
   onClose: () => void;
 }) {
-  const kindLabel = job.kind === "video" ? "video" : "audio";
+  const panel = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const opener = document.activeElement;
+    return () => {
+      if (opener instanceof HTMLElement) {
+        opener.focus();
+      }
+    };
+  }, []);
+
+  // Focus the panel's primary action on open and again on each phase change,
+  // since the button that had focus unmounts when working turns to done.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: job.phase is the re-run trigger, not something the effect reads
+  useEffect(() => {
+    const target =
+      panel.current?.querySelector<HTMLElement>("[data-autofocus]");
+    target?.focus();
+  }, [job.phase]);
+
+  const dismiss = job.phase === "working" ? onCancel : onClose;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      event.stopPropagation();
+      if (event.key === "Escape") {
+        dismiss();
+        return;
+      }
+      if (event.key !== "Tab") {
+        return;
+      }
+      const focusable = panel.current?.querySelectorAll("button");
+      const first = focusable?.[0];
+      const last = focusable?.[focusable.length - 1];
+      if (first === undefined || last === undefined) {
+        return;
+      }
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [dismiss]);
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-void/70 p-6 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-2xl border border-line-strong bg-panel p-6 shadow-[0_24px_70px_-15px_rgba(0,0,0,0.95)]">
+      <div
+        ref={panel}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="render-dialog-title"
+        aria-busy={job.phase === "working"}
+        className="w-full max-w-sm rounded-2xl border border-line-strong bg-panel p-6 shadow-[0_24px_70px_-15px_rgba(0,0,0,0.95)]"
+      >
         {job.phase === "working" ? (
-          <Working
-            job={job}
-            kindLabel={kindLabel}
-            title={title}
-            onCancel={onCancel}
-          />
+          <Working job={job} title={title} onCancel={onCancel} />
         ) : job.phase === "done" ? (
           <Done job={job} onClose={onClose} />
         ) : (
@@ -226,12 +283,10 @@ function RenderDialog({
 
 function Working({
   job,
-  kindLabel,
   title,
   onCancel,
 }: {
   job: Extract<Job, { phase: "working" }>;
-  kindLabel: string;
   title: string;
   onCancel: () => void;
 }) {
@@ -242,14 +297,17 @@ function Working({
       : "Faster than real time.";
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3" role="status" aria-live="polite">
         <Loader2
           className="size-5 shrink-0 animate-spin text-accent"
           aria-hidden="true"
         />
         <div className="min-w-0">
-          <h2 className="font-semibold text-sm text-text">
-            Rendering {kindLabel}
+          <h2
+            id="render-dialog-title"
+            className="font-semibold text-sm text-text"
+          >
+            Rendering {job.kind} — {job.stage}
           </h2>
           <p className="truncate text-faint text-xs">{title}</p>
         </div>
@@ -264,7 +322,14 @@ function Working({
             </span>
           )}
         </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-raised">
+        <div
+          role="progressbar"
+          aria-label={job.stage}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={percent ?? undefined}
+          className="h-1.5 overflow-hidden rounded-full bg-raised"
+        >
           {job.progress === null ? (
             <div className="h-full w-1/3 animate-pulse rounded-full bg-accent" />
           ) : (
@@ -279,6 +344,7 @@ function Working({
 
       <button
         type="button"
+        data-autofocus
         onClick={onCancel}
         className="self-end rounded-lg border border-line-strong px-3 py-1.5 text-muted text-xs transition-colors hover:border-danger hover:text-danger"
       >
@@ -297,12 +363,17 @@ function Done({
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3" role="status" aria-live="polite">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-good/15 text-good">
           <Check className="size-5" aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <h2 className="font-semibold text-sm text-text">Saved</h2>
+          <h2
+            id="render-dialog-title"
+            className="font-semibold text-sm text-text"
+          >
+            Saved
+          </h2>
           <p className="truncate text-faint text-xs">
             {job.filename} · {formatBytes(job.blob.size)}
           </p>
@@ -324,6 +395,7 @@ function Done({
         </button>
         <button
           type="button"
+          data-autofocus
           onClick={onClose}
           className="rounded-lg bg-accent px-3 py-1.5 font-medium text-panel text-xs transition-opacity hover:opacity-90"
         >
@@ -343,15 +415,21 @@ function Failed({
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3" role="status" aria-live="polite">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-danger/15 text-danger">
           <CircleAlert className="size-5" aria-hidden="true" />
         </span>
-        <h2 className="font-semibold text-sm text-text">The render failed</h2>
+        <h2
+          id="render-dialog-title"
+          className="font-semibold text-sm text-text"
+        >
+          The render failed
+        </h2>
       </div>
       <p className="text-muted text-xs leading-relaxed">{message}</p>
       <button
         type="button"
+        data-autofocus
         onClick={onClose}
         className="self-end rounded-lg border border-line-strong px-3 py-1.5 text-muted text-xs transition-colors hover:border-accent hover:text-accent"
       >

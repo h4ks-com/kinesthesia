@@ -1,4 +1,4 @@
-import { DrumMachine, Soundfont } from "smplr";
+import { DrumMachine, type Scheduler, Soundfont } from "smplr";
 import { defaultProgram, soundfontFor } from "@/lib/audio/general-midi";
 import { pickDrumSample } from "@/lib/audio/percussion";
 
@@ -32,9 +32,13 @@ export class InstrumentBank {
   private readonly context: BaseAudioContext;
   private readonly voices = new Map<string, Voice>();
   private readonly loading = new Map<string, Promise<Voice | null>>();
+  /** An offline render passes one that fires every note now, since the default
+   * scheduler leans on a wall clock the render does not have. */
+  private readonly scheduler: Scheduler | null;
 
-  constructor(context: BaseAudioContext) {
+  constructor(context: BaseAudioContext, scheduler: Scheduler | null = null) {
     this.context = context;
+    this.scheduler = scheduler;
   }
 
   voiceFor(request: VoiceRequest): Voice | null {
@@ -70,10 +74,17 @@ export class InstrumentBank {
     }
   }
 
+  private scheduled(): { scheduler?: Scheduler } {
+    return this.scheduler === null ? {} : { scheduler: this.scheduler };
+  }
+
   private async load(key: string, percussion: boolean): Promise<Voice | null> {
     const voice = percussion
-      ? new DrumMachine(this.context, { instrument: "TR-808" })
-      : new Soundfont(this.context, { instrument: key });
+      ? new DrumMachine(this.context, {
+          instrument: "TR-808",
+          ...this.scheduled(),
+        })
+      : new Soundfont(this.context, { instrument: key, ...this.scheduled() });
     try {
       await voice.load;
       const ready = percussion ? asDrumKit(voice) : voice;
@@ -86,7 +97,10 @@ export class InstrumentBank {
 
   private async loadFallback(key: string): Promise<Voice | null> {
     try {
-      const piano = new Soundfont(this.context, { instrument: defaultProgram });
+      const piano = new Soundfont(this.context, {
+        instrument: defaultProgram,
+        ...this.scheduled(),
+      });
       await piano.load;
       this.voices.set(key, piano);
       return piano;

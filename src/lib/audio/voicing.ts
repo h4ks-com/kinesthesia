@@ -1,4 +1,4 @@
-import type { SongTrack } from "@/lib/midi/song";
+import type { SongNote, SongTrack } from "@/lib/midi/song";
 
 /** How one track is made to sound: which instrument plays it, and the shaping
  * laid over the sample. Each default means "leave the sample alone", so a
@@ -93,4 +93,33 @@ export function shapingFor(voicing: Voicing | null): {
 export function velocityFor(velocity: number, voicing: Voicing | null): number {
   const level = (voicing?.volume ?? 100) / 100;
   return clamp(velocity * 127 * level, 0, 127);
+}
+
+/** The instrument a track plays under a voicing, falling back to the one the
+ * file named for a track nobody has revoiced. */
+export function programFor(voicing: Voicing | null, program: number): number {
+  return voicing?.program ?? program;
+}
+
+/** The sampler options a note is played with, shared by the live engine and the
+ * offline render so both sound the same. The caller adds `time`, which is the
+ * only thing that differs between playing now and rendering ahead. */
+export function scheduledNote(
+  note: SongNote,
+  voicing: Voicing | null,
+  rate: number,
+): {
+  note: number;
+  duration: number;
+  velocity: number;
+  ampAttack?: number;
+  ampRelease?: number;
+  lpfCutoffHz?: number;
+} {
+  return {
+    note: note.pitch,
+    duration: Math.max(0.05, (note.end - note.start) / rate),
+    velocity: velocityFor(note.velocity, voicing),
+    ...shapingFor(voicing),
+  };
 }

@@ -1,50 +1,62 @@
-import { audioBufferToWav16, renderOffline } from "smplr";
+import {
+  audioBufferToWav16,
+  type NoteEvent,
+  renderOffline,
+  type Scheduler,
+  type StopFn,
+} from "smplr";
 import { InstrumentBank } from "@/lib/audio/instruments";
-import { shapingFor, velocityFor } from "@/lib/audio/voicing";
+import { programFor, scheduledNote } from "@/lib/audio/voicing";
 import type { RenderConfig } from "@/lib/render/export";
 import { renderDuration } from "@/lib/render/export";
 
 const sampleRate = 48000;
 
-/** Renders the song's sound offline, as fast as the CPU allows, scheduling
- * every note with the same voicing the live engine uses so the export sounds
- * like what plays on screen. */
+const noStop: StopFn = () => {};
+
+/** smplr's default scheduler only plays notes within a lookahead window of the
+ * wall clock, dispatching the rest from a timer that never fires while an
+ * OfflineAudioContext renders instantly. This dispatches every note at once, so
+ * each source node lands at its own absolute time in the rendered buffer. */
+const immediateScheduler: Scheduler = {
+  schedule(event: NoteEvent, callback: (event: NoteEvent) => void): StopFn {
+    callback(event);
+    return noStop;
+  },
+  stop() {},
+};
+
+/** Schedules every note offline through the same voicing the live engine uses,
+ * so the export sounds like what plays on screen. */
 export async function renderSongAudio(
   config: RenderConfig,
 ): Promise<AudioBuffer> {
   const { song, voicing, hiddenTracks, rate } = config;
-  const programs = new Map(
-    song.tracks.map((track) => [track.index, track.program]),
-  );
-  const percussion = new Map(
-    song.tracks.map((track) => [track.index, track.percussion]),
-  );
+  const byIndex = new Map(song.tracks.map((track) => [track.index, track]));
   const audible = song.tracks.filter((track) => !hiddenTracks.has(track.index));
 
   const result = await renderOffline(
     async (context) => {
-      const bank = new InstrumentBank(context);
+      const bank = new InstrumentBank(context, immediateScheduler);
       await bank.warm(
         audible.map((track) => ({
-          program: voicing.get(track.index)?.program ?? track.program,
+          program: programFor(voicing.get(track.index) ?? null, track.program),
           percussion: track.percussion,
         })),
       );
       for (const note of song.notes) {
-        if (hiddenTracks.has(note.track)) {
+        const track = byIndex.get(note.track);
+        if (track === undefined || hiddenTracks.has(note.track)) {
           continue;
         }
         const shaped = voicing.get(note.track) ?? null;
         const voice = bank.voiceFor({
-          program: shaped?.program ?? programs.get(note.track) ?? 0,
-          percussion: percussion.get(note.track) ?? false,
+          program: programFor(shaped, track.program),
+          percussion: track.percussion,
         });
         voice?.start({
-          note: note.pitch,
+          ...scheduledNote(note, shaped, rate),
           time: note.start / rate,
-          duration: Math.max(0.05, (note.end - note.start) / rate),
-          velocity: velocityFor(note.velocity, shaped),
-          ...shapingFor(shaped),
         });
       }
     },

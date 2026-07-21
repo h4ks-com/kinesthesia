@@ -89,7 +89,7 @@ async function withWebCodecs(
     1,
     Math.ceil(renderDuration(config) * renderFps),
   );
-  const renderer = offlineRenderer();
+  const { renderer, canvas } = offlineRenderer();
 
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
@@ -132,7 +132,7 @@ async function withWebCodecs(
         throw failure;
       }
       renderer.draw(watchFrame(config, (index / renderFps) * config.rate));
-      const frame = new VideoFrame(renderer.canvasElement, {
+      const frame = new VideoFrame(canvas, {
         timestamp: Math.round((index / renderFps) * 1_000_000),
         duration: Math.round(1_000_000 / renderFps),
       });
@@ -182,13 +182,20 @@ async function withMediaRecorder(
   onProgress: VideoProgress,
   signal: AbortSignal,
 ): Promise<RenderedVideo> {
-  const renderer = offlineRenderer();
-  const canvas = renderer.canvasElement;
+  const { renderer, canvas } = offlineRenderer();
   const audioContext = new AudioContext({ sampleRate: audio.sampleRate });
   const destination = audioContext.createMediaStreamDestination();
   const source = audioContext.createBufferSource();
   source.buffer = audio;
   source.connect(destination);
+
+  const stop = (): void => {
+    if (recorder.state !== "inactive") {
+      recorder.stop();
+    }
+    source.stop();
+    void audioContext.close();
+  };
 
   const stream = new MediaStream([
     ...canvas.captureStream(renderFps).getVideoTracks(),
@@ -209,8 +216,10 @@ async function withMediaRecorder(
       }
       resolve(new Blob(chunks, { type: mime.type }));
     };
-    recorder.onerror = () =>
+    recorder.onerror = () => {
+      stop();
       reject(new Error("The browser stopped recording."));
+    };
   });
 
   const outDuration = renderDuration(config);
@@ -222,9 +231,7 @@ async function withMediaRecorder(
     const step = (): void => {
       const real = (performance.now() - startedAt) / 1000;
       if (signal.aborted) {
-        recorder.stop();
-        source.stop();
-        void audioContext.close();
+        stop();
         reject(new DOMException("Render cancelled", "AbortError"));
         return;
       }
@@ -233,9 +240,7 @@ async function withMediaRecorder(
       );
       onProgress(Math.min(1, real / outDuration));
       if (real >= outDuration) {
-        recorder.stop();
-        source.stop();
-        void audioContext.close();
+        stop();
         resolve();
         return;
       }
@@ -247,12 +252,10 @@ async function withMediaRecorder(
   return { blob: await recorded, extension: mime.extension, realtime: true };
 }
 
-type OfflineRenderer = {
-  draw: PianoRollRenderer["draw"];
-  canvasElement: HTMLCanvasElement;
-};
-
-function offlineRenderer(): OfflineRenderer {
+function offlineRenderer(): {
+  renderer: PianoRollRenderer;
+  canvas: HTMLCanvasElement;
+} {
   const { width, height } = renderSize;
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -262,7 +265,7 @@ function offlineRenderer(): OfflineRenderer {
     height,
     ratio: 1,
   });
-  return { draw: (frame) => renderer.draw(frame), canvasElement: canvas };
+  return { renderer, canvas };
 }
 
 async function encodeAudio(

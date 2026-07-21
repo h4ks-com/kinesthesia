@@ -333,9 +333,10 @@ function DotPulse({
   hidden: ReadonlySet<number>;
 }): null {
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      return;
-    }
+    // A short note only sounds for a frame or two, so each channel is held lit
+    // briefly past its last note for the pulse to register.
+    const holdMs = 260;
+    const litUntil = new Map<number, number>();
     let frame = 0;
     let last = 0;
     const tick = (now: number) => {
@@ -344,9 +345,11 @@ function DotPulse({
         return;
       }
       last = now;
-      const live = soundingTracks(notes, getPosition(), hidden);
+      for (const index of soundingTracks(notes, getPosition(), hidden)) {
+        litUntil.set(index, now + holdMs);
+      }
       for (const [index, node] of dots) {
-        node.toggleAttribute("data-live", live.has(index));
+        node.toggleAttribute("data-live", (litUntil.get(index) ?? 0) > now);
       }
     };
     frame = requestAnimationFrame(tick);

@@ -26,7 +26,7 @@ const lookAhead = 3.5;
 /** Real seconds of warning before an owed note lands. Scaled by playback speed
  * so a fast song still gives the same time to react, and capped at the look
  * ahead so a long rest before the next note shows nothing until it nears. */
-const foreshadowLead = 0.8;
+const foreshadowLead = 1.6;
 const maxDevicePixelRatio = 1.5;
 /** How long a struck drum keeps its key lit. The note-off a MIDI writes for a
  * drum is arbitrary and often runs for a beat, which would hold the key long

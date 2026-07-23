@@ -1,7 +1,8 @@
 "use client";
 
-import { LogIn, LogOut, Piano, Trophy } from "lucide-react";
+import { Hand, LogIn, LogOut, Piano, Trophy } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/ui/popover";
@@ -16,6 +17,8 @@ type TopBarProps = {
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
   children?: ReactNode;
+  /** Page-specific controls, sat on the right before the account cluster. */
+  nav?: ReactNode;
 };
 
 export function TopBar({
@@ -24,8 +27,10 @@ export function TopBar({
   signIn,
   signOut,
   children,
+  nav,
 }: TopBarProps) {
   const [stats, setStats] = useState<Stats | null>(null);
+  const pathname = usePathname();
 
   useEffect(() => {
     if (viewer === null) {
@@ -60,6 +65,20 @@ export function TopBar({
       {children}
 
       <div className="ml-auto flex items-center gap-2">
+        {nav}
+
+        {pathname === "/play" ? null : (
+          <Link
+            href="/play"
+            data-tip="Free play"
+            data-tip-side="top"
+            aria-label="Free play"
+            className="inline-flex items-center rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"
+          >
+            <Hand className="size-4" aria-hidden="true" />
+          </Link>
+        )}
+
         {viewer !== null && stats !== null ? (
           <span className="hidden items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 font-mono text-muted text-xs sm:flex">
             <Trophy className="size-3.5 text-accent" aria-hidden="true" />

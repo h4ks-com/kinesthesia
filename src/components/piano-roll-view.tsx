@@ -6,7 +6,7 @@ import {
   useRef,
 } from "react";
 import type { Reach } from "@/lib/input/keyboard-map";
-import type { Song } from "@/lib/midi/song";
+import type { LiveNote, Song } from "@/lib/midi/song";
 import { PianoRollRenderer } from "@/lib/render/piano-roll";
 
 /** Each pointer keeps its own gesture, so one finger panning the roll and
@@ -24,6 +24,11 @@ type PianoRollViewProps = {
   getPressed: () => ReadonlySet<number>;
   getOwed: () => ReadonlySet<number>;
   getYours: () => ReadonlySet<number> | null;
+  /** Play mode's live notes, rising from the keys. Omitted everywhere notes
+   * fall from a song instead. */
+  getLive?: () => readonly LiveNote[];
+  /** Whether the sustain pedal is down, for the strike-line indicator. */
+  getSustain?: () => boolean;
   /** What the computer keyboard reaches from the current octave, or null where
    * there is nothing to play. */
   reach?: Reach | null;
@@ -42,12 +47,18 @@ export function PianoRollView({
   getPressed,
   getOwed,
   getYours,
+  getLive,
+  getSustain,
   reach = null,
   keyLabels = null,
   plain = false,
   onStrike,
   onRelease,
 }: PianoRollViewProps) {
+  const liveRef = useRef(getLive);
+  liveRef.current = getLive;
+  const sustainRef = useRef(getSustain);
+  sustainRef.current = getSustain;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<PianoRollRenderer | null>(null);
   const hiddenRef = useRef(hiddenTracks);
@@ -80,6 +91,8 @@ export function PianoRollView({
       renderer.draw({
         song,
         position: getPosition(),
+        live: liveRef.current?.() ?? null,
+        sustain: sustainRef.current?.() ?? false,
         hiddenTracks: hiddenRef.current,
         pressed: getPressed(),
         owed: getOwed(),

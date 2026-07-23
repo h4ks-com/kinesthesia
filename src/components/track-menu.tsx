@@ -25,18 +25,25 @@ type TrackMenuProps = {
   /** Every note, so the list can light the channel a sounding one belongs to. */
   notes: readonly SongNote[];
   getPosition: () => number;
-  hidden: ReadonlySet<number>;
-  mine: ReadonlySet<number>;
-  interactive: boolean;
-  canClaim: boolean;
-  onToggleVisible: (index: number) => void;
-  onToggleMine: (index: number) => void;
-  onSolo: (index: number) => void;
   voicing: SongVoicing;
   /** Null while the sound is not this listener's to change. */
   onVoicing: ((track: number, voicing: Voicing) => void) | null;
-  sound: SoundSharing | null;
+  /** The trigger's accessible name, so a mode with parts rather than a song's
+   * tracks can say so. */
+  label?: string;
+  /** The show/hide/solo/claim controls only appear when their handlers are
+   * given, so a free-roam list is just instruments and nothing to manage. */
+  hidden?: ReadonlySet<number>;
+  mine?: ReadonlySet<number>;
+  interactive?: boolean;
+  canClaim?: boolean;
+  onToggleVisible?: (index: number) => void;
+  onToggleMine?: (index: number) => void;
+  onSolo?: (index: number) => void;
+  sound?: SoundSharing | null;
 };
+
+const noneHidden: ReadonlySet<number> = new Set();
 
 /** How a song's sound is shared: whose is playing, whether this listener has
  * moved anything, and whether they can put it back for everyone. */
@@ -54,21 +61,26 @@ export function TrackMenu({
   tracks,
   notes,
   getPosition,
-  hidden,
-  mine,
-  interactive,
-  canClaim,
+  voicing,
+  onVoicing,
+  label = "Tracks",
+  hidden = noneHidden,
+  mine = noneHidden,
+  interactive = false,
+  canClaim = false,
   onToggleVisible,
   onToggleMine,
   onSolo,
-  voicing,
-  onVoicing,
-  sound,
+  sound = null,
 }: TrackMenuProps) {
   const [shaping, setShaping] = useState<number | null>(null);
   const [returning, setReturning] = useState<number | null>(null);
   const shapeButtons = useRef(new Map<number, HTMLButtonElement>());
   const liveDots = useRef(new Map<number, HTMLSpanElement>());
+
+  // With no show/hide handler there is nothing to manage: the list is a plain
+  // set of instruments, as free-roam play wants.
+  const managed = onToggleVisible !== undefined;
 
   // Coming back from the sound view rebuilds the list, so the row that was
   // opened takes the reading position again.
@@ -101,12 +113,16 @@ export function TrackMenu({
 
   return (
     <Popover
-      label="Tracks"
+      label={label}
       trigger={(open) => (
         <span
           data-tour="tracks"
           data-tip={
-            single ? "The instrument and shaping" : "Show or hide tracks"
+            single
+              ? "The instrument and shaping"
+              : managed
+                ? "Show or hide tracks"
+                : "Instruments"
           }
           className={`inline-flex items-center gap-1.5 rounded-lg border py-2 pr-2 pl-2 transition-colors ${
             open
@@ -120,7 +136,9 @@ export function TrackMenu({
             <>
               <Layers className="size-4" aria-hidden="true" />
               <span className="font-mono text-faint text-xs">
-                {tracks.length - hidden.size}/{tracks.length}
+                {managed
+                  ? `${tracks.length - hidden.size}/${tracks.length}`
+                  : tracks.length}
               </span>
             </>
           )}
@@ -144,7 +162,7 @@ export function TrackMenu({
                 key={track.index}
                 className="flex min-w-0 items-center gap-0.5"
               >
-                {single ? (
+                {single || !managed ? (
                   <span className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-2 text-left">
                     <span
                       ref={registerDot(track.index)}
@@ -157,14 +175,16 @@ export function TrackMenu({
                     <span className="min-w-0 truncate text-sm">
                       {track.name}
                     </span>
-                    <span className="ml-auto shrink-0 font-mono text-faint text-[0.7rem]">
-                      {track.noteCount}
-                    </span>
+                    {track.noteCount > 0 ? (
+                      <span className="ml-auto shrink-0 font-mono text-faint text-[0.7rem]">
+                        {track.noteCount}
+                      </span>
+                    ) : null}
                   </span>
                 ) : (
                   <button
                     type="button"
-                    onClick={() => onToggleVisible(track.index)}
+                    onClick={() => onToggleVisible?.(track.index)}
                     aria-pressed={visible}
                     className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-raised"
                     style={{ opacity: visible ? 1 : 0.4 }}
@@ -181,16 +201,18 @@ export function TrackMenu({
                     <span className="min-w-0 truncate text-sm">
                       {track.name}
                     </span>
-                    <span className="ml-auto shrink-0 font-mono text-faint text-[0.7rem]">
-                      {track.noteCount}
-                    </span>
+                    {track.noteCount > 0 ? (
+                      <span className="ml-auto shrink-0 font-mono text-faint text-[0.7rem]">
+                        {track.noteCount}
+                      </span>
+                    ) : null}
                   </button>
                 )}
-                {single ? null : (
+                {managed && !single ? (
                   <button
                     type="button"
                     data-tour="track-solo"
-                    onClick={() => onSolo(track.index)}
+                    onClick={() => onSolo?.(track.index)}
                     aria-pressed={soloed === track.index}
                     aria-label={`Show only ${track.name}`}
                     data-tip={soloed === track.index ? "Show all" : "Solo"}
@@ -202,12 +224,12 @@ export function TrackMenu({
                   >
                     <Radio className="size-4" aria-hidden="true" />
                   </button>
-                )}
-                {interactive && canClaim && !single ? (
+                ) : null}
+                {managed && interactive && canClaim && !single ? (
                   <button
                     type="button"
                     data-tour="track-claim"
-                    onClick={() => onToggleMine(track.index)}
+                    onClick={() => onToggleMine?.(track.index)}
                     aria-pressed={claimed}
                     aria-label={`Play ${track.name} yourself`}
                     data-tip="Play this one"

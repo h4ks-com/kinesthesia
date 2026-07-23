@@ -3,6 +3,7 @@ import { type NoteColor, pitchColor, trackColor } from "@/lib/midi/palette";
 import {
   highestPitch,
   isBlackKey,
+  type LiveNote,
   lowestPitch,
   noteName,
   type Song,
@@ -52,6 +53,11 @@ type Particle = {
 export type Frame = {
   readonly song: Song;
   readonly position: number;
+  /** Play mode's emitted notes, rising from the keys. Null in watch, learn and
+   * match, where notes fall from the song instead. */
+  readonly live: readonly LiveNote[] | null;
+  /** The sustain pedal is down, marked discreetly along the strike line. */
+  readonly sustain: boolean;
   readonly hiddenTracks: ReadonlySet<number>;
   readonly pressed: ReadonlySet<number>;
   /** The pitches the player still owes at the current gate, so a strike that
@@ -197,7 +203,11 @@ export class PianoRollRenderer {
     this.paintBackground(total, height, keyboardTop, whiteWidth, frame.plain);
 
     const active = new Map<number, NoteColor>();
-    this.paintNotes(frame, keyboardTop, whiteWidth, active);
+    if (frame.live === null) {
+      this.paintNotes(frame, keyboardTop, whiteWidth, active);
+    } else {
+      this.paintLiveNotes(frame, frame.live, keyboardTop, whiteWidth, active);
+    }
     for (const pitch of frame.pressed) {
       active.set(pitch, active.get(pitch) ?? trackColor(0));
     }
@@ -221,8 +231,28 @@ export class PianoRollRenderer {
       total,
     );
     this.paintParticles();
+    if (frame.sustain) {
+      this.paintSustain(keyboardTop, total);
+    }
     this.paintReach(frame.reach, keyboardTop, whiteWidth, total);
     ctx.translate(this.pan, 0);
+  }
+
+  /** A soft lit bar riding the strike line while the pedal is down, so a held
+   * sustain reads at a glance without competing with the notes. */
+  private paintSustain(keyboardTop: number, total: number): void {
+    const ctx = this.context;
+    const y = keyboardTop - 3;
+    const bar = ctx.createLinearGradient(0, y, total, y);
+    bar.addColorStop(0, "rgba(123,184,255,0)");
+    bar.addColorStop(0.5, "rgba(123,184,255,0.9)");
+    bar.addColorStop(1, "rgba(123,184,255,0)");
+    ctx.save();
+    ctx.shadowColor = "rgba(123,184,255,0.8)";
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = bar;
+    ctx.fillRect(0, y, total, 2);
+    ctx.restore();
   }
 
   /** A bar over the stretch the computer keyboard covers, drawn on top of the
@@ -415,6 +445,65 @@ export class PianoRollRenderer {
         ctx.fillStyle = "#ffffff";
         ctx.fillText(label, centerX, centerY);
       }
+    }
+  }
+
+  /** The reverse of paintNotes: a note leaves the keys the moment it is struck
+   * and climbs, its foot pinned to the keyboard while held so the bar grows,
+   * then lifting off once released. A held note lights its key, so the glow,
+   * sparks and sink all read the same as playing along in any other mode. */
+  private paintLiveNotes(
+    frame: Frame,
+    live: readonly LiveNote[],
+    keyboardTop: number,
+    whiteWidth: number,
+    active: Map<number, NoteColor>,
+  ): void {
+    const ctx = this.context;
+    const { position } = frame;
+    const scale = keyboardTop / lookAhead;
+    const blackNote = blackKeyWidth(whiteWidth);
+    const whiteNote = whiteWidth * 0.86;
+
+    for (const note of live) {
+      const headAge = position - note.start;
+      if (headAge < 0) {
+        continue;
+      }
+      const held = note.end === null;
+      const footAge = note.end === null ? 0 : position - note.end;
+      const bottom = keyboardTop - footAge * scale;
+      if (bottom < 0) {
+        continue;
+      }
+      const color = trackColor(note.track);
+      if (held) {
+        active.set(note.pitch, color);
+      }
+
+      const top = keyboardTop - headAge * scale;
+      const noteWidth = isBlackKey(note.pitch) ? blackNote : whiteNote;
+      const x = keyCenter(note.pitch, whiteWidth) - noteWidth / 2;
+      const y = Math.max(0, top);
+      const noteHeight = Math.max(2, bottom - y);
+
+      // Brightest at the leading edge climbing away from the keys, deepening
+      // toward the foot once the note has been let go.
+      let fill: string | CanvasGradient = color.glow;
+      if (!frame.plain) {
+        const gradient = ctx.createLinearGradient(0, y, 0, y + noteHeight);
+        gradient.addColorStop(0, color.core);
+        gradient.addColorStop(held ? 0.6 : 0.25, color.glow);
+        gradient.addColorStop(1, held ? color.glow : color.shade);
+        fill = gradient;
+      } else {
+        fill = color.flat;
+      }
+      ctx.globalAlpha = 0.74 + note.velocity * 0.26;
+      ctx.fillStyle = fill;
+      roundRect(ctx, x, y, noteWidth, noteHeight, 4);
+      ctx.fill();
+      ctx.globalAlpha = 1;
     }
   }
 

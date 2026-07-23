@@ -22,6 +22,8 @@ export function watchFrame(config: RenderConfig, position: number): Frame {
   return {
     song: config.song,
     position,
+    live: null,
+    sustain: false,
     hiddenTracks: config.hiddenTracks,
     pressed: noPitches,
     owed: noPitches,

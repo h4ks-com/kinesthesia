@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Code2, Loader2, Search, Upload, X } from "lucide-react";
+import { BookOpen, Code2, Loader2, Play, Search, X } from "lucide-react";
 import Link from "next/link";
 import {
   type ReactNode,
@@ -42,6 +42,25 @@ type HomeProps = {
   signOut: () => Promise<void>;
 };
 
+/** A pasted http(s) link, so the search box doubles as a way to open a MIDI by
+ * URL. Whether it plays is the watch page's call: only trusted origins pass. */
+function midiUrlFrom(query: string): { url: string; name: string } | null {
+  const value = query.trim();
+  if (!/^https?:\/\//i.test(value)) {
+    return null;
+  }
+  try {
+    const parsed = new URL(value);
+    const last = parsed.pathname.split("/").filter(Boolean).pop() ?? "";
+    return {
+      url: value,
+      name: last === "" ? parsed.hostname : decodeURIComponent(last),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function Home({
   viewer,
   authEnabled,
@@ -57,7 +76,8 @@ export function Home({
   const [dragging, setDragging] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  const state = useLiveSearch(query);
+  const link = midiUrlFrom(query);
+  const state = useLiveSearch(link === null ? query : "");
 
   const refreshLibrary = useCallback(() => {
     void listRecent().then(setRecent);
@@ -125,7 +145,32 @@ export function Home({
         signOut={signOut}
       />
 
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-5 py-14">
+      <main
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={(event) => {
+          const to = event.relatedTarget;
+          if (!(to instanceof Node) || !event.currentTarget.contains(to)) {
+            setDragging(false);
+          }
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragging(false);
+          void addFiles(event.dataTransfer.files);
+        }}
+        className="relative mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-5 py-14"
+      >
+        {dragging ? (
+          <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-2xl border-2 border-accent border-dashed bg-void/80 backdrop-blur">
+            <p className="font-mono text-accent text-sm">
+              drop to add your MIDI
+            </p>
+          </div>
+        ) : null}
+
         <div className="flex flex-col gap-3">
           <h1 className="font-semibold text-4xl tracking-tight sm:text-5xl">
             Play anything.
@@ -136,38 +181,84 @@ export function Home({
           </p>
         </div>
 
-        <div className="relative">
-          <Search
-            className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-4 size-4 text-faint"
-            aria-hidden="true"
-          />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search for a song"
-            aria-label="Search for a song"
-            autoComplete="off"
-            className="w-full rounded-xl border border-line bg-panel py-3.5 pr-11 pl-11 text-text outline-none transition-colors placeholder:text-faint focus:border-accent"
-          />
-          <div className="-translate-y-1/2 absolute top-1/2 right-3 flex items-center">
-            {searching ? (
-              <Loader2
-                className="size-4 animate-spin text-accent"
-                aria-label="Searching"
-              />
-            ) : query !== "" ? (
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                aria-label="Clear search"
-                data-tip="Clear"
-                className="rounded-md p-1 text-faint transition-colors hover:text-text"
-              >
-                <X className="size-4" aria-hidden="true" />
-              </button>
-            ) : null}
+        <div className="flex flex-col gap-2">
+          <div className="relative">
+            <Search
+              className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-4 size-4 text-faint"
+              aria-hidden="true"
+            />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search for a song, or paste a link"
+              aria-label="Search for a song, or paste a link"
+              autoComplete="off"
+              className="w-full rounded-xl border border-line bg-panel py-3.5 pr-11 pl-11 text-text outline-none transition-colors placeholder:text-faint focus:border-accent"
+            />
+            <div className="-translate-y-1/2 absolute top-1/2 right-3 flex items-center">
+              {searching ? (
+                <Loader2
+                  className="size-4 animate-spin text-accent"
+                  aria-label="Searching"
+                />
+              ) : query !== "" ? (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  aria-label="Clear search"
+                  data-tip="Clear"
+                  className="rounded-md p-1 text-faint transition-colors hover:text-text"
+                >
+                  <X className="size-4" aria-hidden="true" />
+                </button>
+              ) : null}
+            </div>
           </div>
+          <p className="px-1 font-mono text-[0.7rem] text-faint">
+            Drop a file anywhere, or{" "}
+            <button
+              type="button"
+              onClick={() => fileInput.current?.click()}
+              className="text-muted underline decoration-line-strong underline-offset-2 transition-colors hover:text-accent"
+            >
+              browse
+            </button>
+            .
+          </p>
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".mid,.midi,audio/midi"
+            multiple
+            className="hidden"
+            onChange={(event) => {
+              void addFiles(event.target.files);
+              event.target.value = "";
+            }}
+          />
+          {uploadError === null ? null : (
+            <p className="px-1 text-danger text-sm">{uploadError}</p>
+          )}
         </div>
+
+        {link === null ? null : (
+          <Link
+            href={`/watch?url=${encodeURIComponent(link.url)}&name=${encodeURIComponent(link.name)}`}
+            className="group flex items-center gap-3 rounded-xl border border-accent/40 bg-accent-soft/20 px-4 py-3.5 transition-colors hover:border-accent"
+          >
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-void">
+              <Play className="size-4" aria-hidden="true" />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate font-medium text-sm">
+                {link.name}
+              </span>
+              <span className="block font-mono text-[0.7rem] text-faint">
+                open this link
+              </span>
+            </span>
+          </Link>
+        )}
 
         {state.status === "failed" ? (
           <p className="text-danger text-sm">{state.message}</p>
@@ -185,8 +276,7 @@ export function Home({
 
         {state.status === "done" && state.results.length === 0 ? (
           <p className="text-muted">
-            Nothing matched that. Try fewer words, or drop your own MIDI file at
-            the bottom of the page.
+            Nothing matched that. Try fewer words, or drop your own MIDI file.
           </p>
         ) : null}
 
@@ -316,45 +406,6 @@ export function Home({
             ))}
           </LibrarySection>
         ) : null}
-
-        <div className="mt-auto">
-          <button
-            type="button"
-            onClick={() => fileInput.current?.click()}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setDragging(true);
-            }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={(event) => {
-              event.preventDefault();
-              setDragging(false);
-              void addFiles(event.dataTransfer.files);
-            }}
-            className={`flex w-full items-center justify-center gap-2 rounded-xl border border-dashed py-4 font-mono text-xs transition-colors ${
-              dragging
-                ? "border-accent bg-accent-soft/30 text-accent"
-                : "border-line text-faint hover:border-line-strong hover:text-muted"
-            }`}
-          >
-            <Upload className="size-4" aria-hidden="true" />
-            drop a midi file here, or click to choose
-          </button>
-          <input
-            ref={fileInput}
-            type="file"
-            accept=".mid,.midi,audio/midi"
-            multiple
-            className="hidden"
-            onChange={(event) => {
-              void addFiles(event.target.files);
-              event.target.value = "";
-            }}
-          />
-          {uploadError === null ? null : (
-            <p className="mt-2 text-danger text-sm">{uploadError}</p>
-          )}
-        </div>
       </main>
 
       <footer className="mx-auto flex w-full max-w-3xl items-center gap-4 px-5 pb-10 font-mono text-faint text-xs">

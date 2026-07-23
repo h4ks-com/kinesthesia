@@ -34,6 +34,12 @@ export class PlaybackEngine {
     this.resetCursor();
   }
 
+  /** Swaps the voices in without cutting what is sounding, for a live setup
+   * where parts appear mid-play and stopping every ringing note would be wrong. */
+  setTracks(song: Song): void {
+    this.song = song;
+  }
+
   /** How each track is made to sound. Tracks left out keep the instrument the
    * file named and the sample's own shape. */
   setVoicing(voicing: SongVoicing): void {

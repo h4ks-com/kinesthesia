@@ -11,6 +11,7 @@ src/app/
   page.tsx                    search home
   sources/page.tsx            the sources a search runs over, and their licensing
   watch|learn|multiplayer/page.tsx  read the URL, hand params to the player
+  play/page.tsx               the free roam player, which reads no song
   api/[[...route]]/route.ts   mounts the Hono app at /api
 src/server/
   api.ts                      routes, OpenAPI spec, Scalar docs, MCP server
@@ -54,6 +55,8 @@ src/components/
   multiplayer-invite.tsx      the invite, at the end of the shared bar
   opponent-panel.tsx          the other side: match type, their part, their
                               score and roll, silent by design
+  play-view.tsx               free roam: keys shoot notes up out of the keyboard
+  parts-menu.tsx              the parts you play into and each one's instrument
 src/lib/
   player-url.ts               builds and parses player URLs
   search-params.ts            route search params to URLSearchParams
@@ -63,6 +66,7 @@ src/lib/
   midi/part.ts                a side's tracks and the notes sounding right now
   midi/use-part-roll.ts       a part as the getters the roll draws with
   midi/palette.ts             per track and per pitch colours
+  play/use-play-notes.ts      the notes play mode emits, rising from the keys
   audio/transport.ts          song position on the audio clock
   audio/engine.ts             instruments and the look ahead scheduler
   audio/instruments.ts        one voice per General MIDI program
@@ -75,7 +79,8 @@ src/lib/
   tour/steps.ts               what the walkthrough points at, per mode
   tour/use-walkthrough.ts     first-run auto play and the replay it hands back
   render/keyboard.ts          key geometry, sizing and the pitch under a point
-  render/piano-roll.ts        draws notes, keyboard, glow and sparks
+  render/piano-roll.ts        draws notes, keyboard, glow and sparks, and play
+                              mode's live notes rising from the keys
   render/export.ts            the watch view as a render job: size, frame, files
   render/audio.ts             offline audio render to a WAV, at the live voicing
   render/video.ts             offline video render, WebCodecs with a recorder fallback
@@ -115,6 +120,15 @@ match derive it separately and have to agree. `learn` pauses when it reaches a
 note the player owes and resumes once they press it, while `multiplayer` plays
 straight through and simply counts the miss. Each judged note pops a `hit-flag`,
 green, gold or red, high on the roll clear of the keys.
+
+`play` is the reverse of the others: there is no song and nothing falls. Each
+key you press, from touch, the computer keyboard or a MIDI device, shoots a note
+up out of the keyboard that blooms while held and drifts off once released,
+drawn on the same free running audio clock the roll already reads. You keep a
+set of parts, each an instrument shaped the same way as any track, and choose
+the one touch and the keyboard play into; a MIDI note picks its part by the
+channel it arrives on, so a split or multitimbral controller drives several at
+once. It has no timeline, so the transport bar keeps its height but stays empty.
 
 `multiplayer` opens on the song itself and the host prepares the whole match.
 Their own half is the player they already know; the other half is

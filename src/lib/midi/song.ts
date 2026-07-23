@@ -56,6 +56,18 @@ export type SongTrack = {
   readonly noteCount: number;
 };
 
+/** A note as play mode emits it live: struck at `start`, still sounding while
+ * `end` is null, then released. Drawn rising out of the keys rather than
+ * falling onto them. */
+export type LiveNote = {
+  readonly id: number;
+  readonly pitch: number;
+  readonly track: number;
+  readonly velocity: number;
+  readonly start: number;
+  end: number | null;
+};
+
 export type Song = {
   readonly name: string;
   readonly duration: number;

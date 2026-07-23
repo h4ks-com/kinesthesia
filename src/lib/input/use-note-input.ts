@@ -12,20 +12,40 @@ import { connectMidiInputs, isWebMidiSupported } from "@/lib/input/web-midi";
 
 export type InputStatus = "midi" | "keyboard";
 
+/** Null where the input names no channel, which is every source but a MIDI
+ * device: the computer keyboard and touch play into the active part. */
+export type InputChannel = number | null;
+
 export type NoteInput = {
   octave: number;
   setOctave: (octave: number) => void;
   status: InputStatus;
   pressed: () => ReadonlySet<number>;
-  press: (pitch: number, velocity: number, at?: number) => void;
+  press: (
+    pitch: number,
+    velocity: number,
+    at?: number,
+    channel?: number,
+  ) => void;
   release: (pitch: number) => void;
 };
 
 type Options = {
   active: boolean;
-  onPress: (pitch: number, velocity: number, at: number) => void;
-  onRelease?: (pitch: number) => void;
-  onToggle: () => void;
+  onPress: (
+    pitch: number,
+    velocity: number,
+    at: number,
+    channel: InputChannel,
+  ) => void;
+  onRelease?: (pitch: number, channel: InputChannel) => void;
+  /** A MIDI device asking for an instrument on a channel. */
+  onProgram?: (channel: number, program: number) => void;
+  /** The MIDI sustain pedal, per channel. */
+  onSustain?: (channel: number, down: boolean) => void;
+  /** Absent in a mode with nothing to toggle, so space is left to activate the
+   * focused control instead of being swallowed. */
+  onToggle?: () => void;
 };
 
 const textInputTypes = new Set([
@@ -58,11 +78,16 @@ export function useNoteInput({
   active,
   onPress,
   onRelease,
+  onProgram,
+  onSustain,
   onToggle,
 }: Options): NoteInput {
   const [octave, setOctave] = useState(defaultOctave);
   const [status, setStatus] = useState<InputStatus>("keyboard");
   const pressedRef = useRef<Set<number>>(new Set());
+  // The pitch each held key opened, so its release ends that note even if the
+  // octave shifted while it was down and its code now maps elsewhere.
+  const keyPitch = useRef(new Map<string, number>());
   const octaveRef = useRef(octave);
   octaveRef.current = octave;
   const pressRef = useRef(onPress);
@@ -71,15 +96,27 @@ export function useNoteInput({
   toggleRef.current = onToggle;
   const releaseRef = useRef(onRelease);
   releaseRef.current = onRelease;
+  const programRef = useRef(onProgram);
+  programRef.current = onProgram;
+  const sustainRef = useRef(onSustain);
+  sustainRef.current = onSustain;
 
-  const press = useCallback((pitch: number, velocity: number, at?: number) => {
-    pressedRef.current.add(pitch);
-    pressRef.current(pitch, velocity, at ?? performance.now());
-  }, []);
+  const press = useCallback(
+    (pitch: number, velocity: number, at?: number, channel?: number) => {
+      pressedRef.current.add(pitch);
+      pressRef.current(
+        pitch,
+        velocity,
+        at ?? performance.now(),
+        channel ?? null,
+      );
+    },
+    [],
+  );
 
-  const release = useCallback((pitch: number) => {
+  const release = useCallback((pitch: number, channel?: number) => {
     pressedRef.current.delete(pitch);
-    releaseRef.current?.(pitch);
+    releaseRef.current?.(pitch, channel ?? null);
   }, []);
 
   useEffect(() => {
@@ -88,16 +125,22 @@ export function useNoteInput({
         return;
       }
       if (event.code === "Space") {
-        if (isTextEntry(event.target)) {
+        const toggle = toggleRef.current;
+        // Only claim space where there is something to toggle, so a mode
+        // without a transport leaves it to activate the focused control.
+        if (toggle === undefined || isTextEntry(event.target)) {
           return;
         }
-        // Space is play everywhere else, so preventDefault stops a focused
-        // button or track toggle from firing on the key instead.
         event.preventDefault();
-        toggleRef.current();
+        toggle();
         return;
       }
       if (!active) {
+        return;
+      }
+      // Typing in a search or text field must not play notes or shift octave,
+      // or fields like the instrument search are impossible to type into.
+      if (isTextEntry(event.target)) {
         return;
       }
       if (octaveDownCodes.has(event.code)) {
@@ -113,12 +156,14 @@ export function useNoteInput({
       const pitch = pitchForCode(event.code, octaveRef.current);
       if (pitch !== null) {
         event.preventDefault();
+        keyPitch.current.set(event.code, pitch);
         press(pitch, 0.8);
       }
     };
     const onUp = (event: KeyboardEvent) => {
-      const pitch = pitchForCode(event.code, octaveRef.current);
-      if (pitch !== null) {
+      const pitch = keyPitch.current.get(event.code);
+      if (pitch !== undefined) {
+        keyPitch.current.delete(event.code);
         release(pitch);
       }
     };
@@ -136,10 +181,14 @@ export function useNoteInput({
     }
     let disconnect: (() => void) | null = null;
     connectMidiInputs((event) => {
-      if (event.down) {
-        press(event.pitch, event.velocity, event.at);
+      if (event.type === "program") {
+        programRef.current?.(event.channel, event.program);
+      } else if (event.type === "sustain") {
+        sustainRef.current?.(event.channel, event.down);
+      } else if (event.down) {
+        press(event.pitch, event.velocity, event.at, event.channel);
       } else {
-        release(event.pitch);
+        release(event.pitch, event.channel);
       }
     })
       .then((cleanup) => {

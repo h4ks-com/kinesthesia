@@ -28,6 +28,9 @@ type TrackMenuProps = {
   voicing: SongVoicing;
   /** Null while the sound is not this listener's to change. */
   onVoicing: ((track: number, voicing: Voicing) => void) | null;
+  /** Which tracks are sounding right now, for the pulsing dots. Given directly
+   * where there are no song notes to read it from, as in free-roam play. */
+  getSounding?: () => Iterable<number>;
   /** The trigger's accessible name, so a mode with parts rather than a song's
    * tracks can say so. */
   label?: string;
@@ -63,6 +66,7 @@ export function TrackMenu({
   getPosition,
   voicing,
   onVoicing,
+  getSounding,
   label = "Tracks",
   hidden = noneHidden,
   mine = noneHidden,
@@ -152,6 +156,7 @@ export function TrackMenu({
             getPosition={getPosition}
             dots={liveDots.current}
             hidden={hidden}
+            getSounding={getSounding}
           />
           {tracks.map((track) => {
             const visible = !hidden.has(track.index);
@@ -348,11 +353,13 @@ function DotPulse({
   getPosition,
   dots,
   hidden,
+  getSounding,
 }: {
   notes: readonly SongNote[];
   getPosition: () => number;
   dots: Map<number, HTMLSpanElement>;
   hidden: ReadonlySet<number>;
+  getSounding?: () => Iterable<number>;
 }): null {
   useEffect(() => {
     // A short note only sounds for a frame or two, so each channel is held lit
@@ -367,7 +374,9 @@ function DotPulse({
         return;
       }
       last = now;
-      for (const index of soundingTracks(notes, getPosition(), hidden)) {
+      const sounding =
+        getSounding?.() ?? soundingTracks(notes, getPosition(), hidden);
+      for (const index of sounding) {
         litUntil.set(index, now + holdMs);
       }
       for (const [index, node] of dots) {
@@ -376,6 +385,6 @@ function DotPulse({
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [notes, getPosition, dots, hidden]);
+  }, [notes, getPosition, dots, hidden, getSounding]);
   return null;
 }

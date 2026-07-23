@@ -268,6 +268,20 @@ export function PlayView({
   }, [notes]);
 
   const getSustain = useCallback(() => sustainRef.current, []);
+
+  // Which parts are sounding now, for the pulsing dots: those with a held note,
+  // plus one just released so a quick tap still registers a pulse.
+  const getSounding = useCallback(() => {
+    const now = getPosition();
+    const set = new Set<number>();
+    for (const note of notes.get()) {
+      if (note.end === null || now - note.end < 0.05) {
+        set.add(note.track);
+      }
+    }
+    return set;
+  }, [notes, getPosition]);
+
   const noPitches = useCallback((): ReadonlySet<number> => noAutoNotes, []);
   const noYours = useCallback((): ReadonlySet<number> | null => null, []);
 
@@ -352,6 +366,7 @@ export function PlayView({
                 tracks={song.tracks}
                 notes={noNotes}
                 getPosition={getPosition}
+                getSounding={getSounding}
                 voicing={voicing}
                 onVoicing={onVoicing}
               />

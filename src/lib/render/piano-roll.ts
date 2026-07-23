@@ -65,6 +65,9 @@ export type Frame = {
   /** Playback speed, so the foreshadow lead is a constant reaction time rather
    * than a fixed song distance that shrinks as the song speeds up. */
   readonly rate: number;
+  /** The track the player is playing, so a struck key that is not sitting on a
+   * sounding note still lights and sparks in their part's colour. */
+  readonly playTrack: number;
   readonly hiddenTracks: ReadonlySet<number>;
   readonly pressed: ReadonlySet<number>;
   /** The pitches the player still owes at the current gate, so a strike that
@@ -223,7 +226,7 @@ export class PianoRollRenderer {
       this.paintLiveNotes(frame, frame.live, keyboardTop, whiteWidth, active);
     }
     for (const pitch of frame.pressed) {
-      active.set(pitch, active.get(pitch) ?? trackColor(0));
+      active.set(pitch, active.get(pitch) ?? trackColor(frame.playTrack));
     }
 
     this.paintKeyboardShadow(total, keyboardTop);
@@ -586,7 +589,7 @@ export class PianoRollRenderer {
       this.spawnSparks(
         keyCenter(pitch, whiteWidth),
         keyboardTop,
-        active.get(pitch) ?? trackColor(0),
+        active.get(pitch) ?? trackColor(frame.playTrack),
         frame.owed.has(pitch) ? "bloom" : "strike",
       );
     }
@@ -657,6 +660,18 @@ export class PianoRollRenderer {
         keyboardHeight - sink,
       );
       ctx.shadowBlur = 0;
+      // Washed before the black keys are laid over it, so the wash never spills
+      // onto a black key sitting on top and the layering reads true.
+      if (!frame.plain) {
+        this.washForeshadow(
+          pitch,
+          active,
+          x + 0.5,
+          keyboardTop,
+          whiteWidth - 1,
+          keyboardHeight,
+        );
+      }
     }
 
     for (let pitch = lowestPitch; pitch <= highestPitch; pitch += 1) {
@@ -672,10 +687,16 @@ export class PianoRollRenderer {
       this.setKeyPaint(frame, active, pitch, this.blackFace ?? "#0b0e15", 16);
       ctx.fillRect(x, keyboardTop + sink, blackWidth, blackHeight - sink);
       ctx.shadowBlur = 0;
-    }
-
-    if (!frame.plain) {
-      this.paintForeshadow(active, keyboardTop, keyboardHeight, whiteWidth);
+      if (!frame.plain) {
+        this.washForeshadow(
+          pitch,
+          active,
+          x,
+          keyboardTop,
+          blackWidth,
+          blackHeight,
+        );
+      }
     }
 
     ctx.fillStyle = "#161c26";
@@ -691,35 +712,31 @@ export class PianoRollRenderer {
     }
   }
 
-  /** A soft wash on the keys an owed note is approaching, brightening as it
-   * nears, so the next thing to press reads before it lands. It hands off to
-   * the full press glow the moment the note reaches the line and goes active. */
-  private paintForeshadow(
+  /** A soft wash over one key an owed note is approaching, brightening as it
+   * nears, so the next thing to press reads before it lands. Drawn on the key
+   * within its own draw pass, so a white key's wash is covered by the black
+   * keys over it and the layering holds. Hands off to the full press glow once
+   * the note lands and the key goes active. */
+  private washForeshadow(
+    pitch: number,
     active: ReadonlyMap<number, NoteColor>,
-    keyboardTop: number,
-    keyboardHeight: number,
-    whiteWidth: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
   ): void {
-    const ctx = this.context;
-    const blackHeight = keyboardHeight * 0.6;
-    ctx.save();
-    for (const [pitch, { color, strength }] of this.foreshadow) {
-      if (active.has(pitch)) {
-        continue;
-      }
-      const black = isBlackKey(pitch);
-      const width = black ? blackKeyWidth(whiteWidth) : whiteWidth - 1;
-      const x = black
-        ? blackKeyLeft(pitch, whiteWidth)
-        : whiteKeyLeft(pitch, whiteWidth) + 0.5;
-      const height = black ? blackHeight : keyboardHeight;
-      ctx.globalAlpha = 0.1 + strength * 0.28;
-      ctx.fillStyle = color.glow;
-      ctx.fillRect(x, keyboardTop, width, height);
-      ctx.globalAlpha = 0.25 + strength * 0.5;
-      ctx.fillStyle = color.core;
-      ctx.fillRect(x, keyboardTop, width, 3);
+    const entry = this.foreshadow.get(pitch);
+    if (entry === undefined || active.has(pitch)) {
+      return;
     }
+    const ctx = this.context;
+    ctx.save();
+    ctx.globalAlpha = 0.1 + entry.strength * 0.28;
+    ctx.fillStyle = entry.color.glow;
+    ctx.fillRect(x, y, width, height);
+    ctx.globalAlpha = 0.25 + entry.strength * 0.5;
+    ctx.fillStyle = entry.color.core;
+    ctx.fillRect(x, y, width, 3);
     ctx.restore();
   }
 

@@ -32,6 +32,9 @@ type PianoRollViewProps = {
   /** Playback speed, so the owed-note foreshadow leads by a constant reaction
    * time. Defaults to normal speed. */
   rate?: number;
+  /** The track the player plays, so a bare key press takes that part's colour
+   * rather than the first track's. */
+  playTrack?: number;
   /** What the computer keyboard reaches from the current octave, or null where
    * there is nothing to play. */
   reach?: Reach | null;
@@ -53,6 +56,7 @@ export function PianoRollView({
   getLive,
   getSustain,
   rate = 1,
+  playTrack = 0,
   reach = null,
   keyLabels = null,
   plain = false,
@@ -65,6 +69,8 @@ export function PianoRollView({
   sustainRef.current = getSustain;
   const rateRef = useRef(rate);
   rateRef.current = rate;
+  const playTrackRef = useRef(playTrack);
+  playTrackRef.current = playTrack;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<PianoRollRenderer | null>(null);
   const hiddenRef = useRef(hiddenTracks);
@@ -100,6 +106,7 @@ export function PianoRollView({
         live: liveRef.current?.() ?? null,
         sustain: sustainRef.current?.() ?? false,
         rate: rateRef.current,
+        playTrack: playTrackRef.current,
         hiddenTracks: hiddenRef.current,
         pressed: getPressed(),
         owed: getOwed(),

@@ -23,6 +23,10 @@ import {
 } from "@/lib/render/keyboard";
 
 const lookAhead = 3.5;
+/** Real seconds of warning before an owed note lands. Scaled by playback speed
+ * so a fast song still gives the same time to react, and capped at the look
+ * ahead so a long rest before the next note shows nothing until it nears. */
+const foreshadowLead = 0.8;
 const maxDevicePixelRatio = 1.5;
 /** How long a struck drum keeps its key lit. The note-off a MIDI writes for a
  * drum is arbitrary and often runs for a beat, which would hold the key long
@@ -58,6 +62,9 @@ export type Frame = {
   readonly live: readonly LiveNote[] | null;
   /** The sustain pedal is down, marked discreetly along the strike line. */
   readonly sustain: boolean;
+  /** Playback speed, so the foreshadow lead is a constant reaction time rather
+   * than a fixed song distance that shrinks as the song speeds up. */
+  readonly rate: number;
   readonly hiddenTracks: ReadonlySet<number>;
   readonly pressed: ReadonlySet<number>;
   /** The pitches the player still owes at the current gate, so a strike that
@@ -90,6 +97,12 @@ export class PianoRollRenderer {
   private readonly context: CanvasRenderingContext2D;
   private readonly fixed: FixedSurface | null;
   private readonly particles: Particle[] = [];
+  /** The keys an owed note is approaching, with how near it is (0 far, 1 at the
+   * line), so learn and match can foreshadow what to press. */
+  private readonly foreshadow = new Map<
+    number,
+    { color: NoteColor; strength: number }
+  >();
   private previouslyActive = new Set<number>();
   private previouslyPressed = new Set<number>();
   private drumTracks: ReadonlySet<number> = new Set();
@@ -203,6 +216,7 @@ export class PianoRollRenderer {
     this.paintBackground(total, height, keyboardTop, whiteWidth, frame.plain);
 
     const active = new Map<number, NoteColor>();
+    this.foreshadow.clear();
     if (frame.live === null) {
       this.paintNotes(frame, keyboardTop, whiteWidth, active);
     } else {
@@ -389,6 +403,24 @@ export class PianoRollRenderer {
 
       if (sounding && !ghost) {
         active.set(note.pitch, color);
+      }
+
+      // Light the key an owed note is heading for, but only once it is within a
+      // speed-scaled lead of the line, and only the nearest one per key.
+      if (
+        !ghost &&
+        !sounding &&
+        frame.owed.has(note.pitch) &&
+        !this.foreshadow.has(note.pitch)
+      ) {
+        const lead = Math.min(foreshadowLead * frame.rate, lookAhead);
+        const ahead = note.start - position;
+        if (ahead <= lead) {
+          this.foreshadow.set(note.pitch, {
+            color,
+            strength: 1 - ahead / lead,
+          });
+        }
       }
 
       const bottom = Math.min(
@@ -642,6 +674,10 @@ export class PianoRollRenderer {
       ctx.shadowBlur = 0;
     }
 
+    if (!frame.plain) {
+      this.paintForeshadow(active, keyboardTop, keyboardHeight, whiteWidth);
+    }
+
     ctx.fillStyle = "#161c26";
     ctx.fillRect(0, keyboardTop - 2, width, 2);
 
@@ -653,6 +689,38 @@ export class PianoRollRenderer {
         whiteWidth,
       );
     }
+  }
+
+  /** A soft wash on the keys an owed note is approaching, brightening as it
+   * nears, so the next thing to press reads before it lands. It hands off to
+   * the full press glow the moment the note reaches the line and goes active. */
+  private paintForeshadow(
+    active: ReadonlyMap<number, NoteColor>,
+    keyboardTop: number,
+    keyboardHeight: number,
+    whiteWidth: number,
+  ): void {
+    const ctx = this.context;
+    const blackHeight = keyboardHeight * 0.6;
+    ctx.save();
+    for (const [pitch, { color, strength }] of this.foreshadow) {
+      if (active.has(pitch)) {
+        continue;
+      }
+      const black = isBlackKey(pitch);
+      const width = black ? blackKeyWidth(whiteWidth) : whiteWidth - 1;
+      const x = black
+        ? blackKeyLeft(pitch, whiteWidth)
+        : whiteKeyLeft(pitch, whiteWidth) + 0.5;
+      const height = black ? blackHeight : keyboardHeight;
+      ctx.globalAlpha = 0.1 + strength * 0.28;
+      ctx.fillStyle = color.glow;
+      ctx.fillRect(x, keyboardTop, width, height);
+      ctx.globalAlpha = 0.25 + strength * 0.5;
+      ctx.fillStyle = color.core;
+      ctx.fillRect(x, keyboardTop, width, 3);
+    }
+    ctx.restore();
   }
 
   /** The letter that plays each key, sat near the front of the key where a

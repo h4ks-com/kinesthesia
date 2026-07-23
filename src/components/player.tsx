@@ -808,6 +808,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
               getPressed={input.pressed}
               getOwed={gates.owed}
               getYours={yours}
+              rate={speed}
               reach={interactive ? reachFor(input.octave) : null}
               keyLabels={
                 interactive && hasKeyboard && showKeyLabels

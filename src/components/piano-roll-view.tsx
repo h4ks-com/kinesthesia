@@ -29,6 +29,9 @@ type PianoRollViewProps = {
   getLive?: () => readonly LiveNote[];
   /** Whether the sustain pedal is down, for the strike-line indicator. */
   getSustain?: () => boolean;
+  /** Playback speed, so the owed-note foreshadow leads by a constant reaction
+   * time. Defaults to normal speed. */
+  rate?: number;
   /** What the computer keyboard reaches from the current octave, or null where
    * there is nothing to play. */
   reach?: Reach | null;
@@ -49,6 +52,7 @@ export function PianoRollView({
   getYours,
   getLive,
   getSustain,
+  rate = 1,
   reach = null,
   keyLabels = null,
   plain = false,
@@ -59,6 +63,8 @@ export function PianoRollView({
   liveRef.current = getLive;
   const sustainRef = useRef(getSustain);
   sustainRef.current = getSustain;
+  const rateRef = useRef(rate);
+  rateRef.current = rate;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<PianoRollRenderer | null>(null);
   const hiddenRef = useRef(hiddenTracks);
@@ -93,6 +99,7 @@ export function PianoRollView({
         position: getPosition(),
         live: liveRef.current?.() ?? null,
         sustain: sustainRef.current?.() ?? false,
+        rate: rateRef.current,
         hiddenTracks: hiddenRef.current,
         pressed: getPressed(),
         owed: getOwed(),

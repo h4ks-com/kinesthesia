@@ -24,6 +24,7 @@ src/server/
   db/client.ts                libSQL connection and migration runner
   scores/store.ts             leaderboard queries
   voicings/store.ts           how people made a song sound, one save each
+  storage/bucket.ts           uploads generated MIDI and project specs to the object store
   midi/
     types.ts                  MidiSource contract and result shapes
     registry.ts               sources available to search
@@ -63,6 +64,9 @@ src/lib/
   format/clock.ts             seconds as m:ss
   midi/song.ts                parses a .mid into a flat note list, moves it to another key
   midi/melody.ts              reduces a part to one playable note at a time
+  midi/analysis.ts            detects tempo, key and chords, and a compact digest
+  midi/compose.ts             chord voicing, a 5x7 text font and note primitives
+  midi/project.ts             an editable song: beat-timed tracks and the edit ops
   midi/part.ts                a side's tracks and the notes sounding right now
   midi/use-part-roll.ts       a part as the getters the roll draws with
   midi/palette.ts             per track and per pitch colours

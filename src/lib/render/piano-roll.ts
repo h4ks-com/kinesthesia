@@ -7,6 +7,7 @@ import {
   lowestPitch,
   noteName,
   type Song,
+  type SongNote,
 } from "@/lib/midi/song";
 import {
   blackKeyLeft,
@@ -32,6 +33,16 @@ const maxDevicePixelRatio = 1.5;
  * drum is arbitrary and often runs for a beat, which would hold the key long
  * after the hit it stands for. */
 const drumDecay = 0.09;
+/** A dense passage lights hundreds of new notes a frame, each a spark burst, so
+ * without a ceiling the particle list runs to tens of thousands and the frame
+ * is spent redrawing sparks no one can pick out. Capped, the swarm reads the
+ * same and stops spawning once it is full. */
+const maxParticles = 1100;
+/** Below this a falling note is a sliver where a vertical gradient and rounded
+ * corners cannot be seen, so it is filled flat and square. The bodies tall
+ * enough to read a gradient keep it. */
+const gradientNoteHeight = 14;
+const roundNoteSize = 10;
 
 type SparkKind = "note" | "strike" | "bloom";
 
@@ -110,6 +121,9 @@ export class PianoRollRenderer {
   private previouslyPressed = new Set<number>();
   private drumTracks: ReadonlySet<number> = new Set();
   private drumsFrom: Song | null = null;
+  /** The longest note in the current song, so the scan can start at the first
+   * note that could still be sounding. */
+  private maxNoteDuration = 0;
   private shadow: CanvasGradient | null = null;
   private shadowAt = -1;
   private whiteFace: CanvasGradient | null = null;
@@ -362,13 +376,26 @@ export class PianoRollRenderer {
           .filter((track) => track.percussion)
           .map((track) => track.index),
       );
+      let longest = 0;
+      for (const note of frame.song.notes) {
+        longest = Math.max(longest, note.end - note.start);
+      }
+      this.maxNoteDuration = longest;
     }
     const drums = this.drumTracks;
     const blackNote = blackKeyWidth(whiteWidth);
     const whiteNote = whiteWidth * 0.86;
 
-    for (const note of frame.song.notes) {
-      if (note.start > position + lookAhead) {
+    // Notes are sorted by start, so every note still on screen starts within
+    // [position - longest note, position + lookAhead]. Anything earlier ended
+    // before now, so the scan begins at the first note that could still sound
+    // and a long song's played history is skipped.
+    const notes = frame.song.notes;
+    const horizon = position + lookAhead;
+    const first = firstFrom(notes, position - this.maxNoteDuration);
+    for (let index = first; index < notes.length; index += 1) {
+      const note = notes[index];
+      if (note === undefined || note.start > horizon) {
         break;
       }
       if (note.end < position || frame.hiddenTracks.has(note.track)) {
@@ -439,28 +466,36 @@ export class PianoRollRenderer {
       // The hue holds across the body and only lifts in the last of the bar,
       // so the leading edge reads as lit without the note becoming a ramp. A
       // note being played drops the deep end and burns at its core instead.
-      const gradient = frame.plain
-        ? null
-        : ctx.createLinearGradient(0, y, 0, y + noteHeight);
-      if (gradient === null) {
-        // Flat, but a note being played still has to read as different.
-      } else if (sounding) {
-        gradient.addColorStop(0, color.glow);
-        gradient.addColorStop(0.4, color.core);
-        gradient.addColorStop(1, color.core);
+      let fill: string | CanvasGradient;
+      if (frame.plain) {
+        fill = sounding ? color.glow : color.flat;
+      } else if (noteHeight >= gradientNoteHeight) {
+        const gradient = ctx.createLinearGradient(0, y, 0, y + noteHeight);
+        if (sounding) {
+          gradient.addColorStop(0, color.glow);
+          gradient.addColorStop(0.4, color.core);
+          gradient.addColorStop(1, color.core);
+        } else {
+          gradient.addColorStop(0, color.shade);
+          gradient.addColorStop(0.3, color.glow);
+          gradient.addColorStop(0.82, color.glow);
+          gradient.addColorStop(1, color.core);
+        }
+        fill = gradient;
       } else {
-        gradient.addColorStop(0, color.shade);
-        gradient.addColorStop(0.3, color.glow);
-        gradient.addColorStop(0.82, color.glow);
-        gradient.addColorStop(1, color.core);
+        fill = sounding ? color.core : color.glow;
       }
       // Velocity only sets how firmly the note sits, since a MIDI whose notes
       // all carry one velocity must not end up a uniformly dim roll.
       const punch = 0.74 + note.velocity * 0.26;
       ctx.globalAlpha = ghost ? 0.22 : punch;
-      ctx.fillStyle = gradient ?? (sounding ? color.glow : color.flat);
-      roundRect(ctx, x, y, noteWidth, noteHeight, 4);
-      ctx.fill();
+      ctx.fillStyle = fill;
+      if (noteHeight >= roundNoteSize && noteWidth >= roundNoteSize) {
+        roundRect(ctx, x, y, noteWidth, noteHeight, 4);
+        ctx.fill();
+      } else {
+        ctx.fillRect(x, y, noteWidth, noteHeight);
+      }
       ctx.globalAlpha = 1;
 
       if (!ghost && !sounding && noteWidth >= 17 && noteHeight >= 20) {
@@ -524,20 +559,26 @@ export class PianoRollRenderer {
 
       // Brightest at the leading edge climbing away from the keys, deepening
       // toward the foot once the note has been let go.
-      let fill: string | CanvasGradient = color.glow;
-      if (!frame.plain) {
+      let fill: string | CanvasGradient;
+      if (frame.plain) {
+        fill = color.flat;
+      } else if (noteHeight >= gradientNoteHeight) {
         const gradient = ctx.createLinearGradient(0, y, 0, y + noteHeight);
         gradient.addColorStop(0, color.core);
         gradient.addColorStop(held ? 0.6 : 0.25, color.glow);
         gradient.addColorStop(1, held ? color.glow : color.shade);
         fill = gradient;
       } else {
-        fill = color.flat;
+        fill = color.glow;
       }
       ctx.globalAlpha = 0.74 + note.velocity * 0.26;
       ctx.fillStyle = fill;
-      roundRect(ctx, x, y, noteWidth, noteHeight, 4);
-      ctx.fill();
+      if (noteHeight >= roundNoteSize && noteWidth >= roundNoteSize) {
+        roundRect(ctx, x, y, noteWidth, noteHeight, 4);
+        ctx.fill();
+      } else {
+        ctx.fillRect(x, y, noteWidth, noteHeight);
+      }
       ctx.globalAlpha = 1;
     }
   }
@@ -614,6 +655,9 @@ export class PianoRollRenderer {
     color: NoteColor,
     kind: SparkKind,
   ): void {
+    if (this.particles.length >= maxParticles) {
+      return;
+    }
     const burst = sparkBursts[kind];
     const count = burst.count + Math.floor(Math.random() * 8);
     for (let index = 0; index < count; index += 1) {
@@ -894,6 +938,22 @@ export class PianoRollRenderer {
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = "source-over";
   }
+}
+
+/** First index whose note starts at or after `from`. The list is sorted by
+ * start. */
+function firstFrom(notes: readonly SongNote[], from: number): number {
+  let low = 0;
+  let high = notes.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if ((notes[mid]?.start ?? 0) < from) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
 }
 
 function roundRect(

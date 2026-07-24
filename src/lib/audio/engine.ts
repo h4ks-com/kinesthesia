@@ -12,6 +12,38 @@ import type { Song, SongNote } from "@/lib/midi/song";
 
 const lookAhead = 0.2;
 const tickInterval = 25;
+/** The polyphony ceiling adapts to the machine. Each voice is a source node
+ * built on the main thread, so the count a machine holds while keeping time is
+ * its own. The ceiling backs off the moment a tick lands late and climbs only
+ * while a passage presses against it, so headroom is earned by real density. An
+ * ordinary song sits below the floor, untouched. */
+const minVoices = 48;
+const maxVoices = 256;
+const startVoices = 96;
+const growStep = 8;
+/** Climb only while within this of the ceiling, so headroom is earned by a
+ * passage that is actually dense. */
+const growSlack = 8;
+/** A tick this much past its interval means the main thread is behind, so the
+ * ceiling drops; comfortably inside it means there is room to climb. */
+const lateTick = tickInterval * 1.8;
+const onTimeTick = tickInterval * 1.4;
+
+/** The ceiling after a pump that ran `gap` ms since the previous one with
+ * `active` voices sounding. */
+export function adaptedVoiceLimit(
+  current: number,
+  gap: number,
+  active: number,
+): number {
+  if (gap > lateTick) {
+    return Math.max(minVoices, Math.round(current * 0.7));
+  }
+  if (gap < onTimeTick && active >= current - growSlack) {
+    return Math.min(maxVoices, current + growStep);
+  }
+  return current;
+}
 
 export class PlaybackEngine {
   private context: AudioContext | null = null;
@@ -24,13 +56,21 @@ export class PlaybackEngine {
   private timer: ReturnType<typeof setInterval> | null = null;
   private pendingPosition = 0;
   private pendingRate = 1;
+  /** Context times at which each scheduled voice falls silent, so the polyphony
+   * ceiling counts the voices still sounding. */
+  private voiceEnds: number[] = [];
+  /** The live polyphony ceiling, adapted to how well this machine keeps time. */
+  private voiceLimit = startVoices;
+  /** Wall-clock time of the last pump, to measure how late the next one runs.
+   * Zero between runs, so a pause does not read as the machine falling behind. */
+  private lastPumpAt = 0;
 
   setSong(song: Song, autoNotes: ReadonlySet<number>): void {
     this.song = song;
     this.autoNotes = autoNotes;
     // Notes inside the look ahead window are already with a voice, so the
     // cursor alone would hand them out a second time.
-    this.bank?.stopAll();
+    this.stopVoices();
     this.resetCursor();
   }
 
@@ -44,7 +84,7 @@ export class PlaybackEngine {
    * file named and the sample's own shape. */
   setVoicing(voicing: SongVoicing): void {
     this.voicing = voicing;
-    this.bank?.stopAll();
+    this.stopVoices();
   }
 
   /** A player who owes only the melody still hears the rest of their part. */
@@ -52,7 +92,7 @@ export class PlaybackEngine {
     this.autoNotes = autoNotes;
     // Notes inside the look ahead window are already with a voice, so the
     // cursor alone would hand them out a second time.
-    this.bank?.stopAll();
+    this.stopVoices();
     this.resetCursor();
   }
 
@@ -108,20 +148,20 @@ export class PlaybackEngine {
 
   pause(): void {
     this.transport?.pause();
-    this.bank?.stopAll();
+    this.stopVoices();
   }
 
   setRate(rate: number): void {
     this.pendingRate = rate;
     this.transport?.setRate(rate);
-    this.bank?.stopAll();
+    this.stopVoices();
     this.resetCursor();
   }
 
   seek(position: number): void {
     this.pendingPosition = Math.max(0, position);
     this.transport?.seek(this.pendingPosition);
-    this.bank?.stopAll();
+    this.stopVoices();
     this.resetCursor();
   }
 
@@ -160,11 +200,30 @@ export class PlaybackEngine {
       clearInterval(this.timer);
       this.timer = null;
     }
-    this.bank?.stopAll();
+    this.stopVoices();
     void this.context?.close();
     this.context = null;
     this.bank = null;
     this.transport = null;
+  }
+
+  private stopVoices(): void {
+    this.bank?.stopAll();
+    this.voiceEnds.length = 0;
+  }
+
+  private adaptVoiceLimit(): void {
+    const wall = performance.now();
+    const previous = this.lastPumpAt;
+    this.lastPumpAt = wall;
+    if (previous === 0) {
+      return;
+    }
+    this.voiceLimit = adaptedVoiceLimit(
+      this.voiceLimit,
+      wall - previous,
+      this.voiceEnds.length,
+    );
   }
 
   private voiceFor(track: number): Voice | null {
@@ -191,11 +250,18 @@ export class PlaybackEngine {
   private pump(): void {
     const transport = this.transport;
     if (this.song === null || transport === null || !transport.playing) {
+      this.lastPumpAt = 0;
       return;
     }
     const notes = this.song.notes;
     const position = transport.position;
     const horizon = position + lookAhead;
+
+    if (this.context !== null) {
+      const now = this.context.currentTime;
+      this.voiceEnds = this.voiceEnds.filter((end) => end > now);
+    }
+    this.adaptVoiceLimit();
 
     while (this.cursor < notes.length) {
       const note = notes[this.cursor];
@@ -221,12 +287,18 @@ export class PlaybackEngine {
     if (context === null || voice === null) {
       return false;
     }
+    // A dense passage cues more notes than can be heard apart; past the ceiling
+    // the extras are dropped to spare the audio thread, and the cursor advances
+    // so a drop is final.
+    if (this.voiceEnds.length >= this.voiceLimit) {
+      return true;
+    }
     const rate = this.transport?.rate ?? 1;
     const shaped = this.voicing.get(note.track) ?? null;
-    voice.start({
-      ...scheduledNote(note, shaped, rate),
-      time: context.currentTime + Math.max(0, note.start - position) / rate,
-    });
+    const startAt =
+      context.currentTime + Math.max(0, note.start - position) / rate;
+    voice.start({ ...scheduledNote(note, shaped, rate), time: startAt });
+    this.voiceEnds.push(startAt + (note.end - note.start) / rate);
     return true;
   }
 }

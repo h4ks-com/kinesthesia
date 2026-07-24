@@ -216,16 +216,20 @@ export function addChords(
   return next;
 }
 
-/** How many glyphs fit across the keys above `basePitch`, so a line of text
- * can be wrapped to what the keyboard actually shows. */
-function charsPerLine(basePitch: number): number {
+function whiteKeyCount(from: number): number {
   let whites = 0;
-  for (let pitch = basePitch; pitch <= highestPitch; pitch += 1) {
+  for (let pitch = from; pitch <= highestPitch; pitch += 1) {
     if (!isBlackKey(pitch)) {
       whites += 1;
     }
   }
-  return Math.max(1, Math.floor((whites + 1) / (glyphWidth + 1)));
+  return whites;
+}
+
+/** How many glyphs fit across the keys from `from` up, so a line of text can be
+ * wrapped to what the keyboard actually shows. */
+function charsPerLine(from: number): number {
+  return Math.max(1, Math.floor((whiteKeyCount(from) + 1) / (glyphWidth + 1)));
 }
 
 /** Greedily packs whole words into lines no wider than `perLine`, hard-splitting
@@ -275,17 +279,20 @@ export function addText(
     channel?: number;
     text: string;
     atBar?: number;
-    basePitch?: number;
   },
 ): Project {
   const next = clone(project);
   const index = ensureTrack(next, args.track, args.channel);
-  const basePitch = args.basePitch ?? 48;
   const atBar = args.atBar ?? endBar(next);
-  const lines = wrapText(args.text, charsPerLine(basePitch));
+  const total = whiteKeyCount(lowestPitch);
+  const lines = wrapText(args.text, charsPerLine(lowestPitch));
   const lineSpan = glyphRows * rowBeats + lineGapBeats;
   const notes: ProjectNote[] = [];
   lines.forEach((line, lineIndex) => {
+    // Centre each line across the whole keyboard so it uses the low keys too
+    // instead of piling up at the top.
+    const lineWhites = line.length * (glyphWidth + 1) - 1;
+    const leftPad = Math.max(0, Math.floor((total - lineWhites) / 2));
     // Line 0 sits highest (latest in time), so the block reads top to bottom.
     const base =
       (atBar - 1) * next.beatsPerBar +
@@ -303,7 +310,7 @@ export function addText(
             continue;
           }
           notes.push({
-            pitch: whiteKeyFrom(basePitch, column + cell),
+            pitch: whiteKeyFrom(lowestPitch, leftPad + column + cell),
             startBeat: base + (glyph.length - 1 - row) * rowBeats,
             durationBeats: rowBeats,
             velocity: 0.9,

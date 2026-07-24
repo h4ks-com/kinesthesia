@@ -55,7 +55,7 @@ beforeEach(() => {
 describe("project editing over MCP", () => {
   it("creates, adds a progression, and reads it back with channel and harmony", async () => {
     const created = await json(call("create_project", { name: "t", bpm: 90 }));
-    expect(created.body.url).toContain("/watch");
+    expect(created.body.url).toContain("/api/p/");
     const id = created.body.id;
 
     await json(

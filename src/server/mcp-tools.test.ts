@@ -102,7 +102,7 @@ describe("new editing tools", () => {
     );
     expect(isError).toBe(false);
     const links = JSON.parse(text);
-    expect(links.playUrl).toContain("/watch");
+    expect(links.playUrl).toContain("/api/g/");
     expect(links.downloadUrl).toContain("gen/");
   });
 
@@ -111,7 +111,7 @@ describe("new editing tools", () => {
       await rpc("arpeggiate", { chords: ["Cmaj7", "G7"], bpm: 90 }),
     );
     expect(isError).toBe(false);
-    expect(JSON.parse(text).playUrl).toContain("/watch");
+    expect(JSON.parse(text).playUrl).toContain("/api/g/");
   });
 
   it("arpeggiate refuses a chord symbol it cannot read", async () => {

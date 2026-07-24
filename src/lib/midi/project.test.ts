@@ -148,7 +148,6 @@ describe("addText wrapping", () => {
     const project = addText(base(), {
       track: "new",
       text: "HELLO WORLD FROM MIDI",
-      basePitch: 36,
     });
     const times = project.tracks[0]?.notes.map((note) => note.startBeat) ?? [];
     expect(Math.max(...times) - Math.min(...times)).toBeGreaterThan(7);

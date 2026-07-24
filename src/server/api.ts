@@ -260,6 +260,29 @@ api.get("/midi/file", async (c) => {
   }
 });
 
+/** Short links for generated files and projects that redirect to the player.
+ * An agent pasting one into chat cannot corrupt it the way it garbles a long
+ * percent-encoded ?url=, so the link it hands out always resolves. */
+api.get("/g/:uuid", (c) => {
+  const uuid = c.req.param("uuid");
+  const bucket = config.bucket;
+  if (bucket === null || !/^[0-9a-f-]{36}$/.test(uuid)) {
+    return c.json({ error: "Unknown file" }, 404);
+  }
+  const file = encodeURIComponent(`${bucket.publicBase}/gen/${uuid}.mid`);
+  return c.redirect(`${config.appBaseUrl}/watch?url=${file}`, 302);
+});
+
+api.get("/p/:id", (c) => {
+  const id = c.req.param("id");
+  const bucket = config.bucket;
+  if (bucket === null || !/^pj_[0-9a-f-]{36}$/.test(id)) {
+    return c.json({ error: "Unknown project" }, 404);
+  }
+  const file = encodeURIComponent(`${bucket.publicBase}/docs/${id}.mid`);
+  return c.redirect(`${config.appBaseUrl}/watch?url=${file}`, 302);
+});
+
 const roomSchema = z
   .object({
     code: z.string(),
@@ -903,14 +926,10 @@ function midiFetchUrl(input: {
  * file url and a player link, so nothing binary crosses the MCP channel. */
 async function publishGenerated(
   bytes: Uint8Array,
-  name: string,
 ): Promise<{ downloadUrl: string; playUrl: string }> {
-  const downloadUrl = await uploadMidi(`gen/${crypto.randomUUID()}.mid`, bytes);
-  const link = playerLink({ url: downloadUrl, name, mode: "watch" });
-  if (!link.ok) {
-    throw new Error(link.why);
-  }
-  return { downloadUrl, playUrl: link.url };
+  const id = crypto.randomUUID();
+  const downloadUrl = await uploadMidi(`gen/${id}.mid`, bytes);
+  return { downloadUrl, playUrl: `${config.appBaseUrl}/api/g/${id}` };
 }
 
 type ToolResult = {
@@ -944,17 +963,10 @@ const textInputShape = {
   text: z
     .string()
     .min(1)
-    .max(40)
-    .describe("Message to spell out on the keys; A-Z and spaces"),
+    .max(120)
+    .describe("Message to spell out on the keys; wraps to fit, A-Z and spaces"),
   name: z.string().default("text").describe("Name to show in the player"),
   bpm: z.coerce.number().int().min(20).max(300).default(120),
-  basePitch: z.coerce
-    .number()
-    .int()
-    .min(21)
-    .max(96)
-    .default(48)
-    .describe("Lowest key the text sits on, MIDI note number"),
 };
 
 const arpInputShape = {
@@ -988,17 +1000,13 @@ async function saveProject(
   const keys = projectKeys(project.id);
   // The .mid lands before the spec, so a failed render leaves the spec (which
   // loadProject reads) unchanged and a retry re-applies the edit exactly once.
-  const publicUrl = await uploadMidi(keys.midi, projectBytes(project));
+  await uploadMidi(keys.midi, projectBytes(project));
   await putJson(keys.spec, project);
-  const link = playerLink({
-    url: publicUrl,
-    name: project.name,
-    mode: "watch",
-  });
-  if (!link.ok) {
-    throw new Error(link.why);
-  }
-  return { id: project.id, url: link.url, digest: projectDigest(project) };
+  return {
+    id: project.id,
+    url: `${config.appBaseUrl}/api/p/${project.id}`,
+    digest: projectDigest(project),
+  };
 }
 
 async function commit(build: () => Promise<Project>): Promise<ToolResult> {
@@ -1074,7 +1082,6 @@ const addTextShape = {
     .min(1)
     .optional()
     .describe("Bar to start at; omit to append after the last bar"),
-  basePitch: z.coerce.number().int().min(21).max(96).default(48),
 };
 const insertBarsShape = {
   id: idArg,
@@ -1342,7 +1349,7 @@ function createMcpServer(): McpServer {
         "Spell a short message out across the keys as falling notes and return a player link plus the raw .mid url. A-Z and spaces render; other characters become blanks.",
       inputSchema: textInputShape,
     },
-    async ({ text, name, bpm, basePitch }): Promise<ToolResult> => {
+    async ({ text, name, bpm }): Promise<ToolResult> => {
       if (!bucketEnabled()) {
         return toolError(
           "This deployment has no object store, so a generated file cannot be shared.",
@@ -1352,12 +1359,11 @@ function createMcpServer(): McpServer {
         const project = addText(createProject("oneshot", { name, bpm }), {
           track: "new",
           text,
-          basePitch,
         });
         if ((project.tracks[0]?.notes.length ?? 0) === 0) {
           return toolError("That text has nothing to draw.");
         }
-        return toolJson(await publishGenerated(projectBytes(project), name));
+        return toolJson(await publishGenerated(projectBytes(project)));
       } catch (error) {
         return toolError(
           error instanceof Error ? error.message : "Could not store the file.",
@@ -1387,7 +1393,7 @@ function createMcpServer(): McpServer {
           style: "up",
           octave,
         });
-        return toolJson(await publishGenerated(projectBytes(project), name));
+        return toolJson(await publishGenerated(projectBytes(project)));
       } catch (error) {
         return toolError(
           error instanceof Error ? error.message : "Could not store the file.",
@@ -1499,14 +1505,13 @@ function createMcpServer(): McpServer {
         "Spell a short message across the keys as falling notes on a track (or a new one), starting at a bar. Add it over an existing song for a caption.",
       inputSchema: addTextShape,
     },
-    ({ id, track, channel, text, atBar, basePitch }): Promise<ToolResult> =>
+    ({ id, track, channel, text, atBar }): Promise<ToolResult> =>
       commit(async () =>
         addText(await loadProject(id), {
           track,
           channel,
           text,
           atBar,
-          basePitch,
         }),
       ),
   );

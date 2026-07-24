@@ -3,6 +3,7 @@ import { StreamableHTTPTransport } from "@hono/mcp";
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Scalar } from "@scalar/hono-api-reference";
+import type { Context } from "hono";
 import { digest, readMidi } from "@/lib/midi/analysis";
 import {
   clampMelodyRate,
@@ -260,17 +261,32 @@ api.get("/midi/file", async (c) => {
   }
 });
 
-/** Short links for generated files and projects that redirect to the player.
- * An agent pasting one into chat cannot corrupt it the way it garbles a long
- * percent-encoded ?url=, so the link it hands out always resolves. */
+/** Short links for generated files and projects. A browser opening one lands on
+ * the player; a fetch of one (what the player does when an agent has wrapped the
+ * link back into ?url=) gets the raw .mid. So the link resolves whether it is
+ * opened or wrapped, and an agent pasting it into chat cannot break it. */
+function shortLink(c: Context, midiUrl: string): Response {
+  const dest = c.req.header("sec-fetch-dest");
+  const navigation =
+    dest === "document" ||
+    (dest === undefined &&
+      (c.req.header("accept") ?? "").includes("text/html"));
+  if (navigation) {
+    return c.redirect(
+      `${config.appBaseUrl}/watch?url=${encodeURIComponent(midiUrl)}`,
+      302,
+    );
+  }
+  return c.redirect(midiUrl, 302);
+}
+
 api.get("/g/:uuid", (c) => {
   const uuid = c.req.param("uuid");
   const bucket = config.bucket;
   if (bucket === null || !/^[0-9a-f-]{36}$/.test(uuid)) {
     return c.json({ error: "Unknown file" }, 404);
   }
-  const file = encodeURIComponent(`${bucket.publicBase}/gen/${uuid}.mid`);
-  return c.redirect(`${config.appBaseUrl}/watch?url=${file}`, 302);
+  return shortLink(c, `${bucket.publicBase}/gen/${uuid}.mid`);
 });
 
 api.get("/p/:id", (c) => {
@@ -279,8 +295,7 @@ api.get("/p/:id", (c) => {
   if (bucket === null || !/^pj_[0-9a-f-]{36}$/.test(id)) {
     return c.json({ error: "Unknown project" }, 404);
   }
-  const file = encodeURIComponent(`${bucket.publicBase}/docs/${id}.mid`);
-  return c.redirect(`${config.appBaseUrl}/watch?url=${file}`, 302);
+  return shortLink(c, `${bucket.publicBase}/docs/${id}.mid`);
 });
 
 const roomSchema = z

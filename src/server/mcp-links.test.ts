@@ -12,20 +12,32 @@ vi.stubEnv("MINIO_PUBLIC_BASE", "https://s3.example.com/kinesthesia");
 const { api } = await import("@/server/api");
 
 describe("short player links", () => {
-  it("redirects a generated-file link to the encoded watch url", async () => {
-    const uuid = "12345678-1234-1234-1234-1234567890ab";
-    const response = await api.request(`/api/g/${uuid}`);
+  const uuid = "12345678-1234-1234-1234-1234567890ab";
+  const midi = `https://s3.example.com/kinesthesia/gen/${uuid}.mid`;
+
+  it("sends a browser navigation to the watch page", async () => {
+    const response = await api.request(`/api/g/${uuid}`, {
+      headers: { "sec-fetch-dest": "document" },
+    });
     expect(response.status).toBe(302);
     const location = response.headers.get("location") ?? "";
     expect(location).toContain("/watch?url=");
-    expect(location).toContain(
-      encodeURIComponent(`https://s3.example.com/kinesthesia/gen/${uuid}.mid`),
-    );
+    expect(location).toContain(encodeURIComponent(midi));
   });
 
-  it("redirects a project link", async () => {
+  it("sends a file fetch straight to the raw midi", async () => {
+    const response = await api.request(`/api/g/${uuid}`, {
+      headers: { accept: "*/*" },
+    });
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(midi);
+  });
+
+  it("resolves a project link for navigation", async () => {
     const id = "pj_12345678-1234-1234-1234-1234567890ab";
-    const response = await api.request(`/api/p/${id}`);
+    const response = await api.request(`/api/p/${id}`, {
+      headers: { "sec-fetch-dest": "document" },
+    });
     expect(response.status).toBe(302);
     expect(response.headers.get("location") ?? "").toContain("/watch?url=");
   });

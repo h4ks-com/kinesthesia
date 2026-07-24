@@ -289,14 +289,11 @@ export function addText(
   const lineSpan = glyphRows * rowBeats + lineGapBeats;
   const notes: ProjectNote[] = [];
   lines.forEach((line, lineIndex) => {
-    // Centre each line across the whole keyboard so it uses the low keys too
-    // instead of piling up at the top.
+    // Centre each line across the whole keyboard so it uses the low keys as well.
     const lineWhites = line.length * (glyphWidth + 1) - 1;
     const leftPad = Math.max(0, Math.floor((total - lineWhites) / 2));
-    // Line 0 sits highest (latest in time), so the block reads top to bottom.
-    const base =
-      (atBar - 1) * next.beatsPerBar +
-      (lines.length - 1 - lineIndex) * lineSpan;
+    // Earlier lines start earlier, so a wrapped message falls in reading order.
+    const base = (atBar - 1) * next.beatsPerBar + lineIndex * lineSpan;
     let column = 0;
     for (const character of line) {
       const glyph = font[character] ?? font[" "];

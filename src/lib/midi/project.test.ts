@@ -152,6 +152,22 @@ describe("addText wrapping", () => {
     const times = project.tracks[0]?.notes.map((note) => note.startBeat) ?? [];
     expect(Math.max(...times) - Math.min(...times)).toBeGreaterThan(7);
   });
+
+  it("plays the first line first, so the phrase falls in reading order", () => {
+    const lineSpan = 4.5;
+    const wrapped =
+      addText(base(), { track: "new", text: "HELLO WORLD FROM MIDI" }).tracks[0]
+        ?.notes ?? [];
+    const key = (note: { pitch: number; startBeat: number }) =>
+      `${note.startBeat}:${note.pitch}`;
+    const earliest = wrapped
+      .filter((note) => note.startBeat < lineSpan)
+      .map(key)
+      .sort();
+    const firstWord =
+      addText(base(), { track: "new", text: "HELLO" }).tracks[0]?.notes ?? [];
+    expect(earliest).toEqual(firstWord.map(key).sort());
+  });
 });
 
 describe("addNotes", () => {

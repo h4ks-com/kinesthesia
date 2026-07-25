@@ -118,7 +118,7 @@ export function scheduledNote(
 } {
   return {
     note: note.pitch,
-    duration: Math.max(0.05, (note.end - note.start) / rate),
+    duration: Math.max(0.05, (note.release - note.start) / rate),
     velocity: velocityFor(note.velocity, voicing),
     ...shapingFor(voicing),
   };

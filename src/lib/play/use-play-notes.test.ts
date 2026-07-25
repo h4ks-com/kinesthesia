@@ -21,7 +21,7 @@ describe("usePlayNotes", () => {
     expect(open[0]?.end).toBeNull();
 
     now.value = 2.5;
-    result.current.release(60, 0);
+    result.current.damp(60, 0);
     expect(result.current.get()[0]?.end).toBe(2.5);
   });
 
@@ -45,7 +45,7 @@ describe("usePlayNotes", () => {
 
     result.current.emit(60, 0, 0.8);
     result.current.emit(60, 1, 0.8);
-    result.current.release(60, 0);
+    result.current.damp(60, 0);
 
     const notes = result.current.get();
     expect(notes.find((note) => note.track === 0)?.end).toBe(0);
@@ -57,13 +57,42 @@ describe("usePlayNotes", () => {
     const { result } = renderHook(() => usePlayNotes(read));
 
     result.current.emit(60, 0, 0.8);
-    result.current.release(60, 0);
+    result.current.damp(60, 0);
 
     now.value = 4.4;
     expect(result.current.get()).toHaveLength(1);
 
     now.value = 4.6;
     expect(result.current.get()).toHaveLength(0);
+  });
+
+  it("stops the bar at the lift but keeps the note sounding under the pedal", () => {
+    const { now, read } = clock();
+    const { result } = renderHook(() => usePlayNotes(read));
+
+    result.current.emit(60, 0, 0.8);
+    now.value = 1;
+    result.current.lift(60, 0);
+
+    const lifted = result.current.get()[0];
+    expect(lifted?.end).toBe(1);
+    expect(lifted?.release).toBeNull();
+
+    now.value = 3;
+    result.current.damp(60, 0);
+    const damped = result.current.get()[0];
+    expect(damped?.end).toBe(1);
+    expect(damped?.release).toBe(3);
+  });
+
+  it("closes a note damped without a lift, so a pedal-only release still ends it", () => {
+    const { now, read } = clock();
+    const { result } = renderHook(() => usePlayNotes(read));
+
+    result.current.emit(60, 0, 0.8);
+    now.value = 2;
+    result.current.damp(60, 0);
+    expect(result.current.get()[0]?.end).toBe(2);
   });
 
   it("never drops a note that is still held", () => {

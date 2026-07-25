@@ -1,4 +1,5 @@
 import { Midi } from "@tonejs/midi";
+import { pedalSpans, releaseAt } from "@/lib/midi/sustain";
 import { isLocalUrl, readUpload } from "@/lib/storage/uploads";
 
 export const noteNames = [
@@ -38,11 +39,15 @@ function decodeMidi(data: ArrayBuffer): Midi {
   }
 }
 
+/** `end` is when the key came up, which is the length the roll draws. `release`
+ * is when the sound stops, which the pedal can carry past `end`. They differ
+ * only under sustain, so a file with no pedal has them equal. */
 export type SongNote = {
   readonly id: number;
   readonly pitch: number;
   readonly start: number;
   readonly end: number;
+  readonly release: number;
   readonly velocity: number;
   readonly track: number;
 };
@@ -56,9 +61,10 @@ export type SongTrack = {
   readonly noteCount: number;
 };
 
-/** A note as play mode emits it live: struck at `start`, still sounding while
- * `end` is null, then released. Drawn rising out of the keys rather than
- * falling onto them. */
+/** A note as play mode emits it live, drawn rising out of the keys rather than
+ * falling onto them. `end` is the key coming up, which stops the bar growing;
+ * `release` is the sound stopping, which the pedal can defer past `end`. Both
+ * are null while still open. */
 export type LiveNote = {
   readonly id: number;
   readonly pitch: number;
@@ -66,6 +72,7 @@ export type LiveNote = {
   readonly velocity: number;
   readonly start: number;
   end: number | null;
+  release: number | null;
 };
 
 export type Song = {
@@ -121,12 +128,19 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
       percussion: track.instrument.percussion,
       noteCount: track.notes.length,
     });
+    const trackEnd = track.notes.reduce(
+      (last, note) => Math.max(last, note.time + note.duration),
+      0,
+    );
+    const spans = pedalSpans(track.controlChanges[64] ?? [], trackEnd);
     for (const note of track.notes) {
+      const end = note.time + note.duration;
       notes.push({
         id: notes.length,
         pitch: note.midi,
         start: note.time,
-        end: note.time + note.duration,
+        end,
+        release: releaseAt(end, spans),
         velocity: note.velocity,
         track: index,
       });
@@ -151,6 +165,7 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
           ...note,
           start: note.start + shift,
           end: note.end + shift,
+          release: note.release + shift,
         }));
 
   return {

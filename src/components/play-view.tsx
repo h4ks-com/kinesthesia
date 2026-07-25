@@ -177,14 +177,15 @@ export function PlayView({
       const key = inputKey(pitch, channel);
       const track = struck.current.get(key) ?? trackFor(channel);
       struck.current.delete(key);
-      // Under the pedal a lifted key keeps ringing and climbing until the pedal
-      // is let up, so its end is deferred rather than struck now.
+      // The bar ends where the key came up, so the roll reads as what was
+      // played. Under the pedal only the sound is deferred.
+      notes.lift(pitch, track);
       if (sustainRef.current) {
         sustained.current.add(`${track}:${pitch}`);
         return;
       }
       engineRef.current?.release(pitch, track);
-      notes.release(pitch, track);
+      notes.damp(pitch, track);
     },
     [trackFor, notes],
   );
@@ -194,7 +195,7 @@ export function PlayView({
       const [track, pitch] = key.split(":").map(Number);
       if (track !== undefined && pitch !== undefined) {
         engineRef.current?.release(pitch, track);
-        notes.release(pitch, track);
+        notes.damp(pitch, track);
       }
     }
     sustained.current.clear();

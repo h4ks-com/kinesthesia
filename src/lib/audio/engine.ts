@@ -298,7 +298,7 @@ export class PlaybackEngine {
     const startAt =
       context.currentTime + Math.max(0, note.start - position) / rate;
     voice.start({ ...scheduledNote(note, shaped, rate), time: startAt });
-    this.voiceEnds.push(startAt + (note.end - note.start) / rate);
+    this.voiceEnds.push(startAt + (note.release - note.start) / rate);
     return true;
   }
 }

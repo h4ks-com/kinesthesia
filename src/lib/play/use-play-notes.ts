@@ -11,7 +11,12 @@ export type PlayNotes = {
   /** A key went down on a part. Stamps the note on the same clock the roll
    * scrolls on, so start it climbing from the keys. */
   emit: (pitch: number, track: number, velocity: number) => void;
-  release: (pitch: number, track: number) => void;
+  /** The key came up, so the bar stops growing at the length actually played
+   * even when the pedal keeps the note sounding. */
+  lift: (pitch: number, track: number) => void;
+  /** The sound stopped, so the key goes dark. Under the pedal this trails the
+   * lift; with no pedal the two land together. */
+  damp: (pitch: number, track: number) => void;
   get: () => readonly LiveNote[];
 };
 
@@ -40,6 +45,7 @@ export function usePlayNotes(getPosition: () => number): PlayNotes {
       const previous = open.current.get(key(track, pitch));
       if (previous !== undefined) {
         previous.end = now;
+        previous.release = now;
       }
       const note: LiveNote = {
         id: nextId.current++,
@@ -48,6 +54,7 @@ export function usePlayNotes(getPosition: () => number): PlayNotes {
         velocity,
         start: now,
         end: null,
+        release: null,
       };
       notes.current.push(note);
       open.current.set(key(track, pitch), note);
@@ -56,10 +63,19 @@ export function usePlayNotes(getPosition: () => number): PlayNotes {
     [prune],
   );
 
-  const release = useCallback((pitch: number, track: number) => {
+  const lift = useCallback((pitch: number, track: number) => {
     const note = open.current.get(key(track, pitch));
     if (note !== undefined) {
       note.end = positionRef.current();
+    }
+  }, []);
+
+  const damp = useCallback((pitch: number, track: number) => {
+    const note = open.current.get(key(track, pitch));
+    if (note !== undefined) {
+      const now = positionRef.current();
+      note.end ??= now;
+      note.release = now;
       open.current.delete(key(track, pitch));
     }
   }, []);
@@ -71,5 +87,5 @@ export function usePlayNotes(getPosition: () => number): PlayNotes {
 
   // A stable object, so the canvas draw effect that lists it as a dependency is
   // not torn down and rebuilt (losing pan and re-sparking) on every render.
-  return useMemo(() => ({ emit, release, get }), [emit, release, get]);
+  return useMemo(() => ({ emit, lift, damp, get }), [emit, lift, damp, get]);
 }

@@ -378,7 +378,7 @@ export class PianoRollRenderer {
       );
       let longest = 0;
       for (const note of frame.song.notes) {
-        longest = Math.max(longest, note.end - note.start);
+        longest = Math.max(longest, note.release - note.start);
       }
       this.maxNoteDuration = longest;
     }
@@ -398,11 +398,19 @@ export class PianoRollRenderer {
       if (note === undefined || note.start > horizon) {
         break;
       }
-      if (note.end < position || frame.hiddenTracks.has(note.track)) {
+      if (frame.hiddenTracks.has(note.track)) {
         continue;
       }
       const ghost = frame.yours !== null && !frame.yours.has(note.id);
       const color = trackColor(note.track);
+      // The pedal holds a key lit after its bar has landed, so the sound the
+      // player hears has a key under it while the roll stays the written length.
+      if (note.end < position) {
+        if (!ghost && position < note.release) {
+          active.set(note.pitch, color);
+        }
+        continue;
+      }
       const sounding = note.start <= position;
 
       // A drum is an impulse: the mark falls to the line and is spent there,
@@ -547,7 +555,9 @@ export class PianoRollRenderer {
         continue;
       }
       const color = trackColor(note.track);
-      if (held) {
+      // The key stays lit for as long as the note sounds, which the pedal can
+      // carry past the lift that stopped the bar growing.
+      if (note.release === null) {
         active.set(note.pitch, color);
       }
 

@@ -46,6 +46,7 @@ function arrangement(
       pitch,
       start: step * beat,
       end: step * beat + beat * 0.9,
+      release: step * beat + beat * 0.9,
       velocity: 0.8,
       track: 0,
     });
@@ -59,6 +60,7 @@ function arrangement(
         pitch,
         start,
         end: start + beat * barsPerChord * 0.95,
+        release: start + beat * barsPerChord * 0.95,
         velocity: 0.6,
         track: 0,
       });
@@ -116,6 +118,7 @@ describe("reduceToMelody on tunes with a known shape", () => {
         pitch,
         start: step * beat,
         end: step * beat + beat * 0.9,
+        release: step * beat + beat * 0.9,
         velocity: 0.8,
         track: 0,
       });
@@ -126,6 +129,7 @@ describe("reduceToMelody on tunes with a known shape", () => {
           pitch: low,
           start: step * beat + voice * (beat / 3),
           end: step * beat + voice * (beat / 3) + beat / 4,
+          release: step * beat + voice * (beat / 3) + beat / 4,
           velocity: 0.5,
           track: 0,
         });

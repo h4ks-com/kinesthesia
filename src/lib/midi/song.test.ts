@@ -20,7 +20,7 @@ function midiStartingAt(firstNoteAt: number): ArrayBuffer {
 }
 
 function note(pitch: number, track: number): SongNote {
-  return { id: pitch, pitch, start: 0, end: 1, velocity: 1, track };
+  return { id: pitch, pitch, start: 0, end: 1, release: 1, velocity: 1, track };
 }
 
 const song: Song = {
@@ -153,5 +153,42 @@ describe("clampTranspose", () => {
 
   it("rounds a fractional shift to a semitone", () => {
     expect(clampTranspose(2.4)).toBe(2);
+  });
+});
+
+describe("parseSong sustain", () => {
+  /** Two short notes under one long pedal press, which is the shape a pedalled
+   * piano MIDI actually has: the written notes stay short and control 64
+   * carries the sound. */
+  function pedalled(): ArrayBuffer {
+    const midi = new Midi();
+    const track = midi.addTrack();
+    track.addNote({ midi: 60, time: 4, duration: 0.25 });
+    track.addNote({ midi: 64, time: 4.5, duration: 0.25 });
+    track.addCC({ number: 64, value: 1, time: 3.9 });
+    track.addCC({ number: 64, value: 0, time: 6 });
+    return midi.toArray().buffer as ArrayBuffer;
+  }
+
+  it("leaves the written length alone so the roll draws what was played", () => {
+    const parsed = parseSong(pedalled(), "x");
+    const first = parsed.notes[0];
+    expect((first?.end ?? 0) - (first?.start ?? 0)).toBeCloseTo(0.25);
+  });
+
+  it("carries the sound to the pedal lift", () => {
+    const parsed = parseSong(pedalled(), "x");
+    for (const note of parsed.notes) {
+      expect(note.release).toBeGreaterThan(note.end);
+    }
+    const lift = parsed.notes[0]?.release ?? 0;
+    expect(parsed.notes[1]?.release).toBeCloseTo(lift);
+  });
+
+  it("leaves release equal to end when the file has no pedal", () => {
+    const parsed = parseSong(midiStartingAt(1), "x");
+    for (const note of parsed.notes) {
+      expect(note.release).toBe(note.end);
+    }
   });
 });

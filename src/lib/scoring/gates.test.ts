@@ -8,6 +8,7 @@ function note(pitch: number, start: number, track: number): SongNote {
     pitch,
     start,
     end: start + 0.5,
+    release: start + 0.5,
     velocity: 0.8,
     track,
   };

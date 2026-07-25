@@ -21,6 +21,7 @@ function note(
     pitch,
     start,
     end: start + duration,
+    release: start + duration,
     velocity: 0.8,
     track,
   };

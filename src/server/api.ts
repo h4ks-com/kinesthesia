@@ -8,13 +8,13 @@ import type { Score } from "@/server/db/schema";
 import { sourceFetch } from "@/server/http/fetch";
 import { mcpHandler } from "@/server/mcp";
 import { analyseMidi } from "@/server/midi/analyse";
-import { midiSourceIds, midiSources } from "@/server/midi/registry";
-import { searchMidi } from "@/server/midi/search";
+import { infoInputShape, searchInputShape } from "@/server/midi/inputs";
 import {
-  infoInputShape,
-  searchInputShape,
+  midiSourceIds,
+  midiSources,
   sourceFileUrl,
-} from "@/server/midi/shapes";
+} from "@/server/midi/registry";
+import { searchMidi } from "@/server/midi/search";
 import {
   closeRoom,
   createRoom,

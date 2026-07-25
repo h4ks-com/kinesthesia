@@ -39,13 +39,13 @@ import {
 import { config } from "@/server/config";
 import { sourceFetch } from "@/server/http/fetch";
 import { analyseMidi } from "@/server/midi/analyse";
-import { findSource, midiSourceIds } from "@/server/midi/registry";
-import { fileEndpoint, searchMidi } from "@/server/midi/search";
+import { infoInputShape, searchInputShape } from "@/server/midi/inputs";
 import {
-  infoInputShape,
-  searchInputShape,
+  findSource,
+  midiSourceIds,
   sourceFileUrl,
-} from "@/server/midi/shapes";
+} from "@/server/midi/registry";
+import { fileEndpoint, searchMidi } from "@/server/midi/search";
 import {
   bucketEnabled,
   getJson,

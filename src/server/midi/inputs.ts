@@ -1,6 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import { isSafeId } from "@/server/midi/id";
-import { findSource, midiSourceIds } from "@/server/midi/registry";
+import { midiSourceIds } from "@/server/midi/registry";
 
 export const searchInputShape = {
   q: z.string().min(1).describe("Song or file name to look for"),
@@ -16,8 +15,3 @@ export const infoInputShape = {
   id: z.string().min(1).describe("The file's id within that source"),
   name: z.string().default("").describe("Name to report it under"),
 };
-
-export function sourceFileUrl(source: string, id: string): string | null {
-  const provider = findSource(source);
-  return provider === null || !isSafeId(id) ? null : provider.fileUrl(id);
-}

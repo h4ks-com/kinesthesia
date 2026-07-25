@@ -29,14 +29,15 @@ src/server/
   storage/bucket.ts           uploads generated MIDI and project specs to the object store
   midi/
     types.ts                  MidiSource contract and result shapes
-    registry.ts               sources available to search
+    registry.ts               sources available to search, and the source and
+                              id to .mid url resolution
     bitmidi.ts                BitMidi adapter
     mutopia.ts                Mutopia adapter
     id.ts                     rejects a file id that could climb out of its path
     search.ts                 searches sources, proxies files and attaches links
     analyse.ts                reads a .mid and reports what it holds
-    shapes.ts                 the search and info inputs both surfaces validate
-                              with, and the source and id to .mid url resolution
+    inputs.ts                 the search and info inputs both surfaces validate
+                              with
 src/components/
   song-row.tsx                one song with its favourite and mode links
   library-section.tsx         preview, expand and bound a saved list

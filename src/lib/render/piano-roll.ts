@@ -43,6 +43,9 @@ const maxParticles = 1100;
  * enough to read a gradient keep it. */
 const gradientNoteHeight = 14;
 const roundNoteSize = 10;
+/** A playhead jump larger than this is a seek rather than a frame of playback,
+ * and the notes passed over never landed, so they spark nothing. */
+const maxOnsetAdvance = 0.5;
 
 type SparkKind = "note" | "strike" | "bloom";
 
@@ -119,6 +122,15 @@ export class PianoRollRenderer {
   >();
   private previouslyActive = new Set<number>();
   private previouslyPressed = new Set<number>();
+  /** Pitches whose note began since the last frame. A key the pedal is already
+   * holding stays lit, so a note landing on it has no lighting change to spark
+   * from and needs its own onset. */
+  private readonly onsets = new Set<number>();
+  private previousPosition: number | null = null;
+  /** The playhead the current frame is measured against, or null when the jump
+   * was a seek rather than playback, which would otherwise read every note
+   * skipped over as landing at once. */
+  private onsetSince: number | null = null;
   private drumTracks: ReadonlySet<number> = new Set();
   private drumsFrom: Song | null = null;
   /** The longest note in the current song, so the scan can start at the first
@@ -234,11 +246,21 @@ export class PianoRollRenderer {
 
     const active = new Map<number, NoteColor>();
     this.foreshadow.clear();
+    this.onsets.clear();
+    const advance =
+      this.previousPosition === null
+        ? null
+        : frame.position - this.previousPosition;
+    this.onsetSince =
+      advance !== null && advance > 0 && advance <= maxOnsetAdvance
+        ? this.previousPosition
+        : null;
     if (frame.live === null) {
       this.paintNotes(frame, keyboardTop, whiteWidth, active);
     } else {
       this.paintLiveNotes(frame, frame.live, keyboardTop, whiteWidth, active);
     }
+    this.previousPosition = frame.position;
     for (const pitch of frame.pressed) {
       active.set(pitch, active.get(pitch) ?? trackColor(frame.playTrack));
     }
@@ -412,6 +434,10 @@ export class PianoRollRenderer {
         continue;
       }
       const sounding = note.start <= position;
+      const since = this.onsetSince;
+      if (!ghost && sounding && since !== null && note.start > since) {
+        this.onsets.add(note.pitch);
+      }
 
       // A drum is an impulse: the mark falls to the line and is spent there,
       // and the key it lights decays on its own rather than on the note-off.
@@ -560,6 +586,10 @@ export class PianoRollRenderer {
       if (note.release === null) {
         active.set(note.pitch, color);
       }
+      const since = this.onsetSince;
+      if (since !== null && note.start > since) {
+        this.onsets.add(note.pitch);
+      }
 
       const top = keyboardTop - headAge * scale;
       const noteWidth = isBlackKey(note.pitch) ? blackNote : whiteNote;
@@ -645,7 +675,8 @@ export class PianoRollRenderer {
       );
     }
     for (const [pitch, color] of active) {
-      if (this.previouslyActive.has(pitch) || sparked.has(pitch)) {
+      const fresh = !this.previouslyActive.has(pitch) || this.onsets.has(pitch);
+      if (!fresh || sparked.has(pitch)) {
         continue;
       }
       this.spawnSparks(

@@ -44,11 +44,23 @@ The API documents itself at `/api/docs`, with the OpenAPI spec at
 ## MCP
 
 The same tools run over MCP at `/api/mcp` (streamable HTTP), so an agent can
-search for songs, read a file's length and tracks, and build player links. Add
-it to a client:
+search for songs, read a file's length and tracks, build player links, and
+edit MIDI projects.
+
+The endpoint takes a bearer token. The server stores only the token's SHA-256
+hash, so generate the pair and keep the key:
 
 ```
-claude mcp add --transport http kinesthesia https://kinesthesia.h4ks.com/api/mcp
+key=$(openssl rand -hex 32)
+echo "key: $key"
+printf %s "$key" | shasum -a 256 | cut -d' ' -f1
+```
+
+Put the hash in `MCP_TOKEN_HASH` and give clients the key. Add it to a client:
+
+```
+claude mcp add --transport http kinesthesia https://kinesthesia.h4ks.com/api/mcp \
+  --header "Authorization: Bearer $key"
 ```
 
 or with JSON config:
@@ -56,12 +68,18 @@ or with JSON config:
 ```json
 {
   "mcpServers": {
-    "kinesthesia": { "type": "http", "url": "https://kinesthesia.h4ks.com/api/mcp" }
+    "kinesthesia": {
+      "type": "http",
+      "url": "https://kinesthesia.h4ks.com/api/mcp",
+      "headers": { "Authorization": "Bearer <key>" }
+    }
   }
 }
 ```
 
-Swap in `http://localhost:3000/api/mcp` when running locally.
+Swap in `http://localhost:3000/api/mcp` when running locally. Leaving
+`MCP_TOKEN_HASH` unset keeps the endpoint open in development and refuses every
+request in production.
 
 MIDI files come from several sources, listed at `/sources`. A `?url=` player
 link also plays a direct `.mid` from the app's own origin or an origin set in

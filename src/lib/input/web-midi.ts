@@ -26,13 +26,39 @@ export type MidiSustainEvent = {
   readonly down: boolean;
 };
 
-export type MidiEvent = MidiNoteEvent | MidiProgramEvent | MidiSustainEvent;
+/** The bend wheel, as a signed fraction of its travel. Channel wide: it moves
+ * every note sounding on that channel, not one key. */
+export type MidiBendEvent = {
+  readonly type: "bend";
+  readonly channel: number;
+  readonly amount: number;
+};
+
+/** The modulation wheel (control 1), as a fraction of its travel. Channel wide
+ * for the same reason as the bend. */
+export type MidiModulationEvent = {
+  readonly type: "modulation";
+  readonly channel: number;
+  readonly depth: number;
+};
+
+export type MidiEvent =
+  | MidiNoteEvent
+  | MidiProgramEvent
+  | MidiSustainEvent
+  | MidiBendEvent
+  | MidiModulationEvent;
 
 const noteOn = 0x90;
 const noteOff = 0x80;
 const controlChange = 0xb0;
 const programChange = 0xc0;
+const pitchBend = 0xe0;
 const sustainController = 64;
+const modulationController = 1;
+/** Bend arrives as two 7 bit halves around a centre of 8192, so a wheel at rest
+ * reads zero and each direction reaches one. */
+const bendCentre = 8192;
 
 export function isWebMidiSupported(): boolean {
   return typeof navigator !== "undefined" && "requestMIDIAccess" in navigator;
@@ -51,13 +77,29 @@ export function decodeMidi(data: Uint8Array, at: number): MidiEvent | null {
     return program === undefined ? null : { type: "program", channel, program };
   }
 
+  if (command === pitchBend) {
+    const low = data[1];
+    const high = data[2];
+    if (low === undefined || high === undefined) {
+      return null;
+    }
+    const raw = (high << 7) | low;
+    return { type: "bend", channel, amount: (raw - bendCentre) / bendCentre };
+  }
+
   if (command === controlChange) {
     const controller = data[1];
     const value = data[2];
-    if (controller !== sustainController || value === undefined) {
+    if (value === undefined) {
       return null;
     }
-    return { type: "sustain", channel, down: value >= 64 };
+    if (controller === sustainController) {
+      return { type: "sustain", channel, down: value >= 64 };
+    }
+    if (controller === modulationController) {
+      return { type: "modulation", channel, depth: value / 127 };
+    }
+    return null;
   }
 
   const pitch = data[1];

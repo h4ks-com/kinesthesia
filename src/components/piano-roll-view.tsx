@@ -7,6 +7,7 @@ import {
 } from "react";
 import type { Reach } from "@/lib/input/keyboard-map";
 import type { LiveNote, Song } from "@/lib/midi/song";
+import type { ExpressionTrail } from "@/lib/play/expression";
 import { PianoRollRenderer } from "@/lib/render/piano-roll";
 
 /** Each pointer keeps its own gesture, so one finger panning the roll and
@@ -29,6 +30,8 @@ type PianoRollViewProps = {
   getLive?: () => readonly LiveNote[];
   /** Whether the sustain pedal is down, for the strike-line indicator. */
   getSustain?: () => boolean;
+  /** How the bend and modulation wheels moved, per track. Play mode only. */
+  expression?: ExpressionTrail;
   /** Playback speed, so the owed-note foreshadow leads by a constant reaction
    * time. Defaults to normal speed. */
   rate?: number;
@@ -60,6 +63,7 @@ export function PianoRollView({
   reach = null,
   keyLabels = null,
   plain = false,
+  expression,
   onStrike,
   onRelease,
 }: PianoRollViewProps) {
@@ -67,6 +71,8 @@ export function PianoRollView({
   liveRef.current = getLive;
   const sustainRef = useRef(getSustain);
   sustainRef.current = getSustain;
+  const expressionRef = useRef(expression);
+  expressionRef.current = expression;
   const rateRef = useRef(rate);
   rateRef.current = rate;
   const playTrackRef = useRef(playTrack);
@@ -105,6 +111,7 @@ export function PianoRollView({
         position: getPosition(),
         live: liveRef.current?.() ?? null,
         sustain: sustainRef.current?.() ?? false,
+        expression: expressionRef.current ?? null,
         rate: rateRef.current,
         playTrack: playTrackRef.current,
         hiddenTracks: hiddenRef.current,

@@ -43,6 +43,10 @@ type Options = {
   onProgram?: (channel: number, program: number) => void;
   /** The MIDI sustain pedal, per channel. */
   onSustain?: (channel: number, down: boolean) => void;
+  /** The bend and modulation wheels, per channel. Both move every note
+   * sounding on that channel rather than one key. */
+  onBend?: (channel: number, amount: number) => void;
+  onModulation?: (channel: number, depth: number) => void;
   /** Absent in a mode with nothing to toggle, so space is left to activate the
    * focused control instead of being swallowed. */
   onToggle?: () => void;
@@ -80,6 +84,8 @@ export function useNoteInput({
   onRelease,
   onProgram,
   onSustain,
+  onBend,
+  onModulation,
   onToggle,
 }: Options): NoteInput {
   const [octave, setOctave] = useState(defaultOctave);
@@ -100,6 +106,10 @@ export function useNoteInput({
   programRef.current = onProgram;
   const sustainRef = useRef(onSustain);
   sustainRef.current = onSustain;
+  const bendRef = useRef(onBend);
+  bendRef.current = onBend;
+  const modulationRef = useRef(onModulation);
+  modulationRef.current = onModulation;
 
   const press = useCallback(
     (pitch: number, velocity: number, at?: number, channel?: number) => {
@@ -185,6 +195,10 @@ export function useNoteInput({
         programRef.current?.(event.channel, event.program);
       } else if (event.type === "sustain") {
         sustainRef.current?.(event.channel, event.down);
+      } else if (event.type === "bend") {
+        bendRef.current?.(event.channel, event.amount);
+      } else if (event.type === "modulation") {
+        modulationRef.current?.(event.channel, event.depth);
       } else if (event.down) {
         press(event.pitch, event.velocity, event.at, event.channel);
       } else {

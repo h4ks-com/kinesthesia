@@ -9,6 +9,7 @@ import {
   type Song,
   type SongNote,
 } from "@/lib/midi/song";
+import type { ExpressionTrail } from "@/lib/play/expression";
 import {
   blackKeyLeft,
   blackKeyWidth,
@@ -46,6 +47,14 @@ const roundNoteSize = 10;
 /** A playhead jump larger than this is a seek rather than a frame of playback,
  * and the notes passed over never landed, so they spark nothing. */
 const maxOnsetAdvance = 0.5;
+/** How far a wheel at full travel throws a note, in white keys. A bend is
+ * usually two semitones, so a little over one key reads as the interval
+ * without the note wandering into its neighbour's lane. */
+const bendSpanKeys = 1.35;
+/** Modulation never displaces a note, it only shivers it, so its width stays
+ * well inside one key and its rate sits where a played vibrato does. */
+const vibratoWidth = 0.22;
+const vibratoHz = 5.5;
 
 type SparkKind = "note" | "strike" | "bloom";
 
@@ -76,6 +85,9 @@ export type Frame = {
   readonly live: readonly LiveNote[] | null;
   /** The sustain pedal is down, marked discreetly along the strike line. */
   readonly sustain: boolean;
+  /** How the bend and modulation wheels moved, per track. Null outside play
+   * mode, where there is no live device to read them from. */
+  readonly expression: ExpressionTrail | null;
   /** Playback speed, so the foreshadow lead is a constant reaction time rather
    * than a fixed song distance that shrinks as the song speeds up. */
   readonly rate: number;
@@ -613,7 +625,19 @@ export class PianoRollRenderer {
       }
       ctx.globalAlpha = 0.74 + note.velocity * 0.26;
       ctx.fillStyle = fill;
-      if (noteHeight >= roundNoteSize && noteWidth >= roundNoteSize) {
+      const bent =
+        frame.expression !== null && frame.expression.touched(note.track);
+      if (bent) {
+        this.traceBentNote(
+          frame,
+          note,
+          { x, y, width: noteWidth, height: noteHeight },
+          scale,
+          keyboardTop,
+          whiteWidth,
+        );
+        ctx.fill();
+      } else if (noteHeight >= roundNoteSize && noteWidth >= roundNoteSize) {
         roundRect(ctx, x, y, noteWidth, noteHeight, 4);
         ctx.fill();
       } else {
@@ -621,6 +645,50 @@ export class PianoRollRenderer {
       }
       ctx.globalAlpha = 1;
     }
+  }
+
+  /** Lays the note's body along the bend curve rather than in one lane, so the
+   * shape it leaves is the pitch that was played. Every height on the bar is an
+   * age, so it reads the wheels as they stood then and the part already climbed
+   * keeps the bend it was struck with. */
+  private traceBentNote(
+    frame: Frame,
+    note: LiveNote,
+    box: { x: number; y: number; width: number; height: number },
+    scale: number,
+    keyboardTop: number,
+    whiteWidth: number,
+  ): void {
+    const ctx = this.context;
+    const trail = frame.expression;
+    if (trail === null) {
+      return;
+    }
+    const span = whiteWidth * bendSpanKeys;
+    const wobble = whiteWidth * vibratoWidth;
+    const steps = Math.max(2, Math.min(48, Math.round(box.height / 5)));
+    const centre = box.x + box.width / 2;
+    const offsets: number[] = [];
+    for (let step = 0; step <= steps; step += 1) {
+      const y = box.y + (box.height * step) / steps;
+      const at = frame.position - (keyboardTop - y) / scale;
+      const { bend, depth } = trail.at(note.track, at);
+      const shimmer =
+        depth === 0
+          ? 0
+          : Math.sin(at * vibratoHz * Math.PI * 2) * depth * wobble;
+      offsets.push(bend * span + shimmer);
+    }
+    ctx.beginPath();
+    for (let step = 0; step <= steps; step += 1) {
+      const y = box.y + (box.height * step) / steps;
+      ctx.lineTo(centre + (offsets[step] ?? 0) - box.width / 2, y);
+    }
+    for (let step = steps; step >= 0; step -= 1) {
+      const y = box.y + (box.height * step) / steps;
+      ctx.lineTo(centre + (offsets[step] ?? 0) + box.width / 2, y);
+    }
+    ctx.closePath();
   }
 
   private paintGlow(

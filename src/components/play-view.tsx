@@ -11,6 +11,7 @@ import type { SongVoicing, Voicing } from "@/lib/audio/voicing";
 import { keyLabelsFor, reachFor } from "@/lib/input/keyboard-map";
 import { type InputChannel, useNoteInput } from "@/lib/input/use-note-input";
 import type { Song, SongNote } from "@/lib/midi/song";
+import { ExpressionTrail } from "@/lib/play/expression";
 import {
   channelPart,
   keyboardPart,
@@ -106,6 +107,9 @@ export function PlayView({
 
   const getPosition = useCallback(() => engineRef.current?.position ?? 0, []);
   const notes = usePlayNotes(getPosition);
+  // The wheels move every note on their channel, so the trail is kept per track
+  // and the roll reads it by time rather than each note carrying a copy.
+  const expression = useRef(new ExpressionTrail()).current;
 
   const partsRef = useRef(parts);
   partsRef.current = parts;
@@ -230,6 +234,10 @@ export function PlayView({
     onRelease: handleRelease,
     onProgram: handleProgram,
     onSustain: (_channel, down) => setPedal(down),
+    onBend: (channel, amount) =>
+      expression.setBend(trackFor(channel), getPosition(), amount),
+    onModulation: (channel, depth) =>
+      expression.setDepth(trackFor(channel), getPosition(), depth),
   });
 
   // The computer keyboard has no pedal, so space stands in for one, but only
@@ -389,6 +397,7 @@ export function PlayView({
           getYours={noYours}
           getLive={notes.get}
           getSustain={getSustain}
+          expression={expression}
           reach={hasKeyboard ? reachFor(input.octave) : null}
           keyLabels={
             hasKeyboard && showKeyLabels ? keyLabelsFor(input.octave) : null

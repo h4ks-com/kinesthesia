@@ -78,6 +78,7 @@ src/lib/
   midi/use-part-roll.ts       a part as the getters the roll draws with
   midi/palette.ts             per track and per pitch colours
   play/use-play-notes.ts      the notes play mode emits, rising from the keys
+  play/expression.ts          the bend and modulation wheels over time, per track
   audio/transport.ts          song position on the audio clock
   audio/engine.ts             instruments and the look ahead scheduler
   audio/instruments.ts        one voice per General MIDI program

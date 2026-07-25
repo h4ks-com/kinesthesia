@@ -50,11 +50,53 @@ describe("decodeMidi", () => {
     });
   });
 
-  it("ignores control changes other than sustain", () => {
+  it("ignores control changes it does not model", () => {
     expect(decodeMidi(bytes(0xb0, 7, 100), 0)).toBeNull();
   });
 
   it("ignores messages it does not model", () => {
-    expect(decodeMidi(bytes(0xe0, 0, 64), 0)).toBeNull();
+    expect(decodeMidi(bytes(0xd0, 64, 0), 0)).toBeNull();
+  });
+});
+
+function bendOf(data: Uint8Array): number | null {
+  const event = decodeMidi(data, 0);
+  return event !== null && event.type === "bend" ? event.amount : null;
+}
+
+describe("expression events", () => {
+  it("reads the bend wheel as a signed fraction, centred at rest", () => {
+    expect(decodeMidi(bytes(0xe0, 0, 64), 0)).toEqual({
+      type: "bend",
+      channel: 0,
+      amount: 0,
+    });
+    expect(bendOf(bytes(0xe0, 127, 127))).toBeCloseTo(1, 3);
+    expect(bendOf(bytes(0xe0, 0, 0))).toBe(-1);
+  });
+
+  it("keeps the bend on the channel it arrived on", () => {
+    expect(decodeMidi(bytes(0xe4, 0, 0), 0)).toEqual({
+      type: "bend",
+      channel: 4,
+      amount: -1,
+    });
+  });
+
+  it("reads the modulation wheel on control 1", () => {
+    expect(decodeMidi(bytes(0xb0, 1, 127), 0)).toEqual({
+      type: "modulation",
+      channel: 0,
+      depth: 1,
+    });
+    expect(decodeMidi(bytes(0xb0, 1, 0), 0)).toEqual({
+      type: "modulation",
+      channel: 0,
+      depth: 0,
+    });
+  });
+
+  it("still ignores controls that are neither sustain nor modulation", () => {
+    expect(decodeMidi(bytes(0xb0, 7, 100), 0)).toBeNull();
   });
 });

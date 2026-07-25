@@ -14,8 +14,10 @@ src/app/
   play/page.tsx               the free roam player, which reads no song
   api/[[...route]]/route.ts   mounts the Hono app at /api
 src/server/
-  api.ts                      routes, OpenAPI spec, Scalar docs, MCP server
-                              and the player links it builds for agents
+  api.ts                      routes, OpenAPI spec, Scalar docs, and where the
+                              MCP handler is mounted
+  mcp.ts                      the MCP server, its tools and instructions, and
+                              the player links it builds for agents
   config.ts                   environment
   auth.ts                     optional Logto session and sign in actions
   http/fetch.ts               proxy aware fetch for outbound source calls
@@ -33,6 +35,8 @@ src/server/
     id.ts                     rejects a file id that could climb out of its path
     search.ts                 searches sources, proxies files and attaches links
     analyse.ts                reads a .mid and reports what it holds
+    shapes.ts                 the search and info inputs both surfaces validate
+                              with, and the source and id to .mid url resolution
 src/components/
   song-row.tsx                one song with its favourite and mode links
   library-section.tsx         preview, expand and bound a saved list
@@ -60,6 +64,8 @@ src/components/
   parts-menu.tsx              the parts you play into and each one's instrument
 src/lib/
   player-url.ts               builds and parses player URLs
+  use-player-settings.ts      the settings a song plays with, restored from this
+                              device and written back to the URL
   search-params.ts            route search params to URLSearchParams
   format/clock.ts             seconds as m:ss
   midi/song.ts                parses a .mid into a flat note list, moves it to another key

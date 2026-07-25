@@ -17,16 +17,12 @@ import { PlayerHeader } from "@/components/player-header";
 import { PlayerTransport, TransportBar } from "@/components/player-transport";
 import { RenderMenu } from "@/components/render-menu";
 import { Walkthrough } from "@/components/walkthrough";
-import { clampLatency, judgedPosition } from "@/lib/audio/latency";
+import { judgedPosition } from "@/lib/audio/latency";
 import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
 import { useSongVoicing } from "@/lib/audio/use-song-voicing";
 import { keyLabelsFor, reachFor } from "@/lib/input/keyboard-map";
 import { useNoteInput } from "@/lib/input/use-note-input";
-import {
-  clampMelodyRate,
-  type MelodyRate,
-  reduceToMelody,
-} from "@/lib/midi/melody";
+import { reduceToMelody } from "@/lib/midi/melody";
 import {
   medianPitch,
   type Part,
@@ -34,36 +30,16 @@ import {
   toggleHidden,
   tracksToHide,
 } from "@/lib/midi/part";
-import {
-  clampTranspose,
-  defaultTranspose,
-  type Song,
-  type Transpose,
-  transposeSong,
-} from "@/lib/midi/song";
+import { type Song, transposeSong } from "@/lib/midi/song";
 import { useSong } from "@/lib/midi/use-song";
-import {
-  asSpeed,
-  buildPlayerUrl,
-  explicitSongSettings,
-  type PlayerMode,
-  type PlayerParams,
-  type Speed,
-} from "@/lib/player-url";
-import { clampKeyWidth, defaultKeyWidth } from "@/lib/render/keyboard";
+import type { PlayerMode, PlayerParams } from "@/lib/player-url";
 import { busiestTrack } from "@/lib/scoring/gates";
 import type { Judgement, Score } from "@/lib/scoring/judge";
 import { useGates } from "@/lib/scoring/use-gates";
 import { useRunRecord } from "@/lib/scoring/use-run-record";
-import {
-  loadGlobalSettings,
-  loadSongSettings,
-  saveGlobalSettings,
-  saveSongSettings,
-  songSettingsKey,
-} from "@/lib/storage/settings";
 import { tourFor } from "@/lib/tour/steps";
 import { useWalkthrough } from "@/lib/tour/use-walkthrough";
+import { usePlayerSettings } from "@/lib/use-player-settings";
 
 type PlayerProps = {
   mode: PlayerMode;
@@ -132,19 +108,6 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const [hiddenTracks, setHiddenTracks] = useState<ReadonlySet<number>>(
     new Set(),
   );
-  const [playerTracks, setPlayerTracks] = useState<ReadonlySet<number>>(
-    new Set(params.tracks ?? []),
-  );
-  const [speed, setSpeed] = useState(params.speed);
-  const [latencyOffset, setLatencyOffset] = useState(0);
-  const [keyWidth, setKeyWidth] = useState(defaultKeyWidth);
-  const [showKeyLabels, setShowKeyLabels] = useState(true);
-  const [plainStyle, setPlainStyle] = useState(false);
-  // A device with no fine pointer has no keyboard to letter the keys for.
-  const [hasKeyboard, setHasKeyboard] = useState(false);
-  const [simplified, setSimplified] = useState(params.simplified);
-  const [melodyRate, setMelodyRate] = useState(params.melodyRate);
-  const [transpose, setTranspose] = useState(params.transpose);
   // The file extension is noise on the presented title.
   const songTitle = params.name.replace(/\.midi?$/i, "");
   // A crafted link auto-focuses a solo view, but not a match, whose setup and
@@ -152,6 +115,32 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const [focus, setFocus] = useState(mode !== "multiplayer" && params.focus);
   const focusRef = useRef(focus);
   focusRef.current = focus;
+  const getFocus = useCallback(() => focusRef.current, []);
+
+  const {
+    playerTracks,
+    speed,
+    latencyOffset,
+    keyWidth,
+    showKeyLabels,
+    plainStyle,
+    hasKeyboard,
+    simplified,
+    melodyRate,
+    transpose,
+    hydrated,
+    claimTrack,
+    updateUrl,
+    changeKeyWidth,
+    changeLatency,
+    changeKeyLabels,
+    changePlainStyle,
+    changeSimplified,
+    changeMelodyRate,
+    changeTranspose,
+    changeSpeed,
+    togglePlayerTrack,
+  } = usePlayerSettings({ mode, params, locked, getFocus });
 
   const song = useMemo(
     () => (original === null ? null : transposeSong(original, transpose)),
@@ -161,88 +150,6 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   // The chrome the tour points at is up only once the song is and the page is
   // not stripped for recording.
   const tour = useWalkthrough(mode, tourAuto && song !== null && !focus);
-
-  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const globalTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (settleTimer.current !== null) {
-        clearTimeout(settleTimer.current);
-      }
-      if (globalTimer.current !== null) {
-        clearTimeout(globalTimer.current);
-      }
-    },
-    [],
-  );
-
-  type SongSettingsValue = {
-    tracks: readonly number[];
-    speed: Speed;
-    simplified: boolean;
-    melodyRate: MelodyRate;
-    transpose: Transpose;
-  };
-  type UrlChange = Partial<SongSettingsValue>;
-
-  // Read at write time, so a deferred write never clobbers a change made after
-  // it was scheduled.
-  const settingsRef = useRef<SongSettingsValue>({
-    tracks: [...playerTracks],
-    speed,
-    simplified,
-    melodyRate,
-    transpose,
-  });
-  settingsRef.current = {
-    tracks: [...playerTracks],
-    speed,
-    simplified,
-    melodyRate,
-    transpose,
-  };
-
-  const merge = useCallback((next: UrlChange): SongSettingsValue => {
-    const current = settingsRef.current;
-    return {
-      tracks: next.tracks ?? current.tracks,
-      speed: next.speed ?? current.speed,
-      simplified: next.simplified ?? current.simplified,
-      melodyRate: next.melodyRate ?? current.melodyRate,
-      transpose: next.transpose ?? current.transpose,
-    };
-  }, []);
-
-  const updateUrl = useCallback(
-    (next: UrlChange) => {
-      window.history.replaceState(
-        null,
-        "",
-        buildPlayerUrl(
-          window.location.origin,
-          mode,
-          { ...params, focus: focusRef.current, ...merge(next) },
-          { explicit: true },
-        ),
-      );
-    },
-    [params, mode, merge],
-  );
-
-  // A locked match plays the agreed part, so it leaves what this device
-  // remembers for the song untouched.
-  const commit = useCallback(
-    (next: UrlChange) => {
-      updateUrl(next);
-      if (!locked) {
-        void saveSongSettings(
-          songSettingsKey(params.source, params.url),
-          merge(next),
-        );
-      }
-    },
-    [params, locked, updateUrl, merge],
-  );
 
   const changeFocus = useCallback(
     (next: boolean) => {
@@ -282,65 +189,6 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     return () => clearTimeout(timer);
   }, [focus, rollUp]);
 
-  const bootstrapped = useRef(false);
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => {
-    if (bootstrapped.current) {
-      return;
-    }
-    bootstrapped.current = true;
-    const explicit = explicitSongSettings(
-      new URLSearchParams(window.location.search),
-    );
-    setHasKeyboard(window.matchMedia("(any-pointer: fine)").matches);
-    void loadGlobalSettings().then((stored) => {
-      if (stored !== null) {
-        setKeyWidth(clampKeyWidth(stored.keyWidth));
-        setLatencyOffset(clampLatency(stored.latencyOffset));
-        setShowKeyLabels(stored.showKeyLabels ?? true);
-        setPlainStyle(stored.plainStyle ?? false);
-      }
-    });
-    if (locked) {
-      setHydrated(true);
-      return;
-    }
-    void loadSongSettings(songSettingsKey(params.source, params.url))
-      .then((stored) => {
-        if (stored === null) {
-          return;
-        }
-        const next = {
-          speed: explicit.has("speed") ? params.speed : asSpeed(stored.speed),
-          simplified: explicit.has("simplified")
-            ? params.simplified
-            : stored.simplified,
-          melodyRate: explicit.has("melodyRate")
-            ? params.melodyRate
-            : clampMelodyRate(stored.melodyRate),
-          transpose: explicit.has("transpose")
-            ? params.transpose
-            : clampTranspose(stored.transpose ?? defaultTranspose),
-          tracks: explicit.has("tracks") ? null : stored.tracks,
-        };
-        setSpeed(next.speed);
-        setSimplified(next.simplified);
-        setMelodyRate(next.melodyRate);
-        setTranspose(next.transpose);
-        if (next.tracks !== null) {
-          setPlayerTracks(new Set(next.tracks));
-        }
-        updateUrl({
-          speed: next.speed,
-          simplified: next.simplified,
-          melodyRate: next.melodyRate,
-          transpose: next.transpose,
-          tracks: next.tracks ?? undefined,
-        });
-      })
-      .finally(() => setHydrated(true));
-  }, [params, locked, updateUrl]);
-
   useEffect(() => {
     if (
       !hydrated ||
@@ -351,12 +199,8 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     ) {
       return;
     }
-    // Publishing the default claim lets a multiplayer invite record the part
-    // the host is actually about to play.
-    const claimed = busiestTrack(song);
-    setPlayerTracks(new Set([claimed]));
-    commit({ tracks: [claimed] });
-  }, [hydrated, locked, song, interactive, playerTracks.size, commit]);
+    claimTrack(busiestTrack(song));
+  }, [hydrated, locked, song, interactive, playerTracks.size, claimTrack]);
 
   const focusedSong = useRef<Song | null>(null);
   useEffect(() => {
@@ -593,79 +437,6 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     endRef.current?.(gates.score);
   }, [matchActive, song, playback.elapsed, gates.score]);
 
-  // A write per slider step trips Safari's replaceState limit, so the write
-  // settles a moment after the last change while state tracks it live.
-  function settleCommit(next: UrlChange) {
-    if (settleTimer.current !== null) {
-      clearTimeout(settleTimer.current);
-    }
-    settleTimer.current = setTimeout(() => commit(next), 250);
-  }
-
-  function settleGlobal(
-    keyWidthNext: number,
-    latencyNext: number,
-    labelsNext: boolean,
-    plainNext: boolean,
-  ) {
-    if (globalTimer.current !== null) {
-      clearTimeout(globalTimer.current);
-    }
-    globalTimer.current = setTimeout(
-      () =>
-        void saveGlobalSettings({
-          keyWidth: keyWidthNext,
-          latencyOffset: latencyNext,
-          showKeyLabels: labelsNext,
-          plainStyle: plainNext,
-        }),
-      250,
-    );
-  }
-
-  function changeKeyWidth(next: number) {
-    const width = clampKeyWidth(next);
-    setKeyWidth(width);
-    settleGlobal(width, latencyOffset, showKeyLabels, plainStyle);
-  }
-
-  function changeLatency(next: number) {
-    const offset = clampLatency(next);
-    setLatencyOffset(offset);
-    settleGlobal(keyWidth, offset, showKeyLabels, plainStyle);
-  }
-
-  function changeKeyLabels(next: boolean) {
-    setShowKeyLabels(next);
-    settleGlobal(keyWidth, latencyOffset, next, plainStyle);
-  }
-
-  function changePlainStyle(next: boolean) {
-    setPlainStyle(next);
-    settleGlobal(keyWidth, latencyOffset, showKeyLabels, next);
-  }
-
-  function changeSimplified(next: boolean) {
-    setSimplified(next);
-    commit({ simplified: next });
-  }
-
-  function changeMelodyRate(next: number) {
-    const rate = clampMelodyRate(next);
-    setMelodyRate(rate);
-    settleCommit({ melodyRate: rate });
-  }
-
-  function changeTranspose(next: Transpose) {
-    setTranspose(next);
-    settleCommit({ transpose: next });
-  }
-
-  function changeSpeed(next: Speed) {
-    setSpeed(next);
-    settleCommit({ speed: next });
-  }
-
   function toggleTrack(index: number) {
     setHiddenTracks((current) => toggleHidden(current, index));
   }
@@ -673,19 +444,6 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   function soloTrack(index: number) {
     const all = song?.tracks.map((track) => track.index) ?? [];
     setHiddenTracks((current) => soloHidden(all, current, index));
-  }
-
-  function togglePlayerTrack(index: number) {
-    setPlayerTracks((current) => {
-      const next = new Set(current);
-      if (next.has(index)) {
-        next.delete(index);
-      } else {
-        next.add(index);
-      }
-      commit({ tracks: [...next].sort((left, right) => left - right) });
-      return next;
-    });
   }
 
   // Focus hides every other control, so its own way out rides along with it,

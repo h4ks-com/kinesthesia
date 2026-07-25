@@ -28,6 +28,16 @@ function keyFor({ program, percussion }: VoiceRequest): string {
   return percussion ? "drums" : soundfontFor(program);
 }
 
+/** A cold first play fetches every instrument at once, so a single dropped
+ * request would otherwise leave that track on the piano fallback for the whole
+ * session. Attempts are spaced so a retry meets a calmer network. */
+const loadAttempts = 3;
+const retryBackoff = 200;
+
+function pause(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export class InstrumentBank {
   private readonly context: BaseAudioContext;
   private readonly voices = new Map<string, Voice>();
@@ -79,20 +89,25 @@ export class InstrumentBank {
   }
 
   private async load(key: string, percussion: boolean): Promise<Voice | null> {
-    const voice = percussion
-      ? new DrumMachine(this.context, {
-          instrument: "TR-808",
-          ...this.scheduled(),
-        })
-      : new Soundfont(this.context, { instrument: key, ...this.scheduled() });
-    try {
-      await voice.load;
-      const ready = percussion ? asDrumKit(voice) : voice;
-      this.voices.set(key, ready);
-      return ready;
-    } catch {
-      return this.loadFallback(key);
+    for (let attempt = 1; attempt <= loadAttempts; attempt += 1) {
+      const voice = percussion
+        ? new DrumMachine(this.context, {
+            instrument: "TR-808",
+            ...this.scheduled(),
+          })
+        : new Soundfont(this.context, { instrument: key, ...this.scheduled() });
+      try {
+        await voice.load;
+        const ready = percussion ? asDrumKit(voice) : voice;
+        this.voices.set(key, ready);
+        return ready;
+      } catch {
+        if (attempt < loadAttempts) {
+          await pause(retryBackoff * attempt);
+        }
+      }
     }
+    return this.loadFallback(key);
   }
 
   private async loadFallback(key: string): Promise<Voice | null> {

@@ -4,6 +4,7 @@ import { Maximize, Minimize } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PianoRollView } from "@/components/piano-roll-view";
 import { SettingsMenu } from "@/components/settings-menu";
+import { SkinPicker } from "@/components/skin-picker";
 import { TopBar } from "@/components/top-bar";
 import { TrackMenu } from "@/components/track-menu";
 import { PlaybackEngine } from "@/lib/audio/engine";
@@ -20,6 +21,8 @@ import {
 } from "@/lib/play/parts";
 import { usePlayNotes } from "@/lib/play/use-play-notes";
 import { clampKeyWidth, defaultKeyWidth } from "@/lib/render/keyboard";
+import { findSkin, noSkin } from "@/lib/skins/registry";
+import type { SkinId } from "@/lib/skins/types";
 import {
   type GlobalSettings,
   loadGlobalSettings,
@@ -70,6 +73,8 @@ export function PlayView({
   const [keyWidth, setKeyWidth] = useState(defaultKeyWidth);
   const [showKeyLabels, setShowKeyLabels] = useState(true);
   const [plainStyle, setPlainStyle] = useState(false);
+  const [skinId, setSkinId] = useState<SkinId>(noSkin);
+  const [pickingSkin, setPickingSkin] = useState(false);
   const [hasKeyboard, setHasKeyboard] = useState(false);
   const [focus, setFocus] = useState(false);
   const [started, setStarted] = useState(false);
@@ -107,6 +112,7 @@ export function PlayView({
         setKeyWidth(clampKeyWidth(stored.keyWidth));
         setShowKeyLabels(stored.showKeyLabels ?? true);
         setPlainStyle(stored.plainStyle ?? false);
+        setSkinId(stored.skin ?? noSkin);
       }
     });
   }, []);
@@ -338,6 +344,19 @@ export function PlayView({
     },
     [settleGlobal],
   );
+  // Free roam shoots notes out of the keys, so that is the direction a skin is
+  // told about and the one the picker offers for.
+  const skin = useMemo(() => findSkin(skinId), [skinId]);
+
+  const onSkin = useCallback(
+    (next: SkinId) => {
+      setSkinId(next);
+      setPickingSkin(false);
+      settleGlobal({ skin: next });
+    },
+    [settleGlobal],
+  );
+
   const onPlainStyle = useCallback(
     (next: boolean) => {
       setPlainStyle(next);
@@ -402,7 +421,18 @@ export function PlayView({
       )}
 
       <div className="relative min-h-0 flex-1">
+        {pickingSkin ? (
+          <SkinPicker
+            chosen={skinId}
+            direction="up"
+            onChoose={onSkin}
+            onClose={() => setPickingSkin(false)}
+          />
+        ) : null}
+
         <PianoRollView
+          skin={skin}
+          direction="up"
           song={song}
           hiddenTracks={noAutoNotes}
           keyWidth={keyWidth}
@@ -460,6 +490,8 @@ export function PlayView({
             onKeyLabels={onKeyLabels}
             plainStyle={plainStyle}
             onPlainStyle={onPlainStyle}
+            onPickSkin={() => setPickingSkin(true)}
+            skinName={skin?.name.toLowerCase() ?? "plain"}
           />
         </footer>
       )}

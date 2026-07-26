@@ -25,6 +25,7 @@ export function watchFrame(config: RenderConfig, position: number): Frame {
     live: null,
     sustain: false,
     expression: null,
+    report: null,
     rate: config.rate,
     playTrack: 0,
     hiddenTracks: config.hiddenTracks,

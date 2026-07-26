@@ -27,6 +27,9 @@ type SettingsMenuProps = {
   keyLabels: boolean | null;
   onKeyLabels: (show: boolean) => void;
   plainStyle: boolean;
+  /** Absent where a mode has no skin to offer. */
+  onPickSkin?: () => void;
+  skinName?: string;
   onPlainStyle: (plain: boolean) => void;
 };
 
@@ -43,6 +46,8 @@ export function SettingsMenu({
   keyLabels,
   onKeyLabels,
   plainStyle,
+  onPickSkin,
+  skinName = "plain",
   onPlainStyle,
 }: SettingsMenuProps) {
   const advice = latencyAdvice(measuredLatency);
@@ -88,6 +93,18 @@ export function SettingsMenu({
             onChange={onPlainStyle}
             tip="Flat colour with no glow or sparks. Calmer to read, and lighter on a slow device."
           />
+          {onPickSkin === undefined ? null : (
+            <button
+              type="button"
+              onClick={onPickSkin}
+              data-tip="What is drawn behind the notes"
+              data-tip-side="left"
+              className="flex w-full items-center justify-between rounded-lg px-1 py-1.5 font-mono text-muted text-xs transition-colors hover:text-accent"
+            >
+              <span>background</span>
+              <span className="text-faint">{skinName}</span>
+            </button>
+          )}
         </Section>
 
         {keyLabels === null ? null : (

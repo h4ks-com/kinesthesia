@@ -23,7 +23,7 @@ import {
   whiteKeyLeft,
   whiteKeys,
 } from "@/lib/render/keyboard";
-import { SparkField, type SparkKind } from "@/lib/render/sparks";
+import { SparkField } from "@/lib/render/sparks";
 
 const lookAhead = 3.5;
 /** Real seconds of warning before an owed note lands. Scaled by playback speed
@@ -83,6 +83,17 @@ export type Frame = {
   /** Fills flat and drops the glow, the sparks and the ramps, for anyone who
    * would rather read the notes than watch them. */
   readonly plain: boolean;
+  /** Filled as the notes are drawn when a skin is behind the roll, so it can
+   * answer to where they are without walking the song again. Null leaves the
+   * roll opaque and costs nothing. */
+  readonly report: SkinReport | null;
+};
+
+/** What the roll hands a skin. Written to during the note passes, so a skinned
+ * frame costs one push per drawn note and nothing else. */
+export type SkinReport = {
+  travellers: { x: number; y: number; radius: number; color: string }[];
+  strikes: { x: number; color: string }[];
 };
 
 /** A fixed drawing surface for an offline render, where there is no laid-out
@@ -221,10 +232,16 @@ export class PianoRollRenderer {
     const { whiteWidth, total, maxPan } = this.metrics;
     this.pan = Math.min(maxPan, this.pan);
 
-    ctx.fillStyle = "#060709";
-    ctx.fillRect(0, 0, width, height);
+    if (frame.report === null) {
+      ctx.fillStyle = "#060709";
+      ctx.fillRect(0, 0, width, height);
+    } else {
+      ctx.clearRect(0, 0, width, height);
+    }
     ctx.translate(-this.pan, 0);
-    this.paintBackground(total, height, keyboardTop, whiteWidth, frame.plain);
+    if (frame.report === null) {
+      this.paintBackground(total, height, keyboardTop, whiteWidth, frame.plain);
+    }
 
     const active = new Map<number, NoteColor>();
     this.foreshadow.clear();
@@ -413,6 +430,10 @@ export class PianoRollRenderer {
       // falls inside one frame still counts as having landed.
       if (!ghost && sounding && since !== null && note.start > since) {
         this.onsets.add(note.pitch);
+        frame.report?.strikes.push({
+          x: keyCenter(note.pitch, whiteWidth),
+          color: color.glow,
+        });
       }
       // A drum key decays on its own, so the pedal has no say over it.
       if (note.end < position) {
@@ -590,6 +611,12 @@ export class PianoRollRenderer {
       }
 
       const top = keyboardTop - headAge * scale;
+      frame.report?.travellers.push({
+        x: keyCenter(note.pitch, whiteWidth),
+        y: top,
+        radius: whiteWidth * 0.5,
+        color: color.glow,
+      });
       const noteWidth = isBlackKey(note.pitch) ? blackNote : whiteNote;
       const x = keyCenter(note.pitch, whiteWidth) - noteWidth / 2;
       const y = Math.max(0, top);
@@ -613,8 +640,7 @@ export class PianoRollRenderer {
       ctx.fillStyle = fill;
       const trail = frame.expression;
       const bent =
-        trail !== null &&
-        trail.touched(note.track) &&
+        trail?.touched(note.track) === true &&
         this.traceBentNote(
           trail,
           note.track,

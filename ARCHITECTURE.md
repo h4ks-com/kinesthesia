@@ -41,6 +41,7 @@ src/server/
 src/components/
   song-row.tsx                one song with its favourite and mode links
   share-upload.tsx            publishes one of your own files, behind a confirm
+  skin-picker.tsx             the backgrounds, each running live before it is picked
   library-section.tsx         preview, expand and bound a saved list
   player.tsx                  composes the hooks below into a mode, and hosts a
                               match through its aside, overlay and footer slots
@@ -96,6 +97,9 @@ src/lib/
   render/piano-roll.ts        draws notes, keyboard, glow and the bend trace,
                               and play mode's live notes rising from the keys
   render/sparks.ts            the swarm thrown up from the keys, and its ceiling
+  skins/types.ts              what a background is told and what it must answer
+  skins/registry.ts           the backgrounds on offer, and which suit a direction
+  skins/starfield.ts          drifting gas, stars, and rocks the notes break
   render/export.ts            the watch view as a render job: size, frame, files
   render/audio.ts             offline audio render to a WAV, at the live voicing
   render/video.ts             offline video render, WebCodecs with a recorder fallback

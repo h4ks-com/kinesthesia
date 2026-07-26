@@ -23,6 +23,8 @@ export type GlobalSettings = {
   readonly showKeyLabels?: boolean;
   /** Absent on rows written before the plain style existed. */
   readonly plainStyle?: boolean;
+  /** Which cosmetic layer is drawn behind the roll. Absent means none. */
+  readonly skin?: string;
 };
 
 const globalKey = "global";

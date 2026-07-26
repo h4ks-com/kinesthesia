@@ -8,10 +8,16 @@ import {
 import type { Reach } from "@/lib/input/keyboard-map";
 import type { ExpressionTrail } from "@/lib/midi/expression";
 import type { LiveNote, Song } from "@/lib/midi/song";
-import { PianoRollRenderer } from "@/lib/render/piano-roll";
+import { keyboardBand } from "@/lib/render/keyboard";
+import { PianoRollRenderer, type SkinReport } from "@/lib/render/piano-roll";
+import type { NoteDirection, Skin, SkinInstance } from "@/lib/skins/types";
 
 /** Each pointer keeps its own gesture, so one finger panning the roll and
  * another walking the keys never read each other's start position. */
+/** A skin is decoration, so it is never worth more than one device pixel per
+ * css pixel even on a dense screen. */
+const maxSkinRatio = 1.5;
+
 type Gesture =
   | { readonly kind: "keys"; pitch: number | null }
   | { readonly kind: "pan"; readonly x: number; readonly pan: number };
@@ -32,6 +38,10 @@ type PianoRollViewProps = {
   getSustain?: () => boolean;
   /** How the bend and modulation wheels moved, per track. Play mode only. */
   expression?: ExpressionTrail;
+  /** The cosmetic layer drawn behind the roll. Null leaves the roll opaque. */
+  skin?: Skin | null;
+  /** Which way notes travel, which decides what a skin is looking at. */
+  direction?: NoteDirection;
   /** Playback speed, so the owed-note foreshadow leads by a constant reaction
    * time. Defaults to normal speed. */
   rate?: number;
@@ -64,6 +74,8 @@ export function PianoRollView({
   keyLabels = null,
   plain = false,
   expression,
+  skin = null,
+  direction = "down",
   onStrike,
   onRelease,
 }: PianoRollViewProps) {
@@ -73,6 +85,12 @@ export function PianoRollView({
   sustainRef.current = getSustain;
   const expressionRef = useRef(expression);
   expressionRef.current = expression;
+  const skinBase = useRef<HTMLCanvasElement | null>(null);
+  const skinOverlay = useRef<HTMLCanvasElement | null>(null);
+  const skinRef = useRef<SkinInstance | null>(null);
+  const directionRef = useRef(direction);
+  directionRef.current = direction;
+  const reportRef = useRef<SkinReport>({ travellers: [], strikes: [] });
   const rateRef = useRef(rate);
   rateRef.current = rate;
   const playTrackRef = useRef(playTrack);
@@ -105,13 +123,21 @@ export function PianoRollView({
     if (focusRef.current !== null) {
       renderer.centreOn(focusRef.current);
     }
+    const started = performance.now();
     let frame = requestAnimationFrame(function loop() {
+      const skinned = skinRef.current;
+      if (skinned !== null) {
+        const report = reportRef.current;
+        report.travellers.length = 0;
+        report.strikes.length = 0;
+      }
       renderer.draw({
         song,
         position: getPosition(),
         live: liveRef.current?.() ?? null,
         sustain: sustainRef.current?.() ?? false,
         expression: expressionRef.current ?? null,
+        report: skinRef.current === null ? null : reportRef.current,
         rate: rateRef.current,
         playTrack: playTrackRef.current,
         hiddenTracks: hiddenRef.current,
@@ -122,6 +148,20 @@ export function PianoRollView({
         keyLabels: labelsRef.current,
         plain: plainRef.current,
       });
+      // Drawn after the roll, which is what fills the report for this frame, so
+      // a skin reacts to where the notes are now rather than a frame behind.
+      if (skinned !== null) {
+        const box = canvas.getBoundingClientRect();
+        skinned.draw({
+          width: box.width,
+          height: box.height,
+          keyboardTop: keyboardBand(box.height).top,
+          elapsed: (performance.now() - started) / 1000,
+          direction: directionRef.current,
+          travellers: reportRef.current.travellers,
+          strikes: reportRef.current.strikes,
+        });
+      }
       frame = requestAnimationFrame(loop);
     });
 
@@ -134,6 +174,35 @@ export function PianoRollView({
       rendererRef.current = null;
     };
   }, [song, getPosition, getPressed, getOwed, getYours]);
+
+  useEffect(() => {
+    const base = skinBase.current;
+    const overlay = skinOverlay.current;
+    if (base === null || overlay === null || skin === null) {
+      return;
+    }
+    const made = skin.create({ base, overlay });
+    skinRef.current = made;
+    if (made === null) {
+      return;
+    }
+    const sizeSkin = () => {
+      const box = base.getBoundingClientRect();
+      made.resize(
+        box.width,
+        box.height,
+        Math.min(window.devicePixelRatio, maxSkinRatio),
+      );
+    };
+    sizeSkin();
+    const observer = new ResizeObserver(sizeSkin);
+    observer.observe(base);
+    return () => {
+      observer.disconnect();
+      made.dispose();
+      skinRef.current = null;
+    };
+  }, [skin]);
 
   useEffect(() => {
     rendererRef.current?.setKeyWidth(keyWidth);
@@ -223,16 +292,36 @@ export function PianoRollView({
     }
   }
 
+  // Keyed so React never hands the roll's canvas to the skin when the layers
+  // appear: a canvas keeps the first context type it is given, and one that has
+  // drawn 2D can never return a WebGL context.
   return (
-    <canvas
-      ref={canvasRef}
-      role="img"
-      aria-label={`Piano roll for ${song.name}`}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={endPointer}
-      onPointerCancel={endPointer}
-      className="absolute inset-0 block size-full touch-none"
-    />
+    <>
+      {skin === null ? null : (
+        <>
+          <canvas
+            key="skin-base"
+            ref={skinBase}
+            className="absolute inset-0 block size-full"
+          />
+          <canvas
+            key="skin-overlay"
+            ref={skinOverlay}
+            className="absolute inset-0 block size-full"
+          />
+        </>
+      )}
+      <canvas
+        key="roll"
+        ref={canvasRef}
+        role="img"
+        aria-label={`Piano roll for ${song.name}`}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endPointer}
+        onPointerCancel={endPointer}
+        className="absolute inset-0 block size-full touch-none"
+      />
+    </>
   );
 }

@@ -107,8 +107,6 @@ export function PlayView({
 
   const getPosition = useCallback(() => engineRef.current?.position ?? 0, []);
   const notes = usePlayNotes(getPosition);
-  // The wheels move every note on their channel, so the trail is kept per track
-  // and the roll reads it by time rather than each note carrying a copy.
   const expression = useRef(new ExpressionTrail()).current;
 
   const partsRef = useRef(parts);
@@ -181,8 +179,6 @@ export function PlayView({
       const key = inputKey(pitch, channel);
       const track = struck.current.get(key) ?? trackFor(channel);
       struck.current.delete(key);
-      // The bar ends where the key came up, so the roll reads as what was
-      // played. Under the pedal only the sound is deferred.
       notes.lift(pitch, track);
       if (sustainRef.current) {
         sustained.current.add(`${track}:${pitch}`);
@@ -284,7 +280,7 @@ export function PlayView({
     const now = getPosition();
     const set = new Set<number>();
     for (const note of notes.get()) {
-      if (note.end === null || now - note.end < 0.05) {
+      if (note.release === null || now - note.release < 0.05) {
         set.add(note.track);
       }
     }

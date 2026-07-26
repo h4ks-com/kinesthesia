@@ -14,6 +14,9 @@ import { LibrarySection } from "@/components/library-section";
 import { SongRow } from "@/components/song-row";
 import { TopBar } from "@/components/top-bar";
 import { ConfirmButton } from "@/components/ui/confirm-button";
+import { defaultMelodyRate } from "@/lib/midi/melody";
+import { defaultTranspose } from "@/lib/midi/song";
+import { defaultSpeed, defaultStart, playerPath } from "@/lib/player-url";
 import {
   clearFavourites,
   clearRecent,
@@ -45,7 +48,27 @@ type HomeProps = {
 
 /** A pasted http(s) link, so the search box doubles as a way to open a MIDI by
  * URL. Whether it plays is the watch page's call: only trusted origins pass. */
-function midiUrlFrom(query: string): { url: string; name: string } | null {
+type SongLink = {
+  readonly url: string;
+  readonly name: string;
+};
+
+function watchHref(song: SongLink): string {
+  return playerPath("watch", {
+    url: song.url,
+    name: song.name,
+    source: null,
+    tracks: null,
+    speed: defaultSpeed,
+    simplified: false,
+    melodyRate: defaultMelodyRate,
+    transpose: defaultTranspose,
+    focus: false,
+    start: defaultStart,
+  });
+}
+
+function midiUrlFrom(query: string): SongLink | null {
   const value = query.trim();
   if (!/^https?:\/\//i.test(value)) {
     return null;
@@ -82,10 +105,8 @@ export function Home({
   const router = useRouter();
 
   const openSong = useCallback(
-    (song: { url: string; name: string }) => {
-      router.push(
-        `/watch?url=${encodeURIComponent(song.url)}&name=${encodeURIComponent(song.name)}`,
-      );
+    (song: SongLink) => {
+      router.push(watchHref(song));
     },
     [router],
   );
@@ -217,12 +238,12 @@ export function Home({
                   openSong(link);
                 }
               }}
-              // Pasting a link is asking to play it. Typing one is not, since
-              // a half typed address parses long before it is finished.
+              // A paste arrives whole, so it is a finished address; a typed one
+              // parses long before it is done. The text is left in the box so a
+              // link the player rejects can be corrected without retyping.
               onPaste={(event) => {
                 const pasted = midiUrlFrom(event.clipboardData.getData("text"));
                 if (pasted !== null) {
-                  event.preventDefault();
                   openSong(pasted);
                 }
               }}
@@ -279,7 +300,7 @@ export function Home({
 
         {link === null ? null : (
           <Link
-            href={`/watch?url=${encodeURIComponent(link.url)}&name=${encodeURIComponent(link.name)}`}
+            href={watchHref(link)}
             className="group flex items-center gap-3 rounded-xl border border-accent/40 bg-accent-soft/20 px-4 py-3.5 transition-colors hover:border-accent"
           >
             <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-void">

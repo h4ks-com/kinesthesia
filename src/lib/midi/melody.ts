@@ -156,6 +156,6 @@ function clipToMonophonic(notes: readonly SongNote[]): SongNote[] {
     if (next === undefined || next.start >= note.end) {
       return note;
     }
-    return { ...note, end: next.start };
+    return { ...note, end: next.start, release: next.start };
   });
 }

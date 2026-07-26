@@ -44,15 +44,13 @@ const maxParticles = 1100;
  * enough to read a gradient keep it. */
 const gradientNoteHeight = 14;
 const roundNoteSize = 10;
-/** A playhead jump larger than this is a seek rather than a frame of playback,
- * and the notes passed over never landed, so they spark nothing. */
+/** Past this a playhead jump is a seek, and the notes passed over never
+ * landed, so they spark nothing. */
 const maxOnsetAdvance = 0.5;
 /** How far a wheel at full travel throws a note, in white keys. A bend is
  * usually two semitones, so a little over one key reads as the interval
  * without the note wandering into its neighbour's lane. */
 const bendSpanKeys = 1.35;
-/** Modulation never displaces a note, it only shivers it, so its width stays
- * well inside one key and its rate sits where a played vibrato does. */
 const vibratoWidth = 0.22;
 const vibratoHz = 5.5;
 
@@ -85,8 +83,7 @@ export type Frame = {
   readonly live: readonly LiveNote[] | null;
   /** The sustain pedal is down, marked discreetly along the strike line. */
   readonly sustain: boolean;
-  /** How the bend and modulation wheels moved, per track. Null outside play
-   * mode, where there is no live device to read them from. */
+  /** Null outside play mode, where there is no live device to read. */
   readonly expression: ExpressionTrail | null;
   /** Playback speed, so the foreshadow lead is a constant reaction time rather
    * than a fixed song distance that shrinks as the song speeds up. */
@@ -139,9 +136,7 @@ export class PianoRollRenderer {
    * from and needs its own onset. */
   private readonly onsets = new Set<number>();
   private previousPosition: number | null = null;
-  /** The playhead the current frame is measured against, or null when the jump
-   * was a seek rather than playback, which would otherwise read every note
-   * skipped over as landing at once. */
+  /** Null across a seek, so the notes skipped over spark nothing. */
   private onsetSince: number | null = null;
   private drumTracks: ReadonlySet<number> = new Set();
   private drumsFrom: Song | null = null;
@@ -427,6 +422,7 @@ export class PianoRollRenderer {
     const notes = frame.song.notes;
     const horizon = position + lookAhead;
     const first = firstFrom(notes, position - this.maxNoteDuration);
+    const since = this.onsetSince;
     for (let index = first; index < notes.length; index += 1) {
       const note = notes[index];
       if (note === undefined || note.start > horizon) {
@@ -437,18 +433,18 @@ export class PianoRollRenderer {
       }
       const ghost = frame.yours !== null && !frame.yours.has(note.id);
       const color = trackColor(note.track);
-      // The pedal holds a key lit after its bar has landed, so the sound the
-      // player hears has a key under it while the roll stays the written length.
+      const sounding = note.start <= position;
+      // Marked before any branch below returns, so a note whose whole length
+      // falls inside one frame still counts as having landed.
+      if (!ghost && sounding && since !== null && note.start > since) {
+        this.onsets.add(note.pitch);
+      }
+      // A drum key decays on its own, so the pedal has no say over it.
       if (note.end < position) {
-        if (!ghost && position < note.release) {
+        if (!ghost && !drums.has(note.track) && position < note.release) {
           active.set(note.pitch, color);
         }
         continue;
-      }
-      const sounding = note.start <= position;
-      const since = this.onsetSince;
-      if (!ghost && sounding && since !== null && note.start > since) {
-        this.onsets.add(note.pitch);
       }
 
       // A drum is an impulse: the mark falls to the line and is spent there,
@@ -589,14 +585,14 @@ export class PianoRollRenderer {
       const held = note.end === null;
       const footAge = note.end === null ? 0 : position - note.end;
       const bottom = keyboardTop - footAge * scale;
-      if (bottom < 0) {
-        continue;
-      }
       const color = trackColor(note.track);
-      // The key stays lit for as long as the note sounds, which the pedal can
-      // carry past the lift that stopped the bar growing.
+      // A note the pedal still holds keeps its key lit even once its bar has
+      // climbed off the roll, so the light is claimed before the geometry cull.
       if (note.release === null) {
         active.set(note.pitch, color);
+      }
+      if (bottom < 0) {
+        continue;
       }
       const since = this.onsetSince;
       if (since !== null && note.start > since) {
@@ -625,17 +621,19 @@ export class PianoRollRenderer {
       }
       ctx.globalAlpha = 0.74 + note.velocity * 0.26;
       ctx.fillStyle = fill;
+      const trail = frame.expression;
       const bent =
-        frame.expression !== null && frame.expression.touched(note.track);
-      if (bent) {
+        trail !== null &&
+        trail.touched(note.track) &&
         this.traceBentNote(
-          frame,
-          note,
+          trail,
+          { track: note.track, position },
           { x, y, width: noteWidth, height: noteHeight },
           scale,
           keyboardTop,
           whiteWidth,
         );
+      if (bent) {
         ctx.fill();
       } else if (noteHeight >= roundNoteSize && noteWidth >= roundNoteSize) {
         roundRect(ctx, x, y, noteWidth, noteHeight, 4);
@@ -647,23 +645,17 @@ export class PianoRollRenderer {
     }
   }
 
-  /** Lays the note's body along the bend curve rather than in one lane, so the
-   * shape it leaves is the pitch that was played. Every height on the bar is an
-   * age, so it reads the wheels as they stood then and the part already climbed
-   * keeps the bend it was struck with. */
+  /** Every height on the bar is an age, so each row reads the wheels as they
+   * stood then. Returns false when the wheels never left centre over the note. */
   private traceBentNote(
-    frame: Frame,
-    note: LiveNote,
+    trail: ExpressionTrail,
+    at: { track: number; position: number },
     box: { x: number; y: number; width: number; height: number },
     scale: number,
     keyboardTop: number,
     whiteWidth: number,
-  ): void {
+  ): boolean {
     const ctx = this.context;
-    const trail = frame.expression;
-    if (trail === null) {
-      return;
-    }
     const span = whiteWidth * bendSpanKeys;
     const wobble = whiteWidth * vibratoWidth;
     const steps = Math.max(2, Math.min(48, Math.round(box.height / 5)));
@@ -671,13 +663,18 @@ export class PianoRollRenderer {
     const offsets: number[] = [];
     for (let step = 0; step <= steps; step += 1) {
       const y = box.y + (box.height * step) / steps;
-      const at = frame.position - (keyboardTop - y) / scale;
-      const { bend, depth } = trail.at(note.track, at);
+      const when = at.position - (keyboardTop - y) / scale;
+      const { bend, depth } = trail.at(at.track, when);
       const shimmer =
         depth === 0
           ? 0
-          : Math.sin(at * vibratoHz * Math.PI * 2) * depth * wobble;
+          : Math.sin(when * vibratoHz * Math.PI * 2) * depth * wobble;
       offsets.push(bend * span + shimmer);
+    }
+    // A track that has moved a wheel keeps its plain corners while the wheels
+    // sit at rest, so the trace is claimed by the offsets and not by a latch.
+    if (offsets.every((offset) => offset === 0)) {
+      return false;
     }
     ctx.beginPath();
     for (let step = 0; step <= steps; step += 1) {
@@ -689,6 +686,7 @@ export class PianoRollRenderer {
       ctx.lineTo(centre + (offsets[step] ?? 0) + box.width / 2, y);
     }
     ctx.closePath();
+    return true;
   }
 
   private paintGlow(

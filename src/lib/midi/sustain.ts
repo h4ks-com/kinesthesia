@@ -1,4 +1,3 @@
-/** A stretch of time with the pedal down, from the press to the lift. */
 export type SustainSpan = {
   readonly start: number;
   readonly end: number;
@@ -9,13 +8,16 @@ export type PedalEvent = {
   readonly value: number;
 };
 
-/** Control 64 reads as down from half travel up, the same threshold a hardware
- * pedal reports. */
+/** Half travel, the same threshold a hardware pedal reports. */
 const pedalDown = 0.5;
+/** A string is silent well before this, and a pedal is often written pressed
+ * and never lifted. Without a bound such a note holds a voice and its key for
+ * the rest of the file, and the roll's scan window widens to the whole song. */
+const maxCarrySeconds = 6;
 
 export function pedalSpans(
   events: readonly PedalEvent[],
-  until: number,
+  lastNoteEnd: number,
 ): SustainSpan[] {
   const ordered = [...events].sort((left, right) => left.time - right.time);
   const spans: SustainSpan[] = [];
@@ -29,21 +31,19 @@ export function pedalSpans(
       openedAt = null;
     }
   }
-  // A file that ends with the pedal still down holds to the last note.
-  if (openedAt !== null && until > openedAt) {
-    spans.push({ start: openedAt, end: until });
+  if (openedAt !== null && lastNoteEnd > openedAt) {
+    spans.push({ start: openedAt, end: lastNoteEnd });
   }
   return spans;
 }
 
-/** When a note stops sounding: its own end, or the pedal lift that outlasts it. */
 export function releaseAt(end: number, spans: readonly SustainSpan[]): number {
   for (const span of spans) {
     if (span.start > end) {
       break;
     }
     if (span.end > end) {
-      return span.end;
+      return Math.min(span.end, end + maxCarrySeconds);
     }
   }
   return end;

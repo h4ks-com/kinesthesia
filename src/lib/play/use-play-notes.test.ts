@@ -104,3 +104,37 @@ describe("usePlayNotes", () => {
     expect(result.current.get()).toHaveLength(1);
   });
 });
+
+describe("re-striking under the pedal", () => {
+  it("leaves the first bar at the length it was played", () => {
+    const { now, read } = clock();
+    const { result } = renderHook(() => usePlayNotes(read));
+
+    result.current.emit(60, 0, 0.8);
+    now.value = 0.2;
+    result.current.lift(60, 0);
+
+    // The pedal holds the note open, so the same key can be struck again while
+    // the first is still sounding.
+    now.value = 1.5;
+    result.current.emit(60, 0, 0.8);
+
+    const first = result.current.get()[0];
+    expect(first?.end).toBe(0.2);
+    expect(first?.release).toBe(1.5);
+  });
+
+  it("keeps a note that is still sounding under the pedal", () => {
+    const { now, read } = clock();
+    const { result } = renderHook(() => usePlayNotes(read));
+
+    result.current.emit(60, 0, 0.8);
+    now.value = 1;
+    result.current.lift(60, 0);
+
+    // Well past the trail window, but the pedal has not been lifted, so the
+    // note is still sounding and must not be culled.
+    now.value = 20;
+    expect(result.current.get()).toHaveLength(1);
+  });
+});

@@ -68,3 +68,23 @@ describe("releaseAt", () => {
     expect(releaseAt(2, [])).toBe(2);
   });
 });
+
+describe("carry limit", () => {
+  it("stops a note ringing far past what a string would hold", () => {
+    // A pedal pressed and never lifted spans the rest of the file. Carrying a
+    // note that far keeps its voice and its key alive for minutes.
+    const spans = pedalSpans([{ time: 1, value: 1 }], 300);
+    expect(releaseAt(2, spans)).toBeLessThan(30);
+  });
+
+  it("still carries an ordinary pedalled note to the lift", () => {
+    const spans = pedalSpans(
+      [
+        { time: 1, value: 1 },
+        { time: 4, value: 0 },
+      ],
+      300,
+    );
+    expect(releaseAt(2, spans)).toBe(4);
+  });
+});

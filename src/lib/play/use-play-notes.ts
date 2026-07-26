@@ -3,8 +3,8 @@
 import { useCallback, useMemo, useRef } from "react";
 import type { LiveNote } from "@/lib/midi/song";
 
-/** Seconds a released note keeps climbing before it is dropped. A shade past
- * the roll's own look ahead, so a note is culled only once it is off screen. */
+/** Seconds a note keeps climbing after it stops sounding. A shade past the
+ * roll's own look ahead, so a note is culled only once it is off screen. */
 const trailSeconds = 4.5;
 
 export type PlayNotes = {
@@ -33,7 +33,7 @@ export function usePlayNotes(getPosition: () => number): PlayNotes {
 
   const prune = useCallback((now: number) => {
     notes.current = notes.current.filter(
-      (note) => note.end === null || now - note.end < trailSeconds,
+      (note) => note.release === null || now - note.release < trailSeconds,
     );
   }, []);
 
@@ -44,7 +44,9 @@ export function usePlayNotes(getPosition: () => number): PlayNotes {
       // pitch on one part never leaves an open note behind.
       const previous = open.current.get(key(track, pitch));
       if (previous !== undefined) {
-        previous.end = now;
+        // Under the pedal the previous note was already lifted, and that lift is
+        // the length it was played. Only its sound ends here.
+        previous.end ??= now;
         previous.release = now;
       }
       const note: LiveNote = {

@@ -53,6 +53,34 @@ export function playerQuery(): string {
   return `url=${encodeURIComponent(songUrl)}&name=${encodeURIComponent(songName)}&source=bitmidi`;
 }
 
+/** Marks every walkthrough seen, so a spec reads as a returning visitor. */
+export async function seenTour(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    for (const mode of ["watch", "learn", "multiplayer"]) {
+      localStorage.setItem(`kinesthesia:tour:${mode}`, "1");
+    }
+  });
+}
+
+/** Serves one MIDI at a url the player will accept. */
+export async function serveMidi(
+  page: Page,
+  url: string,
+  bytes: Uint8Array,
+): Promise<void> {
+  const body = Buffer.from(bytes);
+  await page.route(url, (route) =>
+    route.fulfill({ status: 200, contentType: "audio/midi", body }),
+  );
+}
+
+/** The resting keybed colour, so a lit key is anything that differs from it. */
+export function isIdleKey(pixel: readonly number[]): boolean {
+  return idleKeyColor.every(
+    (channel, index) => Math.abs((pixel[index] ?? 0) - channel) < 24,
+  );
+}
+
 export const keyRowFromBottom = 6;
 const idleKeyColor = [223, 228, 236] as const;
 

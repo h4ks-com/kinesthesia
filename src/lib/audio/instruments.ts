@@ -30,9 +30,9 @@ function keyFor({ program, percussion }: VoiceRequest): string {
 
 /** A cold first play fetches every instrument at once, so a single dropped
  * request would otherwise leave that track on the piano fallback for the whole
- * session. Attempts are spaced so a retry meets a calmer network. */
+ * session. */
 const loadAttempts = 3;
-const retryBackoff = 200;
+const retryBackoffMs = 200;
 
 function pause(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -103,7 +103,7 @@ export class InstrumentBank {
         return ready;
       } catch {
         if (attempt < loadAttempts) {
-          await pause(retryBackoff * attempt);
+          await pause(retryBackoffMs * attempt);
         }
       }
     }

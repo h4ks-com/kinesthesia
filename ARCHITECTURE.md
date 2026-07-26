@@ -70,6 +70,7 @@ src/lib/
   search-params.ts            route search params to URLSearchParams
   format/clock.ts             seconds as m:ss
   midi/song.ts                parses a .mid into a flat note list, moves it to another key
+  midi/sustain.ts             pedal spans, and how far past its end a note sounds under them
   midi/melody.ts              reduces a part to one playable note at a time
   midi/analysis.ts            detects tempo, key and chords, and a compact digest
   midi/compose.ts             chord voicing, a 5x7 text font and note primitives
@@ -91,8 +92,9 @@ src/lib/
   tour/steps.ts               what the walkthrough points at, per mode
   tour/use-walkthrough.ts     first-run auto play and the replay it hands back
   render/keyboard.ts          key geometry, sizing and the pitch under a point
-  render/piano-roll.ts        draws notes, keyboard, glow and sparks, and play
-                              mode's live notes rising from the keys
+  render/piano-roll.ts        draws notes, keyboard, glow, sparks and the bend
+                              trace, and play mode's live notes rising from the
+                              keys
   render/export.ts            the watch view as a render job: size, frame, files
   render/audio.ts             offline audio render to a WAV, at the live voicing
   render/video.ts             offline video render, WebCodecs with a recorder fallback

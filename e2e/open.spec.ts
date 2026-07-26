@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { Midi } from "@tonejs/midi";
+import { seenTour, serveMidi } from "./fixture";
 
 type Page = import("@playwright/test").Page;
 
@@ -15,18 +16,8 @@ function midiBytes(): Uint8Array {
 }
 
 async function openHome(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    for (const mode of ["watch", "learn", "multiplayer"]) {
-      localStorage.setItem(`kinesthesia:tour:${mode}`, "1");
-    }
-  });
-  await page.route(remoteUrl, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "audio/midi",
-      body: Buffer.from(midiBytes()),
-    }),
-  );
+  await seenTour(page);
+  await serveMidi(page, remoteUrl, midiBytes());
   await page.goto("/");
 }
 

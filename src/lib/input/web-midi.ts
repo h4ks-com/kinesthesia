@@ -26,16 +26,14 @@ export type MidiSustainEvent = {
   readonly down: boolean;
 };
 
-/** The bend wheel, as a signed fraction of its travel. Channel wide: it moves
- * every note sounding on that channel, not one key. */
+/** The bend wheel, as a signed fraction of its travel. */
 export type MidiBendEvent = {
   readonly type: "bend";
   readonly channel: number;
   readonly amount: number;
 };
 
-/** The modulation wheel (control 1), as a fraction of its travel. Channel wide
- * for the same reason as the bend. */
+/** The modulation wheel (control 1), as a fraction of its travel. */
 export type MidiModulationEvent = {
   readonly type: "modulation";
   readonly channel: number;

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { seenTour } from "./fixture";
 
 declare global {
   interface Window {
@@ -12,10 +13,8 @@ type Page = import("@playwright/test").Page;
  * browser, so the page gets a stand-in delivering the bytes a wheel and a key
  * would send. */
 async function fakeDevice(page: Page): Promise<void> {
+  await seenTour(page);
   await page.addInitScript(() => {
-    for (const mode of ["watch", "learn", "multiplayer", "play"]) {
-      localStorage.setItem(`kinesthesia:tour:${mode}`, "1");
-    }
     const input: { onmidimessage: ((event: unknown) => void) | null } = {
       onmidimessage: null,
     };
@@ -108,12 +107,22 @@ async function centreAbove(
   );
 }
 
+/** The roll scrolls `lookAhead` seconds over the height above the keys, so a
+ * height is an age and both can be derived rather than guessed at. */
+const lookAhead = 3.5;
+
 async function open(page: Page): Promise<number> {
   await fakeDevice(page);
   await page.goto("/play");
   await expect(page.locator("canvas")).toBeVisible();
-  await page.waitForTimeout(900);
+  await expect
+    .poll(async () => keyboardTop(page), { timeout: 10000 })
+    .toBeGreaterThan(0);
   return keyboardTop(page);
+}
+
+function rowFor(top: number, secondsAgo: number): number {
+  return (top / lookAhead) * secondsAgo;
 }
 
 /** Holds a key long enough for its bar to climb, then moves a wheel, so the
@@ -131,13 +140,12 @@ test("the bend wheel lays the note along the pitch it was played at", async ({
   const top = await open(page);
   await strikeThenBend(page, [0xe0, 0x7f, 0x7f]);
 
-  const recent = await centreAbove(page, top, 40);
-  const older = await centreAbove(page, top, 240);
+  // The bend landed 0.5s ago over a note held 1.9s, so these rows sit either
+  // side of it with room to spare at any viewport.
+  const recent = await centreAbove(page, top, rowFor(top, 0.25));
+  const older = await centreAbove(page, top, rowFor(top, 1.2));
   expect(recent).not.toBeNull();
   expect(older).not.toBeNull();
-
-  // The stretch played since the wheel moved sits to the right of the stretch
-  // played before it, which is what makes the bar a trace rather than a lean.
   expect(recent ?? 0).toBeGreaterThan((older ?? 0) + 15);
 });
 
@@ -145,8 +153,10 @@ test("a bend down lays the note the other way", async ({ page }) => {
   const top = await open(page);
   await strikeThenBend(page, [0xe0, 0x00, 0x00]);
 
-  const recent = await centreAbove(page, top, 40);
-  const older = await centreAbove(page, top, 240);
+  const recent = await centreAbove(page, top, rowFor(top, 0.25));
+  const older = await centreAbove(page, top, rowFor(top, 1.2));
+  expect(recent).not.toBeNull();
+  expect(older).not.toBeNull();
   expect(recent ?? 0).toBeLessThan((older ?? 0) - 15);
 });
 
@@ -154,11 +164,10 @@ test("a wheel on another channel leaves the note alone", async ({ page }) => {
   const top = await open(page);
   // The wheels are channel wide, so a bend on channel 2 must not touch a note
   // played on channel 1.
-  await page.evaluate(() => window.sendMidi([0xe1, 0x7f, 0x7f]));
   await strikeThenBend(page, [0xe1, 0x7f, 0x7f]);
 
-  const recent = await centreAbove(page, top, 40);
-  const older = await centreAbove(page, top, 240);
+  const recent = await centreAbove(page, top, rowFor(top, 0.25));
+  const older = await centreAbove(page, top, rowFor(top, 1.2));
   expect(recent).not.toBeNull();
   expect(Math.abs((recent ?? 0) - (older ?? 0))).toBeLessThan(10);
 });

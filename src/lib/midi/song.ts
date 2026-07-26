@@ -39,9 +39,8 @@ function decodeMidi(data: ArrayBuffer): Midi {
   }
 }
 
-/** `end` is when the key came up, which is the length the roll draws. `release`
- * is when the sound stops, which the pedal can carry past `end`. They differ
- * only under sustain, so a file with no pedal has them equal. */
+/** `end` is when the key came up, the length the roll draws. `release` is when
+ * the sound stops, which the pedal can carry past `end`. */
 export type SongNote = {
   readonly id: number;
   readonly pitch: number;
@@ -61,10 +60,8 @@ export type SongTrack = {
   readonly noteCount: number;
 };
 
-/** A note as play mode emits it live, drawn rising out of the keys rather than
- * falling onto them. `end` is the key coming up, which stops the bar growing;
- * `release` is the sound stopping, which the pedal can defer past `end`. Both
- * are null while still open. */
+/** A note as play mode emits it live, rising out of the keys. Both times are
+ * null while the note is still open. */
 export type LiveNote = {
   readonly id: number;
   readonly pitch: number;

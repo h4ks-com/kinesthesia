@@ -43,8 +43,7 @@ type Options = {
   onProgram?: (channel: number, program: number) => void;
   /** The MIDI sustain pedal, per channel. */
   onSustain?: (channel: number, down: boolean) => void;
-  /** The bend and modulation wheels, per channel. Both move every note
-   * sounding on that channel rather than one key. */
+  /** The bend and modulation wheels, per channel. */
   onBend?: (channel: number, amount: number) => void;
   onModulation?: (channel: number, depth: number) => void;
   /** Absent in a mode with nothing to toggle, so space is left to activate the

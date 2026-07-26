@@ -1,5 +1,4 @@
-/** How the wheels stood at one moment. Bend is signed across the wheel's
- * travel; depth is unsigned. */
+/** Bend is signed across the wheel travel; depth is unsigned. */
 export type Expression = {
   readonly bend: number;
   readonly depth: number;
@@ -13,13 +12,12 @@ type Sample = {
   depth: number;
 };
 
-/** Seconds of wheel movement kept per track. A note is drawn from its start to
- * now, so the trail only has to outlast the longest note still on screen. */
+/** Seconds of wheel movement kept per track. Outlasts the roll's look ahead,
+ * so every note still on screen can be read from it. */
 const trailSeconds = 8;
 
-/** The bend and modulation wheels over time, per track. Both are channel wide
- * in MIDI, so every note on a track shares one trail rather than carrying its
- * own copy. The renderer reads it by time to bend a note along its length. */
+/** Bend and modulation are channel wide, so one trail per track covers every
+ * note on it. */
 export class ExpressionTrail {
   private readonly tracks = new Map<number, Sample[]>();
 
@@ -60,14 +58,14 @@ export class ExpressionTrail {
     this.push(track, at, { bend: this.latest(track).bend, depth });
   }
 
-  latest(track: number): Expression {
+  private latest(track: number): Expression {
     const samples = this.tracks.get(track);
     const last = samples?.[samples.length - 1];
     return last === undefined ? flat : { bend: last.bend, depth: last.depth };
   }
 
-  /** Where the wheels stood at `at`. A wheel holds its value until it is moved
-   * again, so a time between samples reads the one before it. */
+  /** A wheel holds its value until it is moved again, so a time between
+   * samples reads the one before it. */
   at(track: number, at: number): Expression {
     const samples = this.tracks.get(track);
     if (samples === undefined || samples.length === 0) {
@@ -93,13 +91,7 @@ export class ExpressionTrail {
       : { bend: found.bend, depth: found.depth };
   }
 
-  /** Whether a track has ever moved a wheel, so the renderer can keep drawing
-   * plain rectangles for the tracks that never bend. */
   touched(track: number): boolean {
     return (this.tracks.get(track)?.length ?? 0) > 0;
-  }
-
-  clear(): void {
-    this.tracks.clear();
   }
 }

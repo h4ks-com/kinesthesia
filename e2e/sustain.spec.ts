@@ -1,6 +1,12 @@
 import { expect, test } from "@playwright/test";
 import { Midi } from "@tonejs/midi";
-import { pixelAt, whiteKeyCentres } from "./fixture";
+import {
+  isIdleKey,
+  pixelAt,
+  seenTour,
+  serveMidi,
+  whiteKeyCentres,
+} from "./fixture";
 
 const songUrl = "https://example.test/sustain.mid";
 
@@ -27,15 +33,8 @@ function pedalledMidi(): Uint8Array {
 }
 
 async function open(page: import("@playwright/test").Page): Promise<void> {
-  await page.addInitScript(() => {
-    for (const mode of ["watch", "learn", "multiplayer"]) {
-      localStorage.setItem(`kinesthesia:tour:${mode}`, "1");
-    }
-  });
-  const body = Buffer.from(pedalledMidi());
-  await page.route(songUrl, (route) =>
-    route.fulfill({ status: 200, contentType: "audio/midi", body }),
-  );
+  await seenTour(page);
+  await serveMidi(page, songUrl, pedalledMidi());
   await page.goto(
     `/watch?url=${encodeURIComponent(songUrl)}&name=Sustain&source=bitmidi`,
   );
@@ -45,15 +44,6 @@ async function open(page: import("@playwright/test").Page): Promise<void> {
   await expect
     .poll(async () => (await whiteKeyCentres(page)).length, { timeout: 10000 })
     .toBeGreaterThan(0);
-}
-
-function idle(pixel: readonly number[]): boolean {
-  const [red, green, blue] = pixel;
-  return (
-    Math.abs((red ?? 0) - 223) < 24 &&
-    Math.abs((green ?? 0) - 228) < 24 &&
-    Math.abs((blue ?? 0) - 236) < 24
-  );
 }
 
 test("a pedalled note lights its key without stretching its bar", async ({
@@ -76,7 +66,7 @@ test("a pedalled note lights its key without stretching its bar", async ({
   await page.waitForTimeout(300);
   const litRow = height - 40;
   const lit = await Promise.all(centres.map((x) => pixelAt(page, x, litRow)));
-  const held = lit.filter((pixel) => !idle(pixel));
+  const held = lit.filter((pixel) => !isIdleKey(pixel));
   expect(held.length).toBeGreaterThan(0);
 
   // Well above the keys the roll must be empty: the written note ended a second
@@ -90,17 +80,26 @@ test("a pedalled note lights its key without stretching its bar", async ({
   expect(bars).toHaveLength(0);
 });
 
-test("the key goes dark once the pedal lifts", async ({ page }) => {
+test("the key lights under the pedal and goes dark once it lifts", async ({
+  page,
+}) => {
   await open(page);
   const centres = await whiteKeyCentres(page);
   const box = await page.locator("canvas").boundingBox();
   const height = box?.height ?? 0;
   const seek = page.getByRole("slider", { name: "Song position" });
 
-  await seek.fill("10");
-  await page.waitForTimeout(300);
-  const after = await Promise.all(
-    centres.map((x) => pixelAt(page, x, height - 40)),
-  );
-  expect(after.filter((pixel) => !idle(pixel))).toHaveLength(0);
+  // Both halves in one context, so the dark assertion cannot pass by the key
+  // never having lit at all.
+  const litAt = async (at: string): Promise<number> => {
+    await seek.fill(at);
+    await page.waitForTimeout(300);
+    const row = await Promise.all(
+      centres.map((x) => pixelAt(page, x, height - 40)),
+    );
+    return row.filter((pixel) => !isIdleKey(pixel)).length;
+  };
+
+  expect(await litAt("6")).toBeGreaterThan(0);
+  expect(await litAt(String(pedalUp + 2))).toBe(0);
 });

@@ -1,5 +1,11 @@
 import { createFullscreen, nebulaSource } from "@/lib/skins/fullscreen";
-import { drawRock, makeRock, type Rock, Rubble } from "@/lib/skins/rubble";
+import {
+  drawRock,
+  makeRock,
+  type Rock,
+  Rubble,
+  struckBy,
+} from "@/lib/skins/rubble";
 import type {
   Skin,
   SkinFrame,
@@ -89,12 +95,8 @@ function createStarfield({ base, overlay }: SkinSurface): SkinInstance | null {
           rocks.splice(index, 1);
           continue;
         }
-        const struck = frame.travellers.find(
-          (traveller) =>
-            Math.abs(traveller.x - rock.x) < rock.radius + traveller.radius &&
-            Math.abs(traveller.y - rock.y) < rock.radius + traveller.radius,
-        );
-        if (struck !== undefined) {
+        const struck = struckBy(rock, frame.travellers);
+        if (struck !== null) {
           rubble.burst(rock.x, rock.y, rock.radius, struck.color);
           rocks.splice(index, 1);
           continue;

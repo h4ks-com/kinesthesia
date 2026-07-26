@@ -1,11 +1,16 @@
 import { createFullscreen, nebulaSource } from "@/lib/skins/fullscreen";
-import { drawRock, makeRock, type Rock, Rubble } from "@/lib/skins/rubble";
+import {
+  drawRock,
+  makeRock,
+  type Rock,
+  Rubble,
+  struckBy,
+} from "@/lib/skins/rubble";
 import type {
   Skin,
   SkinFrame,
   SkinInstance,
   SkinSurface,
-  Traveller,
 } from "@/lib/skins/types";
 
 /** Dimmer than the still field, because streaking stars are already carrying
@@ -83,17 +88,6 @@ function createCruise({ base, overlay }: SkinSurface): SkinInstance | null {
       placeStar(star, true);
       stars.push(star);
     }
-  }
-
-  function reached(
-    rock: Rock,
-    travellers: readonly Traveller[],
-  ): Traveller | undefined {
-    return travellers.find(
-      (traveller) =>
-        Math.abs(traveller.x - rock.x) < rock.radius + traveller.radius &&
-        Math.abs(traveller.y - rock.y) < rock.radius + traveller.radius,
-    );
   }
 
   return {
@@ -181,8 +175,8 @@ function createCruise({ base, overlay }: SkinSurface): SkinInstance | null {
           rocks.splice(index, 1);
           continue;
         }
-        const struck = reached(rock, frame.travellers);
-        if (struck !== undefined) {
+        const struck = struckBy(rock, frame.travellers);
+        if (struck !== null) {
           rubble.burst(rock.x, rock.y, rock.radius, struck.color);
           rocks.splice(index, 1);
           continue;

@@ -2,6 +2,8 @@
  * rock looks the same wherever it turns up, and so an explosion is worth
  * watching rather than a puff of squares. */
 
+import type { Traveller } from "@/lib/skins/types";
+
 export type Rock = {
   x: number;
   y: number;
@@ -79,6 +81,24 @@ export function makeRock(x: number, y: number, radius: number): Rock {
     shape,
     craters,
   };
+}
+
+/** A rock still above the view is not in play: breaking it there spends the
+ * whole burst where nobody sees it, and a busy roll reaches that high. */
+export function struckBy(
+  rock: Rock,
+  travellers: readonly Traveller[],
+): Traveller | null {
+  if (rock.y + rock.radius < 0) {
+    return null;
+  }
+  return (
+    travellers.find(
+      (traveller) =>
+        Math.abs(traveller.x - rock.x) < rock.radius + traveller.radius &&
+        Math.abs(traveller.y - rock.y) < rock.radius + traveller.radius,
+    ) ?? null
+  );
 }
 
 function traceRock(

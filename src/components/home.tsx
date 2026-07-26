@@ -2,6 +2,7 @@
 
 import { BookOpen, Code2, Loader2, Play, Search, X } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   type ReactNode,
   useCallback,
@@ -78,6 +79,16 @@ export function Home({
   const fileInput = useRef<HTMLInputElement>(null);
   const link = midiUrlFrom(query);
   const state = useLiveSearch(link === null ? query : "");
+  const router = useRouter();
+
+  const openSong = useCallback(
+    (song: { url: string; name: string }) => {
+      router.push(
+        `/watch?url=${encodeURIComponent(song.url)}&name=${encodeURIComponent(song.name)}`,
+      );
+    },
+    [router],
+  );
 
   const refreshLibrary = useCallback(() => {
     void listRecent().then(setRecent);
@@ -97,16 +108,26 @@ export function Home({
         return;
       }
       setUploadError(null);
+      const stored: { url: string; name: string }[] = [];
+      let kept = true;
       try {
         for (const file of midis) {
-          await storeUpload(file.name, await file.arrayBuffer());
+          const url = await storeUpload(file.name, await file.arrayBuffer());
+          stored.push({ url, name: file.name });
         }
       } catch {
         setUploadError("Could not save that file on this device.");
+        kept = false;
       }
       refreshLibrary();
+      // Handing over one file means play it. Several is a library import, so
+      // those stay on the page where the whole batch can be seen.
+      const only = stored[0];
+      if (kept && stored.length === 1 && only !== undefined) {
+        openSong(only);
+      }
     },
-    [refreshLibrary],
+    [refreshLibrary, openSong],
   );
 
   const favoriteKeys = new Set(favorites.map((entry) => entry.key));
@@ -190,6 +211,21 @@ export function Home({
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && link !== null) {
+                  event.preventDefault();
+                  openSong(link);
+                }
+              }}
+              // Pasting a link is asking to play it. Typing one is not, since
+              // a half typed address parses long before it is finished.
+              onPaste={(event) => {
+                const pasted = midiUrlFrom(event.clipboardData.getData("text"));
+                if (pasted !== null) {
+                  event.preventDefault();
+                  openSong(pasted);
+                }
+              }}
               placeholder="Search for a song, or paste a link"
               aria-label="Search for a song, or paste a link"
               autoComplete="off"

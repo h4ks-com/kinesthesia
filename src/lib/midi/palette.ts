@@ -9,13 +9,18 @@ export type NoteColor = {
   readonly flat: string;
 };
 
+/** Ordered so neighbouring tracks land far apart on the colour wheel, since a
+ * song's parts are numbered in the order they appear and adjacent hues on
+ * adjacent tracks are the pair hardest to tell apart on the roll. */
 const trackColors: readonly NoteColor[] = [
   { shade: "#1f8f6d", glow: "#35d6a4", core: "#8ff0d0", flat: "#4f9e86" },
-  { shade: "#1f6f9c", glow: "#38a8e8", core: "#9ad8f5", flat: "#5089b0" },
   { shade: "#a3701f", glow: "#f0a93a", core: "#ffd694", flat: "#b0894f" },
-  { shade: "#a32b5f", glow: "#f04b93", core: "#ff9dc4", flat: "#b05f80" },
   { shade: "#5f42a3", glow: "#9a6af0", core: "#c9b3f7", flat: "#7d6bb0" },
   { shade: "#808f22", glow: "#c3d63c", core: "#e2ed95", flat: "#93a05a" },
+  { shade: "#1f6f9c", glow: "#38a8e8", core: "#9ad8f5", flat: "#5089b0" },
+  { shade: "#8f251f", glow: "#e8483c", core: "#f7a49d", flat: "#b0605a" },
+  { shade: "#1f8f2f", glow: "#3ce857", core: "#a4f7b0", flat: "#5aa066" },
+  { shade: "#a32b5f", glow: "#f04b93", core: "#ff9dc4", flat: "#b05f80" },
 ];
 
 const pitchColors: readonly string[] = [
@@ -32,6 +37,8 @@ const pitchColors: readonly string[] = [
   "#ab47bc",
   "#ec407a",
 ];
+
+export const trackColorCount = trackColors.length;
 
 export function trackColor(track: number): NoteColor {
   const color = trackColors[track % trackColors.length];

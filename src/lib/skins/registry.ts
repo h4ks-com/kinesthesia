@@ -1,3 +1,4 @@
+import { cruise } from "@/lib/skins/cruise";
 import { starfield } from "@/lib/skins/starfield";
 import type { NoteDirection, Skin, SkinId } from "@/lib/skins/types";
 
@@ -5,7 +6,7 @@ import type { NoteDirection, Skin, SkinId } from "@/lib/skins/types";
  * canvas is mounted at all, so nothing is paid for the default. */
 export const noSkin: SkinId = "none";
 
-export const skins: readonly Skin[] = [starfield];
+export const skins: readonly Skin[] = [starfield, cruise];
 
 export function findSkin(id: SkinId): Skin | null {
   return skins.find((skin) => skin.id === id) ?? null;

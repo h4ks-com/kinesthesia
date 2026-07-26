@@ -99,7 +99,10 @@ src/lib/
   render/sparks.ts            the swarm thrown up from the keys, and its ceiling
   skins/types.ts              what a background is told and what it must answer
   skins/registry.ts           the backgrounds on offer, and which suit a direction
+  skins/fullscreen.ts         the one triangle a shader background draws on, and
+                              the gas both space backgrounds share
   skins/starfield.ts          drifting gas, stars, and rocks the notes break
+  skins/cruise.ts             the same space travelled through, stars streaking past
   render/export.ts            the watch view as a render job: size, frame, files
   render/audio.ts             offline audio render to a WAV, at the live voicing
   render/video.ts             offline video render, WebCodecs with a recorder fallback

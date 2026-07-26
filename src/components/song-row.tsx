@@ -9,6 +9,7 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
+import { ShareUpload } from "@/components/share-upload";
 import { defaultMelodyRate } from "@/lib/midi/melody";
 import { defaultTranspose } from "@/lib/midi/song";
 import {
@@ -50,6 +51,9 @@ type SongRowProps = {
   onToggleFavorite: () => void;
   /** When set, a remove control drops this one entry, used for uploads. */
   onRemove?: () => void;
+  /** Set on an upload that has not been published yet, so it can be. */
+  onShare?: (() => Promise<void>) | null;
+  signedIn?: boolean;
 };
 
 export function SongRow({
@@ -61,6 +65,8 @@ export function SongRow({
   favorite,
   onToggleFavorite,
   onRemove,
+  onShare,
+  signedIn = false,
 }: SongRowProps) {
   const local = isLocalUrl(url);
   const watchHref = playerPath("watch", {
@@ -113,6 +119,14 @@ export function SongRow({
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
+        {onShare === undefined ? null : (
+          <ShareUpload
+            name={name}
+            onShare={onShare}
+            sharedHref={local ? null : watchHref}
+            signedIn={signedIn}
+          />
+        )}
         {onRemove === undefined ? null : (
           <button
             type="button"

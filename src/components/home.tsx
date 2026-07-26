@@ -32,7 +32,10 @@ import {
   deleteUpload,
   isLocalUrl,
   listUploads,
+  markShared,
+  readUpload,
   storeUpload,
+  uploadKey,
 } from "@/lib/storage/uploads";
 import { shortestQuery, useLiveSearch } from "@/lib/use-live-search";
 import type { Viewer } from "@/server/auth";
@@ -149,6 +152,29 @@ export function Home({
       }
     },
     [refreshLibrary, openSong],
+  );
+
+  const shareUpload = useCallback(
+    async (entry: LibraryEntry) => {
+      const bytes = await readUpload(entry.url);
+      const response = await fetch("/api/uploads", {
+        method: "POST",
+        headers: { "content-type": "audio/midi" },
+        body: bytes,
+      });
+      if (!response.ok) {
+        const body: unknown = await response.json().catch(() => null);
+        const reason =
+          typeof body === "object" && body !== null && "error" in body
+            ? String((body as { error: unknown }).error)
+            : "That did not go through";
+        throw new Error(reason);
+      }
+      const { url } = (await response.json()) as { url: string };
+      await markShared(uploadKey(entry.url), url);
+      refreshLibrary();
+    },
+    [refreshLibrary],
   );
 
   const favoriteKeys = new Set(favorites.map((entry) => entry.key));
@@ -424,6 +450,10 @@ export function Home({
                 plays={null}
                 favorite={favoriteKeys.has(entry.key)}
                 onToggleFavorite={() => void onToggleFavorite(entry)}
+                signedIn={viewer !== null}
+                onShare={
+                  isLocalUrl(entry.url) ? () => shareUpload(entry) : null
+                }
                 onRemove={() =>
                   void deleteUpload(entry.url).then(refreshLibrary)
                 }

@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
 import type { Context } from "hono";
+import { readMidi } from "@/lib/midi/analysis";
 import { isPlayableUrl } from "@/lib/player-url";
 import { currentViewer } from "@/server/auth";
 import { config } from "@/server/config";
@@ -22,6 +23,7 @@ import {
   type MultiplayerRoom,
 } from "@/server/multiplayer/rooms";
 import { saveScore, statsFor, topScores } from "@/server/scores/store";
+import { bucketEnabled, uploadMidi } from "@/server/storage/bucket";
 import {
   deleteVoicing,
   saveVoicing,
@@ -681,6 +683,70 @@ api.openapi(deleteVoicingRoute, async (c) => {
   }
   await deleteVoicing(viewer.id, c.req.valid("query"));
   return c.json({ deleted: true }, 200);
+});
+
+const shareUploadRoute = createRoute({
+  method: "post",
+  path: "/uploads",
+  summary: "Publish an uploaded MIDI",
+  description:
+    "Copies a signed-in player's own MIDI to the public object store and returns the url that serves it. The copy is permanent: the link is meant to keep resolving for anyone it is given to.",
+  request: {
+    body: { content: { "audio/midi": { schema: z.any() } } },
+  },
+  responses: {
+    200: {
+      description: "Where the file now lives",
+      content: {
+        "application/json": { schema: z.object({ url: z.string() }) },
+      },
+    },
+    401: {
+      description: "Not signed in",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+    413: {
+      description: "Larger than the server accepts",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+    503: {
+      description: "No object store is configured",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+  },
+});
+
+api.openapi(shareUploadRoute, async (c) => {
+  const viewer = await currentViewer();
+  if (viewer === null) {
+    return c.json({ error: "Sign in to share a file" }, 401);
+  }
+  if (!bucketEnabled()) {
+    return c.json({ error: "Sharing is unavailable on this server" }, 503);
+  }
+  const body = await c.req.arrayBuffer();
+  if (body.byteLength === 0) {
+    return c.json({ error: "That file is empty" }, 413);
+  }
+  if (body.byteLength > config.maxMidiBytes) {
+    return c.json({ error: "That file is too large to share" }, 413);
+  }
+  const bytes = new Uint8Array(body);
+  // Reading it proves it is a MIDI before it is given a public url that is
+  // meant to keep resolving.
+  try {
+    readMidi(bytes);
+  } catch {
+    return c.json({ error: "That file is not a valid MIDI" }, 413);
+  }
+  const url = await uploadMidi(`shared/${crypto.randomUUID()}.mid`, bytes);
+  return c.json({ url }, 200);
 });
 
 api.doc31("/openapi.json", {

@@ -40,6 +40,7 @@ src/server/
                               with
 src/components/
   song-row.tsx                one song with its favourite and mode links
+  share-upload.tsx            publishes one of your own files, behind a confirm
   library-section.tsx         preview, expand and bound a saved list
   player.tsx                  composes the hooks below into a mode, and hosts a
                               match through its aside, overlay and footer slots
@@ -112,7 +113,8 @@ src/lib/
   storage/library.ts          recents and favourites, and the word filter the
                               home page runs over them
   storage/settings.ts         remembered settings, per song and global
-  storage/uploads.ts          bytes of uploaded MIDI files, keyed by local: url
+  storage/uploads.ts          bytes of uploaded MIDI files, keyed by local: url,
+                              and where one was published if it has been
 ```
 
 ## How playback stays in time

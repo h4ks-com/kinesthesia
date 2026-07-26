@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ExpressionTrail } from "@/lib/midi/expression";
 import { type MelodyOptions, reduceToMelody } from "@/lib/midi/melody";
 import type { Song, SongNote, SongTrack } from "@/lib/midi/song";
 
@@ -71,6 +72,7 @@ function arrangement(
     duration: melody.length * beat,
     notes: notes.sort((left, right) => left.start - right.start),
     tracks: [pitched(0)],
+    expression: new ExpressionTrail(),
   };
 }
 
@@ -140,6 +142,7 @@ describe("reduceToMelody on tunes with a known shape", () => {
       duration: twinkle.length * beat,
       notes: notes.sort((left, right) => left.start - right.start),
       tracks: [pitched(0)],
+      expression: new ExpressionTrail(),
     };
     const atTuneSpeed: MelodyOptions = {
       tracks: new Set([0]),

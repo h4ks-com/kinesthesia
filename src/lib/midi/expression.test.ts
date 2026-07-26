@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ExpressionTrail, flat } from "@/lib/play/expression";
+import { ExpressionTrail, flat } from "@/lib/midi/expression";
 
 describe("ExpressionTrail", () => {
   it("reads flat for a track that never moved a wheel", () => {

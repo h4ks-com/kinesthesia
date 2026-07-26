@@ -6,8 +6,8 @@ import {
   useRef,
 } from "react";
 import type { Reach } from "@/lib/input/keyboard-map";
+import type { ExpressionTrail } from "@/lib/midi/expression";
 import type { LiveNote, Song } from "@/lib/midi/song";
-import type { ExpressionTrail } from "@/lib/play/expression";
 import { PianoRollRenderer } from "@/lib/render/piano-roll";
 
 /** Each pointer keeps its own gesture, so one finger panning the roll and

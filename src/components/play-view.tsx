@@ -10,8 +10,8 @@ import { PlaybackEngine } from "@/lib/audio/engine";
 import type { SongVoicing, Voicing } from "@/lib/audio/voicing";
 import { keyLabelsFor, reachFor } from "@/lib/input/keyboard-map";
 import { type InputChannel, useNoteInput } from "@/lib/input/use-note-input";
+import { ExpressionTrail } from "@/lib/midi/expression";
 import type { Song, SongNote } from "@/lib/midi/song";
-import { ExpressionTrail } from "@/lib/play/expression";
 import {
   channelPart,
   keyboardPart,
@@ -54,6 +54,7 @@ function playSong(parts: readonly PlayPart[]): Song {
     duration: Number.POSITIVE_INFINITY,
     notes: [],
     tracks: parts.map(partToTrack),
+    expression: new ExpressionTrail(),
   };
 }
 

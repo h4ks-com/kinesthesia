@@ -1,4 +1,5 @@
 import { Midi } from "@tonejs/midi";
+import { ExpressionTrail } from "@/lib/midi/expression";
 import { pedalSpans, releaseAt } from "@/lib/midi/sustain";
 import { isLocalUrl, readUpload } from "@/lib/storage/uploads";
 
@@ -27,6 +28,14 @@ const startLeadIn = 2.5;
 /** A real MIDI is kilobytes; this only stops a hostile or mistaken file from
  * exhausting the tab's memory as it parses. */
 export const maxMidiBytes = 5 * 1024 * 1024;
+
+/** One wheel event before the song's runway shift is known. */
+type WheelMove = {
+  readonly track: number;
+  readonly at: number;
+  readonly bend?: number;
+  readonly depth?: number;
+};
 
 function decodeMidi(data: ArrayBuffer): Midi {
   if (data.byteLength > maxMidiBytes) {
@@ -77,6 +86,9 @@ export type Song = {
   readonly duration: number;
   readonly notes: readonly SongNote[];
   readonly tracks: readonly SongTrack[];
+  /** The bend and modulation the file writes, per track. Empty for the many
+   * files that carry neither. */
+  readonly expression: ExpressionTrail;
 };
 
 export function isBlackKey(pitch: number): boolean {
@@ -112,6 +124,7 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
   const midi = decodeMidi(data);
   const notes: SongNote[] = [];
   const tracks: SongTrack[] = [];
+  const wheels: WheelMove[] = [];
 
   for (const [index, track] of midi.tracks.entries()) {
     if (track.notes.length === 0) {
@@ -130,6 +143,16 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
       0,
     );
     const spans = pedalSpans(track.controlChanges[64] ?? [], trackEnd);
+    for (const bend of track.pitchBends) {
+      wheels.push({
+        track: index,
+        at: bend.time,
+        bend: bend.value,
+      });
+    }
+    for (const wheel of track.controlChanges[1] ?? []) {
+      wheels.push({ track: index, at: wheel.time, depth: wheel.value });
+    }
     for (const note of track.notes) {
       const end = note.time + note.duration;
       notes.push({
@@ -165,11 +188,24 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
           release: note.release + shift,
         }));
 
+  // Built after the runway is known, so a wheel lines up with the notes it
+  // moves rather than with where they sat before the song was nudged along.
+  const expression = new ExpressionTrail();
+  wheels.sort((left, right) => left.at - right.at);
+  for (const move of wheels) {
+    if (move.bend !== undefined) {
+      expression.setBend(move.track, move.at + shift, move.bend);
+    } else if (move.depth !== undefined) {
+      expression.setDepth(move.track, move.at + shift, move.depth);
+    }
+  }
+
   return {
     name,
     duration: midi.duration + shift,
     notes: runwayNotes,
     tracks,
+    expression,
   };
 }
 

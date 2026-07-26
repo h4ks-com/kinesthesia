@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ExpressionTrail } from "@/lib/midi/expression";
 import type { Song, SongNote } from "@/lib/midi/song";
 import { buildGates, busiestTrack, gateIndexAt } from "@/lib/scoring/gates";
 
@@ -25,7 +26,13 @@ function song(notes: SongNote[]): Song {
       noteCount: notes.filter((entry) => entry.track === index).length,
     }),
   );
-  return { name: "test", duration: 10, notes, tracks };
+  return {
+    name: "test",
+    duration: 10,
+    notes,
+    tracks,
+    expression: new ExpressionTrail(),
+  };
 }
 
 function owned(source: Song, tracks: ReadonlySet<number>): SongNote[] {

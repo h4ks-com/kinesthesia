@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ExpressionTrail } from "@/lib/midi/expression";
 import {
   clampMelodyRate,
   type MelodyOptions,
@@ -44,6 +45,7 @@ function song(notes: SongNote[], tracks: SongTrack[] = [track(0)]): Song {
     duration: Math.max(0, ...notes.map((each) => each.end)),
     notes: [...notes].sort((left, right) => left.start - right.start),
     tracks,
+    expression: new ExpressionTrail(),
   };
 }
 

@@ -1,4 +1,5 @@
 import type { Reach } from "@/lib/input/keyboard-map";
+import type { ExpressionTrail } from "@/lib/midi/expression";
 import { type NoteColor, pitchColor, trackColor } from "@/lib/midi/palette";
 import {
   highestPitch,
@@ -9,7 +10,6 @@ import {
   type Song,
   type SongNote,
 } from "@/lib/midi/song";
-import type { ExpressionTrail } from "@/lib/play/expression";
 import {
   blackKeyLeft,
   blackKeyWidth,
@@ -532,7 +532,21 @@ export class PianoRollRenderer {
       const punch = 0.74 + note.velocity * 0.26;
       ctx.globalAlpha = ghost ? 0.22 : punch;
       ctx.fillStyle = fill;
-      if (noteHeight >= roundNoteSize && noteWidth >= roundNoteSize) {
+      // A falling note climbs into the future, so a height above the line is a
+      // moment still to come and the file already knows the wheels there.
+      const written = frame.song.expression;
+      const bent =
+        written.touched(note.track) &&
+        this.traceBentNote(
+          written,
+          note.track,
+          (at) => position + lookAhead * (1 - at / keyboardTop),
+          { x, y, width: noteWidth, height: noteHeight },
+          whiteWidth,
+        );
+      if (bent) {
+        ctx.fill();
+      } else if (noteHeight >= roundNoteSize && noteWidth >= roundNoteSize) {
         roundRect(ctx, x, y, noteWidth, noteHeight, 4);
         ctx.fill();
       } else {
@@ -627,10 +641,9 @@ export class PianoRollRenderer {
         trail.touched(note.track) &&
         this.traceBentNote(
           trail,
-          { track: note.track, position },
+          note.track,
+          (at) => position - (keyboardTop - at) / scale,
           { x, y, width: noteWidth, height: noteHeight },
-          scale,
-          keyboardTop,
           whiteWidth,
         );
       if (bent) {
@@ -649,10 +662,9 @@ export class PianoRollRenderer {
    * stood then. Returns false when the wheels never left centre over the note. */
   private traceBentNote(
     trail: ExpressionTrail,
-    at: { track: number; position: number },
+    track: number,
+    timeAt: (y: number) => number,
     box: { x: number; y: number; width: number; height: number },
-    scale: number,
-    keyboardTop: number,
     whiteWidth: number,
   ): boolean {
     const ctx = this.context;
@@ -663,8 +675,8 @@ export class PianoRollRenderer {
     const offsets: number[] = [];
     for (let step = 0; step <= steps; step += 1) {
       const y = box.y + (box.height * step) / steps;
-      const when = at.position - (keyboardTop - y) / scale;
-      const { bend, depth } = trail.at(at.track, when);
+      const when = timeAt(y);
+      const { bend, depth } = trail.at(track, when);
       const shimmer =
         depth === 0
           ? 0

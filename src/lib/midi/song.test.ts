@@ -1,5 +1,6 @@
 import { Midi } from "@tonejs/midi";
 import { describe, expect, it } from "vitest";
+import { ExpressionTrail } from "@/lib/midi/expression";
 import {
   clampTranspose,
   highestPitch,
@@ -45,6 +46,7 @@ const song: Song = {
     },
   ],
   notes: [note(60, 0), note(64, 0), note(67, 0), note(38, 1)],
+  expression: new ExpressionTrail(),
 };
 
 function withLine(line: readonly number[]): Song {
@@ -190,5 +192,47 @@ describe("parseSong sustain", () => {
     for (const note of parsed.notes) {
       expect(note.release).toBe(note.end);
     }
+  });
+});
+
+describe("parseSong expression", () => {
+  /** A note under a bend that arrives after it starts, which is how a played
+   * bend is written: the note first, the wheel while it rings. */
+  function bentMidi(): ArrayBuffer {
+    const midi = new Midi();
+    const track = midi.addTrack();
+    track.addNote({ midi: 60, time: 4, duration: 2 });
+    track.addPitchBend({ time: 5, value: 8191 });
+    track.addCC({ number: 1, value: 0.5, time: 5.5 });
+    return midi.toArray().buffer as ArrayBuffer;
+  }
+
+  it("reads the wheels the file writes", () => {
+    const parsed = parseSong(bentMidi(), "x");
+    expect(parsed.expression.touched(0)).toBe(true);
+    expect(parsed.expression.at(0, 5.2).bend).toBeCloseTo(1, 1);
+    expect(parsed.expression.at(0, 6).depth).toBeCloseTo(0.5, 1);
+  });
+
+  it("leaves the note flat before the wheel moves", () => {
+    const parsed = parseSong(bentMidi(), "x");
+    expect(parsed.expression.at(0, 4.5).bend).toBe(0);
+  });
+
+  it("moves the wheels with the runway, so they line up with the notes", () => {
+    const midi = new Midi();
+    const track = midi.addTrack();
+    // The first note sits at zero, so the whole song is nudged along.
+    track.addNote({ midi: 60, time: 0, duration: 2 });
+    track.addPitchBend({ time: 1, value: 8191 });
+    const parsed = parseSong(midi.toArray().buffer as ArrayBuffer, "x");
+    const shift = (parsed.notes[0]?.start ?? 0) - 0;
+    expect(parsed.expression.at(0, 1 + shift).bend).toBeCloseTo(1, 1);
+    expect(parsed.expression.at(0, 1).bend).toBe(0);
+  });
+
+  it("has nothing to read for a file with no wheels", () => {
+    const parsed = parseSong(midiStartingAt(1), "x");
+    expect(parsed.expression.touched(0)).toBe(false);
   });
 });

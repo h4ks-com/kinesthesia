@@ -71,6 +71,7 @@ src/lib/
   format/clock.ts             seconds as m:ss
   midi/song.ts                parses a .mid into a flat note list, moves it to another key
   midi/sustain.ts             pedal spans, and how far past its end a note sounds under them
+  midi/expression.ts          the bend and modulation wheels over time, per track
   midi/melody.ts              reduces a part to one playable note at a time
   midi/analysis.ts            detects tempo, key and chords, and a compact digest
   midi/compose.ts             chord voicing, a 5x7 text font and note primitives
@@ -79,7 +80,6 @@ src/lib/
   midi/use-part-roll.ts       a part as the getters the roll draws with
   midi/palette.ts             per track and per pitch colours
   play/use-play-notes.ts      the notes play mode emits, rising from the keys
-  play/expression.ts          the bend and modulation wheels over time, per track
   audio/transport.ts          song position on the audio clock
   audio/engine.ts             instruments and the look ahead scheduler
   audio/instruments.ts        one voice per General MIDI program

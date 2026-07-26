@@ -69,6 +69,8 @@ src/lib/
   player-url.ts               builds and parses player URLs
   use-player-settings.ts      the settings a song plays with, restored from this
                               device and written back to the URL
+  use-background.ts           picks, remembers and resolves the background and
+                              which way the notes travel
   use-reduced-motion.ts       whether the system asks for less movement
   search-params.ts            route search params to URLSearchParams
   format/clock.ts             seconds as m:ss

@@ -158,6 +158,23 @@ float clouds(vec2 p) {
   }
   return sum;
 }
+
+/* Stars on a grid of cells, one per cell, placed and sized by the cell's own
+   hash, so the field is dense without any of them being sampled twice. The cut
+   decides how many cells hold one, the twinkle how much they breathe. */
+float stars(vec2 pixel, float cell, float cut, float twinkle) {
+  vec2 grid = floor(pixel / cell);
+  vec2 within = fract(pixel / cell);
+  float pick = hash(grid);
+  if (pick < cut) {
+    return 0.0;
+  }
+  vec2 at = vec2(hash(grid + 1.7), hash(grid + 4.3));
+  float bright = (pick - cut) / (1.0 - cut);
+  float near = 1.0 - smoothstep(0.0, 0.10 + bright * 0.06, length(within - at));
+  float breathe = 1.0 - twinkle + twinkle * sin(time * 1.4 + pick * 40.0);
+  return near * bright * bright * breathe;
+}
 `;
 
 /** The gas both space backgrounds sit in. `drift` decides how fast it is being
@@ -180,6 +197,14 @@ void main() {
     + violet * pow(a, 1.7) * 0.72
     + teal * pow(b, 2.1) * 0.55
     + rose * pow(a * b, 2.6) * 0.75;
+
+  // Three layers at different densities, so the field has depth rather than
+  // reading as one sheet of dots. The gas thins them where it is thickest.
+  float behind = 1.0 - clamp(a * 0.55, 0.0, 0.6);
+  float field = stars(gl_FragCoord.xy, 34.0, 0.86, 0.35) * 0.85
+              + stars(gl_FragCoord.xy, 19.0, 0.90, 0.5) * 0.5
+              + stars(gl_FragCoord.xy, 11.0, 0.94, 0.6) * 0.3;
+  sky += vec3(0.85, 0.90, 1.0) * field * behind;
 
   colour = vec4(sky * gain, 1.0);
 }`;

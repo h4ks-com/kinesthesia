@@ -21,14 +21,12 @@ import {
 } from "@/lib/play/parts";
 import { usePlayNotes } from "@/lib/play/use-play-notes";
 import { clampKeyWidth, defaultKeyWidth } from "@/lib/render/keyboard";
-import { findSkin, skinsFor } from "@/lib/skins/registry";
-import type { SkinId } from "@/lib/skins/types";
 import {
   type GlobalSettings,
   loadGlobalSettings,
   updateGlobalSettings,
 } from "@/lib/storage/settings";
-import { useReducedMotion } from "@/lib/use-reduced-motion";
+import { useBackground } from "@/lib/use-background";
 import type { Viewer } from "@/server/auth";
 
 type PlayViewProps = {
@@ -74,7 +72,6 @@ export function PlayView({
   const [keyWidth, setKeyWidth] = useState(defaultKeyWidth);
   const [showKeyLabels, setShowKeyLabels] = useState(true);
   const [plainStyle, setPlainStyle] = useState(false);
-  const [skinId, setSkinId] = useState<SkinId | null>(null);
   const [pickingSkin, setPickingSkin] = useState(false);
   const [hasKeyboard, setHasKeyboard] = useState(false);
   const [focus, setFocus] = useState(false);
@@ -113,7 +110,6 @@ export function PlayView({
         setKeyWidth(clampKeyWidth(stored.keyWidth));
         setShowKeyLabels(stored.showKeyLabels ?? true);
         setPlainStyle(stored.plainStyle ?? false);
-        setSkinId(stored.skin ?? null);
       }
     });
   }, []);
@@ -345,20 +341,13 @@ export function PlayView({
     },
     [settleGlobal],
   );
-  // Free roam always shoots notes out of the keys, so only the backgrounds that
-  // read that way round are worth offering.
-  const freeRoamSkins = skinsFor("up");
-  const still = useReducedMotion();
-  const skin = plainStyle || still ? null : findSkin(skinId);
-
-  const onSkin = useCallback(
-    (next: SkinId | null) => {
-      setSkinId(next);
-      setPickingSkin(false);
-      settleGlobal({ skin: next ?? undefined });
-    },
-    [settleGlobal],
-  );
+  // Free roam always shoots notes out of the keys, so the direction is not the
+  // player's to choose and only the backgrounds that read that way are offered.
+  const background = useBackground({
+    fixed: "up",
+    plain: plainStyle,
+    fromLink: { skin: null, rise: false },
+  });
 
   const onPlainStyle = useCallback(
     (next: boolean) => {
@@ -426,15 +415,18 @@ export function PlayView({
       <div className="relative min-h-0 flex-1">
         {pickingSkin ? (
           <SkinPicker
-            chosen={skinId}
-            available={freeRoamSkins}
-            onChoose={onSkin}
+            chosen={background.chosen}
+            available={background.offered}
+            onChoose={(next) => {
+              background.choose(next);
+              setPickingSkin(false);
+            }}
             onClose={() => setPickingSkin(false)}
           />
         ) : null}
 
         <PianoRollView
-          skin={skin}
+          skin={background.skin}
           direction="up"
           song={song}
           hiddenTracks={noAutoNotes}
@@ -494,7 +486,7 @@ export function PlayView({
             plainStyle={plainStyle}
             onPlainStyle={onPlainStyle}
             onPickSkin={() => setPickingSkin(true)}
-            skinName={skin?.name.toLowerCase() ?? "plain"}
+            skinName={background.skin?.name.toLowerCase() ?? "plain"}
           />
         </footer>
       )}

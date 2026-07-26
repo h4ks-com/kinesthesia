@@ -266,6 +266,9 @@ export class PianoRollRenderer {
     }
 
     const active = new Map<number, NoteColor>();
+    // Keys the pedal is holding after the hand has left. They stay pressed, and
+    // dark: the colour belongs to the strike.
+    const held = new Set<number>();
     this.foreshadow.clear();
     this.onsets.clear();
     const advance =
@@ -277,9 +280,16 @@ export class PianoRollRenderer {
         ? this.previousPosition
         : null;
     if (frame.live === null) {
-      this.paintNotes(frame, keyboardTop, whiteWidth, active);
+      this.paintNotes(frame, keyboardTop, whiteWidth, active, held);
     } else {
-      this.paintLiveNotes(frame, frame.live, keyboardTop, whiteWidth, active);
+      this.paintLiveNotes(
+        frame,
+        frame.live,
+        keyboardTop,
+        whiteWidth,
+        active,
+        held,
+      );
     }
     this.previousPosition = frame.position;
     for (const pitch of frame.pressed) {
@@ -299,6 +309,7 @@ export class PianoRollRenderer {
     this.paintKeyboard(
       frame,
       active,
+      held,
       keyboardTop,
       keyboardHeight,
       whiteWidth,
@@ -405,6 +416,7 @@ export class PianoRollRenderer {
     keyboardTop: number,
     whiteWidth: number,
     active: Map<number, NoteColor>,
+    held: Set<number>,
   ): void {
     const ctx = this.context;
     const { position } = frame;
@@ -455,9 +467,10 @@ export class PianoRollRenderer {
       const ghost = frame.yours !== null && !frame.yours.has(note.id);
       const color = trackColor(note.track);
       const started = note.start <= position;
-      // A rising note outlives its own sound, so a key is lit by the note still
-      // making a noise rather than by one that is merely on the roll.
-      const sounding = started && position < note.release;
+      // A key is lit by a note being played, not by one the pedal is holding
+      // on after the hand has gone: the light stands for the strike.
+      const sounding = started && position < note.end;
+      const pedalled = started && !sounding && position < note.release;
       // Marked before any branch below returns, so a note whose whole length
       // falls inside one frame still counts as having landed.
       if (!ghost && started && since !== null && note.start > since) {
@@ -470,11 +483,15 @@ export class PianoRollRenderer {
       // A rising note is only starting its climb when its end passes, so this
       // is the moment it leaves the keys rather than the moment it is spent.
       if (note.end < position && !rising) {
-        // A drum key decays on its own, so the pedal has no say over it.
-        if (!ghost && !drums.has(note.track) && sounding) {
-          active.set(note.pitch, color);
+        // A drum key decays on its own, so the pedal has no say over it. The
+        // key stays down while the pedal holds it, but unlit.
+        if (!ghost && !drums.has(note.track) && pedalled) {
+          held.add(note.pitch);
         }
         continue;
+      }
+      if (rising && !ghost && !drums.has(note.track) && pedalled) {
+        held.add(note.pitch);
       }
 
       // A drum is an impulse: the mark falls to the line and is spent there,
@@ -622,14 +639,15 @@ export class PianoRollRenderer {
 
   /** The reverse of paintNotes: a note leaves the keys the moment it is struck
    * and climbs, its foot pinned to the keyboard while held so the bar grows,
-   * then lifting off once released. A held note lights its key, so the glow,
-   * sparks and sink all read the same as playing along in any other mode. */
+   * then lifting off once released. A note being played lights its key, so the
+   * glow, sparks and sink read the same as playing along in any other mode. */
   private paintLiveNotes(
     frame: Frame,
     live: readonly LiveNote[],
     keyboardTop: number,
     whiteWidth: number,
     active: Map<number, NoteColor>,
+    held: Set<number>,
   ): void {
     const ctx = this.context;
     const { position } = frame;
@@ -642,14 +660,16 @@ export class PianoRollRenderer {
       if (headAge < 0) {
         continue;
       }
-      const held = note.end === null;
+      const down = note.end === null;
       const footAge = note.end === null ? 0 : position - note.end;
       const bottom = keyboardTop - footAge * scale;
       const color = trackColor(note.track);
-      // A note the pedal still holds keeps its key lit even once its bar has
-      // climbed off the roll, so the light is claimed before the geometry cull.
-      if (note.release === null) {
+      // Claimed before the geometry cull, so a note whose bar has climbed off
+      // the roll still owns its key. Down is lit; only pedalled is merely held.
+      if (down) {
         active.set(note.pitch, color);
+      } else if (note.release === null) {
+        held.add(note.pitch);
       }
       if (bottom < 0) {
         continue;
@@ -678,8 +698,8 @@ export class PianoRollRenderer {
       } else if (noteHeight >= gradientNoteHeight) {
         const gradient = ctx.createLinearGradient(0, y, 0, y + noteHeight);
         gradient.addColorStop(0, color.core);
-        gradient.addColorStop(held ? 0.6 : 0.25, color.glow);
-        gradient.addColorStop(1, held ? color.glow : color.shade);
+        gradient.addColorStop(down ? 0.6 : 0.25, color.glow);
+        gradient.addColorStop(1, down ? color.glow : color.shade);
         fill = gradient;
       } else {
         fill = color.glow;
@@ -821,6 +841,7 @@ export class PianoRollRenderer {
   private paintKeyboard(
     frame: Frame,
     active: ReadonlyMap<number, NoteColor>,
+    held: ReadonlySet<number>,
     keyboardTop: number,
     keyboardHeight: number,
     whiteWidth: number,
@@ -833,7 +854,7 @@ export class PianoRollRenderer {
     for (const pitch of whiteKeys) {
       const x = whiteKeyLeft(pitch, whiteWidth);
       // A lit key sinks a couple pixels, exposing the keybed above it.
-      const sink = active.has(pitch) ? 2 : 0;
+      const sink = active.has(pitch) || held.has(pitch) ? 2 : 0;
       this.setKeyPaint(frame, active, pitch, this.whiteFace ?? "#dfe4ec", 20);
       ctx.fillRect(
         x + 0.5,
@@ -865,7 +886,7 @@ export class PianoRollRenderer {
       // The shadow a raised black key casts on the whites just past its tip.
       ctx.fillStyle = "rgba(0,0,0,0.28)";
       ctx.fillRect(x - 1, keyboardTop + blackHeight, blackWidth + 2, 4);
-      const sink = active.has(pitch) ? 2 : 0;
+      const sink = active.has(pitch) || held.has(pitch) ? 2 : 0;
       this.setKeyPaint(frame, active, pitch, this.blackFace ?? "#0b0e15", 16);
       ctx.fillRect(x, keyboardTop + sink, blackWidth, blackHeight - sink);
       ctx.shadowBlur = 0;

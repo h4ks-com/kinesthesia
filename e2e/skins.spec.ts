@@ -232,3 +232,59 @@ test("learn offers the backgrounds that read with notes coming down", async ({
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.getByRole("switch", { name: /notes rise/ })).toHaveCount(0);
 });
+
+test.describe("remembering the choice", () => {
+  const openWatch = async (page: Page): Promise<void> => {
+    await serveFixture(page);
+    await page.goto(watchPath);
+    await expect(page.locator("canvas")).toBeVisible();
+  };
+
+  test("a background picked in watch is there on the next visit", async ({
+    page,
+  }) => {
+    await openWatch(page);
+    await page.getByRole("button", { name: "Settings" }).click();
+    await page.getByRole("button", { name: /background/i }).click();
+    await page.getByRole("button", { name: /^Ember/ }).click();
+    await settingStored(page, "skin", "ember");
+
+    await page.reload();
+    await expect(page.locator("canvas")).toHaveCount(3);
+    await page.getByRole("button", { name: "Settings" }).click();
+    await expect(
+      page.getByRole("button", { name: /background/i }),
+    ).toContainText("ember");
+  });
+
+  test("the direction is remembered with everything else", async ({ page }) => {
+    await openWatch(page);
+    await page.getByRole("button", { name: "Settings" }).click();
+    await page.getByRole("switch", { name: /notes rise/ }).click();
+    await settingStored(page, "rise", true);
+
+    await page.reload();
+    await expect(page.locator("canvas")).toBeVisible();
+    await page.getByRole("button", { name: "Settings" }).click();
+    await expect(
+      page.getByRole("switch", { name: /notes rise/ }),
+    ).toHaveAttribute("aria-checked", "true");
+  });
+
+  test("a link outranks what this device remembers, for that visit", async ({
+    page,
+  }) => {
+    await openWatch(page);
+    await page.getByRole("button", { name: "Settings" }).click();
+    await page.getByRole("button", { name: /background/i }).click();
+    await page.getByRole("button", { name: /^Ember/ }).click();
+    await settingStored(page, "skin", "ember");
+
+    await page.goto(`${watchPath}&skin=abyss`);
+    await expect(page.locator("canvas")).toHaveCount(3);
+    await page.getByRole("button", { name: "Settings" }).click();
+    await expect(
+      page.getByRole("button", { name: /background/i }),
+    ).toContainText("abyss");
+  });
+});

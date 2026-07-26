@@ -47,8 +47,8 @@ type Dust = {
 };
 
 /** Pieces are chips off the rock, so they carry its colours and none of their
- * own. */
-const rockShades = ["#3a342d", "#2b2521", "#4a4239", "#211c18"] as const;
+ * own. Stone, not soil: a warm rock reads as dirt against a cold sky. */
+const rockShades = ["#3d4045", "#2b2d31", "#4d5157", "#212326"] as const;
 
 const corners = 11;
 const maxChunks = 320;
@@ -127,9 +127,9 @@ export function drawRock(ctx: CanvasRenderingContext2D, rock: Rock): void {
     rock.radius,
     rock.radius,
   );
-  body.addColorStop(0, "#3a342d");
-  body.addColorStop(0.45, "#241f1a");
-  body.addColorStop(1, "#141110");
+  body.addColorStop(0, "#43474d");
+  body.addColorStop(0.45, "#292b30");
+  body.addColorStop(1, "#131417");
   traceRock(ctx, rock, 1);
   ctx.fillStyle = body;
   ctx.fill();
@@ -145,7 +145,7 @@ export function drawRock(ctx: CanvasRenderingContext2D, rock: Rock): void {
       0,
       Math.PI * 2,
     );
-    ctx.fillStyle = "#191512";
+    ctx.fillStyle = "#1b1d21";
     ctx.fill();
     ctx.beginPath();
     ctx.ellipse(
@@ -157,7 +157,7 @@ export function drawRock(ctx: CanvasRenderingContext2D, rock: Rock): void {
       0,
       Math.PI * 2,
     );
-    ctx.fillStyle = "#221d19";
+    ctx.fillStyle = "#26292e";
     ctx.fill();
   }
 
@@ -166,7 +166,7 @@ export function drawRock(ctx: CanvasRenderingContext2D, rock: Rock): void {
   traceRock(ctx, rock, 1);
   ctx.clip();
   ctx.globalAlpha = 0.5;
-  ctx.strokeStyle = "#4b443b";
+  ctx.strokeStyle = "#565b62";
   ctx.lineWidth = 1.6;
   traceRock(ctx, rock, 0.985);
   ctx.stroke();
@@ -216,7 +216,7 @@ export class Rubble {
         fade: 0.014 + Math.random() * 0.016,
         color:
           rockShades[Math.floor(Math.random() * rockShades.length)] ??
-          "#2b2521",
+          "#2b2d31",
       });
     }
   }
@@ -251,8 +251,8 @@ export class Rubble {
         puff.y,
         Math.max(1, spread),
       );
-      cloud.addColorStop(0, "rgba(86,74,62,0.55)");
-      cloud.addColorStop(1, "rgba(38,31,26,0)");
+      cloud.addColorStop(0, "rgba(120,126,134,0.5)");
+      cloud.addColorStop(1, "rgba(38,40,44,0)");
       ctx.globalAlpha = puff.life * 0.7;
       ctx.fillStyle = cloud;
       ctx.beginPath();
@@ -332,6 +332,14 @@ export class Rubble {
   }
 }
 
+/** Big enough that breaking it should leave something behind. Anything smaller
+ * is spent in one hit. */
+const splitAbove = 16;
+const smallestPiece = 6;
+/** Headroom over the spawn cap, so pieces have somewhere to go without letting
+ * a long session fill the sky. */
+const pieceRoom = 8;
+
 export type RockFieldOptions = {
   readonly max: number;
   /** Rocks entering per second. */
@@ -378,7 +386,13 @@ export class RockField {
       rock.y += rock.fall * step;
       rock.x += rock.drift * step;
       rock.angle += rock.spin * step;
-      if (rock.y - rock.radius > frame.keyboardTop) {
+      // Pieces are thrown in every direction, so leaving by any edge counts.
+      if (
+        rock.y - rock.radius > frame.keyboardTop ||
+        rock.y + rock.radius < -400 ||
+        rock.x + rock.radius < -200 ||
+        rock.x - rock.radius > width + 200
+      ) {
         this.rocks.splice(index, 1);
         continue;
       }
@@ -386,11 +400,38 @@ export class RockField {
       if (struck !== null) {
         this.rubble.burst(rock.x, rock.y, rock.radius, struck.color);
         this.rocks.splice(index, 1);
+        this.split(rock);
         continue;
       }
       drawRock(ctx, rock);
     }
 
     this.rubble.paint(ctx, width, height);
+  }
+
+  /** What a broken rock leaves behind: two or three smaller ones thrown apart,
+   * each still solid enough to be hit again. A small one leaves nothing. */
+  private split(rock: Rock): void {
+    if (rock.radius < splitAbove) {
+      return;
+    }
+    const pieces = 2 + Math.floor(Math.random() * 2);
+    for (let index = 0; index < pieces; index += 1) {
+      if (this.rocks.length >= this.options.max + pieceRoom) {
+        return;
+      }
+      const around = (index / pieces) * Math.PI * 2 + Math.random();
+      const piece = makeRock(
+        rock.x,
+        rock.y,
+        Math.max(smallestPiece, rock.radius / (pieces * 0.7)),
+      );
+      piece.drift = rock.drift + Math.cos(around) * 110;
+      // Kept falling, so a piece thrown upward still comes back down the roll
+      // rather than hanging above it.
+      piece.fall = Math.max(25, rock.fall * 0.75 + Math.sin(around) * 80);
+      piece.spin = (Math.random() - 0.5) * 3.4;
+      this.rocks.push(piece);
+    }
   }
 }

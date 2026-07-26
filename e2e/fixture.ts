@@ -286,7 +286,7 @@ export async function brightNotePixels(page: Page): Promise<number> {
 export async function settingStored(
   page: Page,
   field: string,
-  value: string,
+  value: string | boolean,
 ): Promise<void> {
   await expect
     .poll(

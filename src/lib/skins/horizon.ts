@@ -11,8 +11,8 @@ void main() {
   float up = 1.0 - uv.y;
   float line = 0.52;
 
-  vec3 high = vec3(0.05, 0.02, 0.10);
-  vec3 low = vec3(0.24, 0.05, 0.20);
+  vec3 high = vec3(0.030, 0.012, 0.060);
+  vec3 low = vec3(0.115, 0.022, 0.098);
   vec3 sky = mix(high, low, smoothstep(0.0, line, up));
 
   // A banded sun sitting on the horizon, the bands widening toward the bottom.
@@ -22,13 +22,13 @@ void main() {
   float sun = smoothstep(0.30, 0.02, disc);
   float slats = step(0.35, fract((middle.y - up) * 34.0 + 0.35));
   sun *= up > line ? 1.0 : max(slats, smoothstep(0.14, 0.0, disc));
-  sky += mix(vec3(1.0, 0.30, 0.42), vec3(1.0, 0.72, 0.30), 1.0 - disc * 2.2) * sun * 0.85;
+  sky += mix(vec3(0.85, 0.22, 0.34), vec3(0.85, 0.55, 0.24), 1.0 - disc * 2.2) * sun * 0.42;
 
   // Haze along the horizon, lifted by whatever is playing.
-  sky += vec3(0.9, 0.25, 0.55) * smoothstep(0.12, 0.0, abs(up - line)) * (0.16 + energy * 0.3);
+  sky += vec3(0.9, 0.25, 0.55) * smoothstep(0.12, 0.0, abs(up - line)) * (0.07 + energy * 0.13);
 
   float star = step(0.9985, hash(floor(gl_FragCoord.xy * 0.5))) * step(line, up);
-  sky += vec3(star) * 0.6;
+  sky += vec3(star) * 0.45;
 
   colour = vec4(sky * gain, 1.0);
 }`;
@@ -89,7 +89,7 @@ export const horizon = defineSkin({
             const reach = deep * 0.9 * particle.life;
             const glow = ctx.createLinearGradient(0, line - reach, 0, line);
             glow.addColorStop(0, "rgba(253,224,71,0)");
-            glow.addColorStop(1, `rgba(253,224,71,${particle.life * 0.55})`);
+            glow.addColorStop(1, `rgba(253,224,71,${particle.life * 0.34})`);
             ctx.fillStyle = glow;
             ctx.fillRect(particle.x - 1.5, line - reach, 3, reach);
           },
@@ -98,7 +98,7 @@ export const horizon = defineSkin({
 
         // The floor. Verticals fan out of the vanishing point; the horizontals
         // bunch toward it, so the spacing itself carries the distance.
-        ctx.strokeStyle = `rgba(217,70,239,${0.34 + energy * 0.26})`;
+        ctx.strokeStyle = `rgba(190,66,208,${0.19 + energy * 0.14})`;
         ctx.lineWidth = 1;
         ctx.beginPath();
         const middle = view.width / 2;
@@ -118,7 +118,7 @@ export const horizon = defineSkin({
         // A haze where the grid meets the sky, so the two are one place.
         const seam = ctx.createLinearGradient(0, line - 24, 0, line + 24);
         seam.addColorStop(0, "rgba(244,63,94,0)");
-        seam.addColorStop(0.5, "rgba(244,63,94,0.22)");
+        seam.addColorStop(0.5, "rgba(244,63,94,0.10)");
         seam.addColorStop(1, "rgba(244,63,94,0)");
         ctx.fillStyle = seam;
         ctx.fillRect(0, line - 24, view.width, 48);

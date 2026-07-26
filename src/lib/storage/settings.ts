@@ -26,6 +26,9 @@ export type GlobalSettings = {
   readonly plainStyle?: boolean;
   /** Which cosmetic layer is drawn behind the roll. Absent means none. */
   readonly skin?: SkinId;
+  /** Sends the notes out of the keys rather than onto them. Absent means they
+   * fall, which is how a song is read. */
+  readonly rise?: boolean;
 };
 
 const globalKey = "global";

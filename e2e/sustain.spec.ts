@@ -46,28 +46,37 @@ async function open(page: import("@playwright/test").Page): Promise<void> {
     .toBeGreaterThan(0);
 }
 
-test("a pedalled note lights its key without stretching its bar", async ({
+/** Counts the white keys wearing a track colour on the given row. */
+async function litKeys(
+  page: import("@playwright/test").Page,
+  centres: readonly number[],
+  row: number,
+): Promise<number> {
+  const pixels = await Promise.all(centres.map((x) => pixelAt(page, x, row)));
+  return pixels.filter((pixel) => !isIdleKey(pixel)).length;
+}
+
+test("a pedalled note stops lighting its key once the hand leaves", async ({
   page,
 }) => {
   await open(page);
   const centres = await whiteKeyCentres(page);
   expect(centres.length).toBeGreaterThan(0);
 
-  const canvas = page.locator("canvas");
-  const box = await canvas.boundingBox();
-  expect(box).not.toBeNull();
+  const box = await page.locator("canvas").boundingBox();
   const height = box?.height ?? 0;
-
-  // Middle C is the only sounding pitch, so the lit key is the one that differs
-  // from the idle keybed.
+  const litRow = height - 40;
   const seek = page.getByRole("slider", { name: "Song position" });
 
+  // Sounding: the key wears its track colour.
+  await seek.fill(String(noteAt));
+  await page.waitForTimeout(300);
+  expect(await litKeys(page, centres, litRow)).toBeGreaterThan(0);
+
+  // Held by the pedal alone: still down, but the light belongs to the strike.
   await seek.fill("6");
   await page.waitForTimeout(300);
-  const litRow = height - 40;
-  const lit = await Promise.all(centres.map((x) => pixelAt(page, x, litRow)));
-  const held = lit.filter((pixel) => !isIdleKey(pixel));
-  expect(held.length).toBeGreaterThan(0);
+  expect(await litKeys(page, centres, litRow)).toBe(0);
 
   // Well above the keys the roll must be empty: the written note ended a second
   // ago, so the pedal must not have drawn a bar up there.
@@ -80,26 +89,25 @@ test("a pedalled note lights its key without stretching its bar", async ({
   expect(bars).toHaveLength(0);
 });
 
-test("the key lights under the pedal and goes dark once it lifts", async ({
+test("the key stays dark from the note ending until the next one lands", async ({
   page,
 }) => {
   await open(page);
   const centres = await whiteKeyCentres(page);
   const box = await page.locator("canvas").boundingBox();
   const height = box?.height ?? 0;
+  const row = height - 40;
   const seek = page.getByRole("slider", { name: "Song position" });
 
-  // Both halves in one context, so the dark assertion cannot pass by the key
-  // never having lit at all.
   const litAt = async (at: string): Promise<number> => {
     await seek.fill(at);
     await page.waitForTimeout(300);
-    const row = await Promise.all(
-      centres.map((x) => pixelAt(page, x, height - 40)),
-    );
-    return row.filter((pixel) => !isIdleKey(pixel)).length;
+    return litKeys(page, centres, row);
   };
 
-  expect(await litAt("6")).toBeGreaterThan(0);
+  // All three in one context, so the dark assertions cannot pass by the key
+  // never having lit at all.
+  expect(await litAt(String(noteAt))).toBeGreaterThan(0);
+  expect(await litAt("6")).toBe(0);
   expect(await litAt(String(pedalUp + 2))).toBe(0);
 });

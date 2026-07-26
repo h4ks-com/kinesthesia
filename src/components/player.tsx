@@ -38,13 +38,10 @@ import { busiestTrack } from "@/lib/scoring/gates";
 import type { Judgement, Score } from "@/lib/scoring/judge";
 import { useGates } from "@/lib/scoring/use-gates";
 import { useRunRecord } from "@/lib/scoring/use-run-record";
-import { findSkin, offeredSkins, suitsDirection } from "@/lib/skins/registry";
-import type { NoteDirection, SkinId } from "@/lib/skins/types";
-import { skinReads } from "@/lib/skins/types";
 import { tourFor } from "@/lib/tour/steps";
 import { useWalkthrough } from "@/lib/tour/use-walkthrough";
+import { useBackground } from "@/lib/use-background";
 import { usePlayerSettings } from "@/lib/use-player-settings";
-import { useReducedMotion } from "@/lib/use-reduced-motion";
 
 type PlayerProps = {
   mode: PlayerMode;
@@ -107,20 +104,11 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const sound = useSongVoicing(params, viewerId);
   const load = useSong(params);
   const original = load.status === "ready" ? load.song : null;
-  // A link may name a background and which way the notes travel. Neither is
-  // written back to this device: they belong to the link, not to the person
-  // opening it.
-  const [skinId, setSkinId] = useState<SkinId | null>(params.skin);
-  const [rising, setRising] = useState(params.rise);
-  // A background the player asks for here outranks a system asking for less
-  // movement. One that merely arrived in a link does not.
-  const [askedHere, setAskedHere] = useState(false);
   const [pickingSkin, setPickingSkin] = useState(false);
 
   const interactive = mode !== "watch";
   // Notes may only leave the keys where nobody has to read them coming: in
   // learn and match the approach is how you know what to play.
-  const mayRise = mode === "watch";
   const waitsForYou = mode === "learn";
 
   const [hiddenTracks, setHiddenTracks] = useState<ReadonlySet<number>>(
@@ -160,46 +148,13 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     togglePlayerTrack,
   } = usePlayerSettings({ mode, params, locked, getFocus });
 
-  // Plain style means plain: no background either. A system asking for less
-  // movement suppresses one that arrived on its own, since a link can turn a
-  // background on without ever being saved here.
-  const still = useReducedMotion();
-  const unasked = still && !askedHere;
-  const chosen = plainStyle || unasked ? null : findSkin(skinId);
-  // A background that reads only one way decides the direction, so turning the
-  // notes around can never make one vanish under the player.
-  const held =
-    chosen !== null &&
-    !(skinReads(chosen.id, "up") && skinReads(chosen.id, "down"))
-      ? chosen
-      : null;
-  const direction: NoteDirection =
-    held !== null
-      ? skinReads(held.id, "up") && mayRise
-        ? "up"
-        : "down"
-      : mayRise && rising
-        ? "up"
-        : "down";
-  const skin =
-    chosen !== null && suitsDirection(chosen, direction) ? chosen : null;
-  const offered = offeredSkins(mayRise);
-
-  const pickSkin = useCallback((next: SkinId | null) => {
-    setSkinId(next);
-    setAskedHere(true);
-    setPickingSkin(false);
-    // A background built to be flown through turns the notes around with it,
-    // and one that only reads coming down turns them back, so picking one is
-    // the whole of the choice for anyone who does not want two.
-    if (next !== null) {
-      if (!skinReads(next, "down")) {
-        setRising(true);
-      } else if (!skinReads(next, "up")) {
-        setRising(false);
-      }
-    }
-  }, []);
+  const background = useBackground({
+    // Notes may only leave the keys where nobody has to read them coming: in
+    // learn and match the approach is how you know what to play.
+    fixed: mode === "watch" ? null : "down",
+    plain: plainStyle,
+    fromLink: { skin: params.skin, rise: params.rise },
+  });
 
   const song = useMemo(
     () => (original === null ? null : transposeSong(original, transpose)),
@@ -602,7 +557,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                     hiddenTracks={hiddenTracks}
                     plain={plainStyle}
                     speed={speed}
-                    direction={direction}
+                    direction={background.direction}
                     title={songTitle}
                   />
                 ) : null
@@ -619,15 +574,18 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
           >
             {pickingSkin ? (
               <SkinPicker
-                chosen={skinId}
-                available={offered}
-                onChoose={pickSkin}
+                chosen={background.chosen}
+                available={background.offered}
+                onChoose={(next) => {
+                  background.choose(next);
+                  setPickingSkin(false);
+                }}
                 onClose={() => setPickingSkin(false)}
               />
             ) : null}
             <PianoRollView
-              skin={skin}
-              direction={direction}
+              skin={background.skin}
+              direction={background.direction}
               song={song}
               hiddenTracks={hiddenTracks}
               keyWidth={keyWidth}
@@ -688,12 +646,14 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             plainStyle={plainStyle}
             onPlainStyle={changePlainStyle}
             onPickSkin={
-              offered.length > 0 ? () => setPickingSkin(true) : undefined
+              background.offered.length > 0
+                ? () => setPickingSkin(true)
+                : undefined
             }
-            skinName={skin?.name.toLowerCase() ?? "plain"}
-            onRising={mayRise ? setRising : undefined}
-            rising={direction === "up"}
-            risingHeldBy={held?.name.toLowerCase()}
+            skinName={background.skin?.name.toLowerCase() ?? "plain"}
+            onRising={background.canTurn ? background.turn : undefined}
+            rising={background.direction === "up"}
+            risingHeldBy={background.heldBy?.name.toLowerCase()}
             inputStatus={input.status}
             // A running match owns the clock, so nobody plays or seeks by hand.
             onToggle={matchActive ? null : () => void playback.toggle()}

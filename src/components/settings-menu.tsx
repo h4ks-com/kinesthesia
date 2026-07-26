@@ -30,6 +30,13 @@ type SettingsMenuProps = {
   /** Absent where a mode has no skin to offer. */
   onPickSkin?: () => void;
   skinName?: string;
+  /** Absent where the notes have to be read coming and cannot be turned
+   * around. */
+  onRising?: (rising: boolean) => void;
+  rising?: boolean;
+  /** The background that decides the direction on its own, where one does.
+   * Named so the row can say why it will not move. */
+  risingHeldBy?: string;
   onPlainStyle: (plain: boolean) => void;
 };
 
@@ -48,6 +55,9 @@ export function SettingsMenu({
   plainStyle,
   onPickSkin,
   skinName = "plain",
+  onRising,
+  rising = false,
+  risingHeldBy,
   onPlainStyle,
 }: SettingsMenuProps) {
   const advice = latencyAdvice(measuredLatency);
@@ -94,6 +104,19 @@ export function SettingsMenu({
               onChange={onPlainStyle}
               tip="Flat colour, no glow, no sparks and no background. Calmer to read, and lighter on a slow device."
             />
+            {onRising === undefined ? null : (
+              <Toggle
+                label="notes rise"
+                checked={rising}
+                onChange={onRising}
+                disabled={plainStyle || risingHeldBy !== undefined}
+                tip={
+                  risingHeldBy === undefined
+                    ? "Sends the notes out of the keys as they sound instead of onto them. A look, not a way to read ahead."
+                    : `${risingHeldBy} only reads with the notes going this way. Pick another background to turn them around.`
+                }
+              />
+            )}
             {onPickSkin === undefined ? null : (
               <button
                 type="button"

@@ -442,6 +442,7 @@ export function Multiplayer({
         transpose: clampTranspose(room.transpose ?? defaultTranspose),
         focus: false,
         skin: null,
+        rise: false,
         start: defaultStart,
       });
       const { Peer } = await import("peerjs");

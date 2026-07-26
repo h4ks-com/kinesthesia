@@ -80,6 +80,7 @@ export function SongRow({
     transpose: defaultTranspose,
     focus: false,
     skin: null,
+    rise: false,
     start: defaultStart,
   });
 
@@ -182,6 +183,7 @@ export function SongRow({
                 transpose: defaultTranspose,
                 focus: false,
                 skin: null,
+                rise: false,
                 start: defaultStart,
               })}
               data-tip={tip}

@@ -70,6 +70,7 @@ function watchHref(song: SongLink): string {
     transpose: defaultTranspose,
     focus: false,
     skin: null,
+    rise: false,
     start: defaultStart,
   });
 }

@@ -18,6 +18,7 @@ const song: PlayerParams = {
   transpose: 0,
   focus: false,
   skin: null,
+  rise: false,
   start: defaultStart,
 };
 
@@ -175,5 +176,25 @@ describe("the background in a link", () => {
       new URLSearchParams(`url=${encodeURIComponent(song.url)}&skin=made-up`),
     );
     expect(read?.skin).toBeNull();
+  });
+});
+
+describe("which way the notes travel", () => {
+  const origin = "https://kinesthesia.test";
+
+  it("leaves the flag out while they fall, which is the default", () => {
+    expect(buildPlayerUrl(origin, "watch", song)).not.toContain("rise");
+  });
+
+  it("carries it when they rise, so a shared link arrives the same", () => {
+    const url = buildPlayerUrl(origin, "watch", { ...song, rise: true });
+    expect(url).toContain("rise=1");
+    expect(parse(new URL(url).searchParams)?.rise).toBe(true);
+  });
+
+  it("reads a link without one as falling", () => {
+    expect(parse(new URLSearchParams("name=x&url=https://x/a.mid"))?.rise).toBe(
+      false,
+    );
   });
 });

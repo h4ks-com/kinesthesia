@@ -114,6 +114,12 @@ const playerLinkShape = {
     .describe(
       "Background drawn behind the notes, purely cosmetic. Some of them send the notes out of the keys instead of onto them, and those are watch only. Left out for the plain roll",
     ),
+  rise: z
+    .boolean()
+    .optional()
+    .describe(
+      "Send the notes out of the keys as they sound instead of onto them. A look rather than a way to read ahead, so it is watch only. Some backgrounds turn it on by themselves",
+    ),
   start: z
     .number()
     .min(0)
@@ -136,6 +142,7 @@ type PlayerLinkInput = {
   readonly melodyRate?: number;
   readonly focus?: boolean;
   readonly skin?: string;
+  readonly rise?: boolean;
   readonly start?: number;
 };
 
@@ -184,6 +191,12 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
       why: `${skin} sends the notes out of the keys, and a mode that is played needs them approaching. In ${input.mode} try ${falling.join(" or ")}`,
     };
   }
+  if (input.rise === true && input.mode !== "watch") {
+    return {
+      ok: false,
+      why: "notes may only leave the keys in watch, since a mode that is played needs them approaching",
+    };
+  }
   if (input.focus === true && input.mode !== "watch") {
     return {
       ok: false,
@@ -201,6 +214,7 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
       melodyRate: clampMelodyRate(input.melodyRate ?? defaultMelodyRate),
       transpose: clampTranspose(input.transpose ?? defaultTranspose),
       focus: input.focus ?? false,
+      rise: input.rise ?? false,
       skin,
       start: input.start ?? defaultStart,
     }),
@@ -534,7 +548,9 @@ nothing is saved to the listener's device, so a link opens looking the way it wa
 sent. Watch takes any of them. Some send the notes out of the keys rather than
 onto them, and those are refused in learn and multiplayer, where the approach is
 how a player knows what to play; player_link names the ones that still work
-there when it refuses.
+there when it refuses. The rise argument turns the notes around on its own, for
+a background that reads either way or for the plain roll, and is watch only for
+the same reason.
 
 player_link also accepts a direct .mid url in place of source and id, as long as
 the url is on an origin the deployment trusts. That is how a file from elsewhere,

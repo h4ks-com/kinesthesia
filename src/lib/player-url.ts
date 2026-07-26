@@ -36,6 +36,9 @@ export type PlayerParams = {
   /** The background drawn behind the roll. Carried in the link so a shared one
    * arrives looking the way it was sent, and never saved to this device. */
   readonly skin: SkinId | null;
+  /** Sends the notes out of the keys rather than onto them. A look rather than
+   * a way to read ahead, so it rides in the link with the background. */
+  readonly rise: boolean;
   /** Seconds the playhead opens at, so a link can start partway through. */
   readonly start: number;
 };
@@ -176,6 +179,9 @@ export function buildPlayerUrl(
   if (params.skin !== null) {
     target.searchParams.set("skin", params.skin);
   }
+  if (params.rise) {
+    target.searchParams.set("rise", "1");
+  }
   if (params.focus) {
     target.searchParams.set("focus", "1");
   }
@@ -230,6 +236,7 @@ export function parsePlayerParams(
     melodyRate: readRate(searchParams.get("rate")),
     transpose: clampTranspose(transpose),
     focus: searchParams.get("focus") === "1",
+    rise: searchParams.get("rise") === "1",
     skin: readSkin(searchParams.get("skin")),
     start: readStart(searchParams.get("start")),
   };

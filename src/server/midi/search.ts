@@ -80,6 +80,7 @@ export async function searchMidi({
         transpose: defaultTranspose,
         focus: false,
         skin: null,
+        rise: false,
         start: defaultStart,
       });
     return {

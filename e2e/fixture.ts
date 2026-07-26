@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import { Midi } from "@tonejs/midi";
 
 export const songUrl = "https://example.test/fixture.mid";
@@ -277,4 +277,40 @@ export async function brightNotePixels(page: Page): Promise<number> {
     }
     return bright;
   });
+}
+
+/** Waits until a global setting has actually reached storage. The writes are
+ * debounced, so a reload fired off the click alone can beat them and lose the
+ * setting. Polled through evaluate, since a promise returned from
+ * waitForFunction is truthy the moment it is made. */
+export async function settingStored(
+  page: Page,
+  field: string,
+  value: string,
+): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          (key) =>
+            new Promise<unknown>((resolve) => {
+              const request = indexedDB.open("kinesthesia", 3);
+              request.onsuccess = () => {
+                const store = request.result
+                  .transaction("settings", "readonly")
+                  .objectStore("settings");
+                const row = store.get("global");
+                row.onsuccess = () =>
+                  resolve(
+                    (row.result as Record<string, unknown> | undefined)?.[key],
+                  );
+                row.onerror = () => resolve(null);
+              };
+              request.onerror = () => resolve(null);
+            }),
+          field,
+        ),
+      { timeout: 10_000 },
+    )
+    .toBe(value);
 }

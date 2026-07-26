@@ -6,9 +6,17 @@ type ToggleProps = {
   onChange: (checked: boolean) => void;
   /** The longer explanation, kept off the panel and shown on hover. */
   tip?: string;
+  /** Greyed and unreachable where the setting cannot apply. */
+  disabled?: boolean;
 };
 
-export function Toggle({ label, checked, onChange, tip }: ToggleProps) {
+export function Toggle({
+  label,
+  checked,
+  onChange,
+  tip,
+  disabled = false,
+}: ToggleProps) {
   return (
     <button
       type="button"
@@ -16,10 +24,11 @@ export function Toggle({ label, checked, onChange, tip }: ToggleProps) {
       aria-checked={checked}
       aria-label={tip === undefined ? undefined : `${label}: ${tip}`}
       onClick={() => onChange(!checked)}
+      disabled={disabled}
       data-tip={tip}
       data-tip-side="top"
       data-tip-wide={tip === undefined ? undefined : ""}
-      className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-raised pointer-coarse:min-h-11"
+      className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-raised disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent pointer-coarse:min-h-11"
     >
       <span className="font-mono text-[0.7rem] text-muted">{label}</span>
       <span

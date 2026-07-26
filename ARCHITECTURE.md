@@ -98,7 +98,8 @@ src/lib/
   render/piano-roll.ts        draws notes, keyboard, glow and the bend trace,
                               and play mode's live notes rising from the keys
   render/sparks.ts            the swarm thrown up from the keys, and its ceiling
-  skins/types.ts              what a background is told and what it must answer
+  skins/types.ts              what a background is told, what it must answer,
+                              and which way each one reads
   skins/scene.ts              turns a paint function into a background: contexts,
                               sizing, the clock and the shader inputs
   skins/registry.ts           the backgrounds on offer, which suit a direction,

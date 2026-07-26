@@ -38,6 +38,9 @@ type PlayerTransportProps = {
   plainStyle: boolean;
   onPickSkin?: () => void;
   skinName?: string;
+  onRising?: (rising: boolean) => void;
+  rising?: boolean;
+  risingHeldBy?: string;
   onPlainStyle: (plain: boolean) => void;
   /** Null once a round owns the clock, leaving the bar to report it. */
   onToggle: (() => void) | null;
@@ -66,6 +69,9 @@ export function PlayerTransport({
   plainStyle,
   onPickSkin,
   skinName,
+  onRising,
+  rising,
+  risingHeldBy,
   onPlainStyle,
   onToggle,
   onSeek,
@@ -233,6 +239,9 @@ export function PlayerTransport({
           plainStyle={plainStyle}
           onPickSkin={onPickSkin}
           skinName={skinName}
+          onRising={onRising}
+          rising={rising}
+          risingHeldBy={risingHeldBy}
           onPlainStyle={onPlainStyle}
         />
       </div>

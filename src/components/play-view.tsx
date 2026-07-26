@@ -20,7 +20,11 @@ import {
 } from "@/lib/play/parts";
 import { usePlayNotes } from "@/lib/play/use-play-notes";
 import { clampKeyWidth, defaultKeyWidth } from "@/lib/render/keyboard";
-import { loadGlobalSettings, saveGlobalSettings } from "@/lib/storage/settings";
+import {
+  type GlobalSettings,
+  loadGlobalSettings,
+  updateGlobalSettings,
+} from "@/lib/storage/settings";
 import type { Viewer } from "@/server/auth";
 
 type PlayViewProps = {
@@ -35,6 +39,8 @@ const noNotes: readonly SongNote[] = [];
 /** The computer keyboard and touch always play this part; MIDI channels get
  * their own. It is never removed, so the routing target is a constant. */
 const keyboardTrack = 0;
+/** Seconds a settings write waits for the change after it. */
+const settleDelay = 250;
 
 /** A key struck through one input, so its release ends the note on the same
  * part even after the octave has moved on. */
@@ -115,8 +121,18 @@ export function PlayView({
   const channels = useRef(new Map<number, number>());
   const programByChannel = useRef(new Map<number, number>());
   const nextId = useRef(1);
+  const globalTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sustainRef = useRef(false);
   const sustained = useRef(new Set<string>());
+
+  useEffect(
+    () => () => {
+      if (globalTimer.current !== null) {
+        clearTimeout(globalTimer.current);
+      }
+    },
+    [],
+  );
 
   const ensureRunning = useCallback(() => {
     if (startedRef.current) {
@@ -290,40 +306,38 @@ export function PlayView({
   const noPitches = useCallback((): ReadonlySet<number> => noAutoNotes, []);
   const noYours = useCallback((): ReadonlySet<number> | null => null, []);
 
-  const settleGlobal = useCallback(
-    (width: number, labels: boolean, plain: boolean) => {
-      void loadGlobalSettings().then((stored) => {
-        void saveGlobalSettings({
-          keyWidth: width,
-          latencyOffset: stored?.latencyOffset ?? 0,
-          showKeyLabels: labels,
-          plainStyle: plain,
-        });
-      });
-    },
-    [],
-  );
+  // A write per slider step would spend a read and a write on a value the next
+  // step replaces, so the save settles a moment after the last change.
+  const settleGlobal = useCallback((patch: Partial<GlobalSettings>) => {
+    if (globalTimer.current !== null) {
+      clearTimeout(globalTimer.current);
+    }
+    globalTimer.current = setTimeout(
+      () => void updateGlobalSettings(patch),
+      settleDelay,
+    );
+  }, []);
 
   const onKeyWidth = useCallback(
     (width: number) => {
       setKeyWidth(width);
-      settleGlobal(width, showKeyLabels, plainStyle);
+      settleGlobal({ keyWidth: width });
     },
-    [settleGlobal, showKeyLabels, plainStyle],
+    [settleGlobal],
   );
   const onKeyLabels = useCallback(
     (next: boolean) => {
       setShowKeyLabels(next);
-      settleGlobal(keyWidth, next, plainStyle);
+      settleGlobal({ showKeyLabels: next });
     },
-    [settleGlobal, keyWidth, plainStyle],
+    [settleGlobal],
   );
   const onPlainStyle = useCallback(
     (next: boolean) => {
       setPlainStyle(next);
-      settleGlobal(keyWidth, showKeyLabels, next);
+      settleGlobal({ plainStyle: next });
     },
-    [settleGlobal, keyWidth, showKeyLabels],
+    [settleGlobal],
   );
 
   useEffect(() => {

@@ -1,4 +1,5 @@
 import type { Transpose } from "@/lib/midi/song";
+import { defaultKeyWidth } from "@/lib/render/keyboard";
 import { run, stores } from "@/lib/storage/idb";
 import { entryKey } from "@/lib/storage/library";
 
@@ -67,6 +68,28 @@ export async function saveGlobalSettings(
   await run(stores.settings, "readwrite", (store) =>
     store.put({ ...settings, key: globalKey }),
   );
+}
+
+/** One row holds every global setting, so a writer that owns only some of them
+ * has to read the rest first. Those reads and writes are queued because two
+ * overlapping ones would each save what the other had already replaced. */
+let globalWrites: Promise<unknown> = Promise.resolve();
+
+export function updateGlobalSettings(
+  patch: Partial<GlobalSettings>,
+): Promise<void> {
+  const next = globalWrites.then(async () => {
+    const stored = await loadGlobalSettings();
+    await saveGlobalSettings({
+      keyWidth: stored?.keyWidth ?? defaultKeyWidth,
+      latencyOffset: stored?.latencyOffset ?? 0,
+      showKeyLabels: stored?.showKeyLabels,
+      plainStyle: stored?.plainStyle,
+      ...patch,
+    });
+  });
+  globalWrites = next.catch(() => undefined);
+  return next;
 }
 
 function stripKey<T>(row: Stored<T>): T {

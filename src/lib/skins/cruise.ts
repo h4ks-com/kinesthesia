@@ -1,11 +1,5 @@
 import { createFullscreen, nebulaSource } from "@/lib/skins/fullscreen";
-import {
-  drawRock,
-  makeRock,
-  type Rock,
-  Rubble,
-  struckBy,
-} from "@/lib/skins/rubble";
+import { RockField } from "@/lib/skins/rubble";
 import type {
   Skin,
   SkinFrame,
@@ -35,10 +29,9 @@ const starColours = [
   "#ffd3a8",
 ] as const;
 
-const maxRocks = 9;
-/** Roughly one rock every few seconds, so they are an event rather than a field
- * to fly through. */
-const rockChance = 0.02;
+/** Roughly one rock a second, so they are an event rather than a field to fly
+ * through. */
+const rockRate = 1.2;
 
 type Star = {
   /** Direction from the vanishing point, before depth is applied. */
@@ -65,8 +58,12 @@ function createCruise({ base, overlay }: SkinSurface): SkinInstance | null {
   const ctx = overlay.getContext("2d");
 
   const stars: Star[] = [];
-  const rocks: Rock[] = [];
-  const rubble = new Rubble();
+  const field = new RockField({
+    max: 9,
+    rate: rockRate,
+    smallest: 13,
+    largest: 30,
+  });
   let width = 0;
   let height = 0;
   let ratio = 1;
@@ -112,7 +109,8 @@ function createCruise({ base, overlay }: SkinSurface): SkinInstance | null {
       }
       // Measured rather than assumed, so the travel reads the same whatever
       // rate the frames arrive at.
-      const step = last === 0 ? 1 / 60 : Math.min(0.05, frame.elapsed - last);
+      const step =
+        last === 0 ? 1 / 60 : Math.max(0, Math.min(0.05, frame.elapsed - last));
       last = frame.elapsed;
 
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
@@ -157,34 +155,7 @@ function createCruise({ base, overlay }: SkinSurface): SkinInstance | null {
       ctx.globalAlpha = 1;
       ctx.lineCap = "butt";
 
-      if (Math.random() < rockChance && rocks.length < maxRocks) {
-        rocks.push(
-          makeRock(Math.random() * width, -40, 13 + Math.random() * 17),
-        );
-      }
-
-      for (let index = rocks.length - 1; index >= 0; index -= 1) {
-        const rock = rocks[index];
-        if (rock === undefined) {
-          continue;
-        }
-        rock.y += rock.fall * step;
-        rock.x += rock.drift;
-        rock.angle += rock.spin * step;
-        if (rock.y - rock.radius > frame.keyboardTop) {
-          rocks.splice(index, 1);
-          continue;
-        }
-        const struck = struckBy(rock, frame.travellers);
-        if (struck !== null) {
-          rubble.burst(rock.x, rock.y, rock.radius, struck.color);
-          rocks.splice(index, 1);
-          continue;
-        }
-        drawRock(ctx, rock);
-      }
-
-      rubble.paint(ctx, width, height);
+      field.paint(ctx, width, height, step, frame);
     },
 
     dispose() {

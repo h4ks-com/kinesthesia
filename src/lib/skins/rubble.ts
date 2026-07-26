@@ -2,7 +2,7 @@
  * rock looks the same wherever it turns up, and so an explosion is worth
  * watching rather than a puff of squares. */
 
-import type { Traveller } from "@/lib/skins/types";
+import type { SkinFrame, Traveller } from "@/lib/skins/types";
 
 export type Rock = {
   x: number;
@@ -73,7 +73,7 @@ export function makeRock(x: number, y: number, radius: number): Rock {
   return {
     x,
     y,
-    drift: (Math.random() - 0.5) * 0.5,
+    drift: (Math.random() - 0.5) * 30,
     fall: 60 + Math.random() * 70,
     spin: (Math.random() - 0.5) * 1.4,
     angle: Math.random() * Math.PI * 2,
@@ -230,12 +230,6 @@ export class Rubble {
     }
   }
 
-  get busy(): boolean {
-    return (
-      this.chunks.length > 0 || this.flashes.length > 0 || this.dust.length > 0
-    );
-  }
-
   paint(ctx: CanvasRenderingContext2D, width: number, height: number): void {
     // The dust sits under everything, so the bright parts read against it.
     for (let index = this.dust.length - 1; index >= 0; index -= 1) {
@@ -335,5 +329,68 @@ export class Rubble {
       ctx.restore();
     }
     ctx.globalAlpha = 1;
+  }
+}
+
+export type RockFieldOptions = {
+  readonly max: number;
+  /** Rocks entering per second. */
+  readonly rate: number;
+  readonly smallest: number;
+  readonly largest: number;
+};
+
+/** A drifting field of rocks that the notes break. Everything here is per
+ * second and stepped by a measured delta, so a 120 Hz screen sees the same
+ * scene as a 60 Hz one rather than twice the rocks at half the speed. */
+export class RockField {
+  private readonly rocks: Rock[] = [];
+  private readonly rubble = new Rubble();
+  private readonly options: RockFieldOptions;
+
+  constructor(options: RockFieldOptions) {
+    this.options = options;
+  }
+
+  paint(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    step: number,
+    frame: SkinFrame,
+  ): void {
+    const { max, rate, smallest, largest } = this.options;
+    if (this.rocks.length < max && Math.random() < rate * step) {
+      this.rocks.push(
+        makeRock(
+          Math.random() * width,
+          -40,
+          smallest + Math.random() * (largest - smallest),
+        ),
+      );
+    }
+
+    for (let index = this.rocks.length - 1; index >= 0; index -= 1) {
+      const rock = this.rocks[index];
+      if (rock === undefined) {
+        continue;
+      }
+      rock.y += rock.fall * step;
+      rock.x += rock.drift * step;
+      rock.angle += rock.spin * step;
+      if (rock.y - rock.radius > frame.keyboardTop) {
+        this.rocks.splice(index, 1);
+        continue;
+      }
+      const struck = struckBy(rock, frame.travellers);
+      if (struck !== null) {
+        this.rubble.burst(rock.x, rock.y, rock.radius, struck.color);
+        this.rocks.splice(index, 1);
+        continue;
+      }
+      drawRock(ctx, rock);
+    }
+
+    this.rubble.paint(ctx, width, height);
   }
 }

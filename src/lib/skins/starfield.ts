@@ -1,11 +1,5 @@
 import { createFullscreen, nebulaSource } from "@/lib/skins/fullscreen";
-import {
-  drawRock,
-  makeRock,
-  type Rock,
-  Rubble,
-  struckBy,
-} from "@/lib/skins/rubble";
+import { RockField } from "@/lib/skins/rubble";
 import type {
   Skin,
   SkinFrame,
@@ -16,8 +10,6 @@ import type {
 /** Kept well under the roll's own brightness, so a note always reads against
  * it. The skin sits behind the notes, and this keeps it behind them in tone. */
 const nebulaGain = 0.66;
-
-const maxRocks = 14;
 
 /** The gas and stars are a shader on one quad; the rocks are drawn over it on a
  * 2D layer, because they are a handful of shapes that have to answer to where
@@ -35,26 +27,18 @@ function createStarfield({ base, overlay }: SkinSurface): SkinInstance | null {
   if (gas === null) {
     return null;
   }
-  const rocksCtx = overlay.getContext("2d");
+  const ctx = overlay.getContext("2d");
 
-  const rocks: Rock[] = [];
-  const rubble = new Rubble();
+  const field = new RockField({
+    max: 14,
+    rate: 2.7,
+    smallest: 11,
+    largest: 28,
+  });
   let width = 0;
   let height = 0;
   let ratio = 1;
-
-  function spawnRock(): void {
-    if (rocks.length >= maxRocks || width === 0) {
-      return;
-    }
-    rocks.push(
-      makeRock(
-        Math.random() * width,
-        -30 - Math.random() * 90,
-        11 + Math.random() * 17,
-      ),
-    );
-  }
+  let last = 0;
 
   return {
     resize(nextWidth, nextHeight, nextRatio) {
@@ -70,41 +54,16 @@ function createStarfield({ base, overlay }: SkinSurface): SkinInstance | null {
 
     draw(frame: SkinFrame) {
       gas.draw([base.width, base.height], frame.elapsed, nebulaGain);
-
-      if (rocksCtx === null) {
+      if (ctx === null) {
         return;
       }
-      rocksCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
-      rocksCtx.clearRect(0, 0, width, height);
+      const step =
+        last === 0 ? 1 / 60 : Math.max(0, Math.min(0.05, frame.elapsed - last));
+      last = frame.elapsed;
 
-      if (Math.random() < 0.045) {
-        spawnRock();
-      }
-
-      // A note head reaching a rock breaks it. The notes are never touched:
-      // the rock is what gives way.
-      for (let index = rocks.length - 1; index >= 0; index -= 1) {
-        const rock = rocks[index];
-        if (rock === undefined) {
-          continue;
-        }
-        rock.y += rock.fall * 0.016;
-        rock.x += rock.drift;
-        rock.angle += rock.spin;
-        if (rock.y - rock.radius > frame.keyboardTop) {
-          rocks.splice(index, 1);
-          continue;
-        }
-        const struck = struckBy(rock, frame.travellers);
-        if (struck !== null) {
-          rubble.burst(rock.x, rock.y, rock.radius, struck.color);
-          rocks.splice(index, 1);
-          continue;
-        }
-        drawRock(rocksCtx, rock);
-      }
-
-      rubble.paint(rocksCtx, width, height);
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+      field.paint(ctx, width, height, step, frame);
     },
 
     dispose() {

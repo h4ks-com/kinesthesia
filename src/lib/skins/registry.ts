@@ -1,14 +1,16 @@
 import { cruise } from "@/lib/skins/cruise";
 import { starfield } from "@/lib/skins/starfield";
 import type { NoteDirection, Skin, SkinId } from "@/lib/skins/types";
+import { skinIds } from "@/lib/skins/types";
 
-/** The plain roll. Not a skin with an empty draw: choosing it means no second
- * canvas is mounted at all, so nothing is paid for the default. */
-export const noSkin: SkinId = "none";
+/** Keyed so a new id cannot be declared without a skin to go with it. Null is
+ * the plain roll: not a skin with an empty draw, but no second canvas at all,
+ * so nothing is paid for the default. */
+const byId: Record<SkinId, Skin> = { starfield, cruise };
 
-export const skins: readonly Skin[] = [starfield, cruise];
+export const skins: readonly Skin[] = skinIds.map((id) => byId[id]);
 
-export function findSkin(id: SkinId): Skin | null {
+export function findSkin(id: string | null): Skin | null {
   return skins.find((skin) => skin.id === id) ?? null;
 }
 
@@ -20,4 +22,14 @@ export function suitsDirection(skin: Skin, direction: NoteDirection): boolean {
 
 export function skinsFor(direction: NoteDirection): readonly Skin[] {
   return skins.filter((skin) => suitsDirection(skin, direction));
+}
+
+/** The one rule for which way notes travel: a song falls onto the keys unless a
+ * background the player chose is built to be flown out of. Held here so the
+ * roll, the video export and the link validator cannot drift apart. */
+export function directionFor(
+  skin: Skin | null,
+  mayRise: boolean,
+): NoteDirection {
+  return mayRise && skin !== null && suitsDirection(skin, "up") ? "up" : "down";
 }

@@ -1,5 +1,6 @@
 import type { Transpose } from "@/lib/midi/song";
 import { defaultKeyWidth } from "@/lib/render/keyboard";
+import type { SkinId } from "@/lib/skins/types";
 import { run, stores } from "@/lib/storage/idb";
 import { entryKey } from "@/lib/storage/library";
 
@@ -24,7 +25,7 @@ export type GlobalSettings = {
   /** Absent on rows written before the plain style existed. */
   readonly plainStyle?: boolean;
   /** Which cosmetic layer is drawn behind the roll. Absent means none. */
-  readonly skin?: string;
+  readonly skin?: SkinId;
 };
 
 const globalKey = "global";

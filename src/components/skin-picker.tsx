@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { skinsFor } from "@/lib/skins/registry";
 import type {
   NoteDirection,
@@ -11,9 +11,9 @@ import type {
 } from "@/lib/skins/types";
 
 type SkinPickerProps = {
-  chosen: SkinId;
+  chosen: SkinId | null;
   direction: NoteDirection;
-  onChoose: (id: SkinId) => void;
+  onChoose: (id: SkinId | null) => void;
   onClose: () => void;
 };
 
@@ -22,11 +22,19 @@ type SkinPickerProps = {
 const previewTravellers = [0.28, 0.52, 0.74];
 
 /** Runs one skin small, so the choice is made by looking rather than by name.
- * A skin the device cannot run says so in place of a picture. */
-function Preview({ skin }: { skin: Skin }) {
+ * A skin the device cannot run reports it, so the tile can refuse the choice
+ * rather than accepting one that quietly does nothing. */
+function Preview({
+  skin,
+  onUnsupported,
+}: {
+  skin: Skin;
+  onUnsupported: () => void;
+}) {
   const base = useRef<HTMLCanvasElement | null>(null);
   const overlay = useRef<HTMLCanvasElement | null>(null);
-  const [unsupported, setUnsupported] = useState(false);
+  const refuse = useRef(onUnsupported);
+  refuse.current = onUnsupported;
 
   useEffect(() => {
     const under = base.current;
@@ -34,35 +42,26 @@ function Preview({ skin }: { skin: Skin }) {
     if (under === null || over === null) {
       return;
     }
-    let made: SkinInstance | null = null;
-    try {
-      made = skin.create({ base: under, overlay: over });
-    } catch {
-      made = null;
-    }
+    const made = skin.create({ base: under, overlay: over });
     if (made === null) {
-      setUnsupported(true);
+      refuse.current();
       return;
     }
-    const instance = made;
+    const instance: SkinInstance = made;
     const box = under.getBoundingClientRect();
     instance.resize(box.width, box.height, 1);
     const started = performance.now();
     let frame = requestAnimationFrame(function loop() {
       const elapsed = (performance.now() - started) / 1000;
       instance.draw({
-        width: box.width,
-        height: box.height,
         keyboardTop: box.height,
         elapsed,
-        direction: "up",
         travellers: previewTravellers.map((across, index) => ({
           x: box.width * across,
           y: box.height * (0.9 - ((elapsed * 0.32 + index * 0.31) % 1)),
           radius: 7,
           color: index === 1 ? "#f0a93a" : "#35d6a4",
         })),
-        strikes: [],
       });
       frame = requestAnimationFrame(loop);
     });
@@ -72,13 +71,6 @@ function Preview({ skin }: { skin: Skin }) {
     };
   }, [skin]);
 
-  if (unsupported) {
-    return (
-      <div className="flex h-24 items-center justify-center rounded-lg bg-void px-3 text-center font-mono text-[0.7rem] text-faint">
-        this browser cannot run it
-      </div>
-    );
-  }
   return (
     <span className="relative block h-24 w-full overflow-hidden rounded-lg bg-void">
       <canvas ref={base} className="absolute inset-0 block size-full" />
@@ -91,21 +83,24 @@ function Choice({
   title,
   blurb,
   selected,
+  disabled = false,
   onSelect,
   children,
 }: {
   title: string;
   blurb: string;
   selected: boolean;
+  disabled?: boolean;
   onSelect: () => void;
-  children?: React.ReactNode;
+  children?: ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onSelect}
+      disabled={disabled}
       aria-pressed={selected}
-      className={`flex flex-col gap-2 rounded-xl border p-2.5 text-left transition-colors ${
+      className={`flex flex-col gap-2 rounded-xl border p-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
         selected
           ? "border-accent bg-accent-soft/20"
           : "border-line hover:border-line-strong"
@@ -136,15 +131,45 @@ export function SkinPicker({
   onClose,
 }: SkinPickerProps) {
   const available = skinsFor(direction);
+  const dialog = useRef<HTMLDivElement | null>(null);
+  const [unsupported, setUnsupported] = useState<ReadonlySet<SkinId>>(
+    new Set(),
+  );
 
   useEffect(() => {
+    const opener = document.activeElement;
+    dialog.current?.focus();
+    // Captured and swallowed: the keys behind this play notes and toggle
+    // playback, and aria-modal promises they are out of reach.
     const onKey = (event: KeyboardEvent) => {
+      event.stopPropagation();
       if (event.key === "Escape") {
         onClose();
+      } else if (event.key === "Tab") {
+        const focusable = dialog.current?.querySelectorAll<HTMLElement>(
+          "button:not([disabled])",
+        );
+        const first = focusable?.[0];
+        const last = focusable?.[focusable.length - 1];
+        if (first === undefined || last === undefined) {
+          return;
+        }
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      if (opener instanceof HTMLElement) {
+        opener.focus();
+      }
+    };
   }, [onClose]);
 
   return (
@@ -152,9 +177,13 @@ export function SkinPicker({
       role="dialog"
       aria-modal="true"
       aria-label="Background"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-void/70 p-4 backdrop-blur"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-void/70 p-4 backdrop-blur"
     >
-      <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl border border-line-strong bg-panel p-4 shadow-2xl">
+      <div
+        ref={dialog}
+        tabIndex={-1}
+        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl border border-line-strong bg-panel p-4 shadow-2xl outline-none"
+      >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <h2 className="font-semibold text-lg text-text">Background</h2>
@@ -176,25 +205,30 @@ export function SkinPicker({
           <Choice
             title="Plain"
             blurb="The roll on its own."
-            selected={chosen === "none"}
-            onSelect={() => onChoose("none")}
+            selected={chosen === null}
+            onSelect={() => onChoose(null)}
           />
           {available.map((skin) => (
             <Choice
               key={skin.id}
               title={skin.name}
-              blurb={skin.blurb}
+              blurb={
+                unsupported.has(skin.id)
+                  ? "This browser cannot run it."
+                  : skin.blurb
+              }
               selected={chosen === skin.id}
+              disabled={unsupported.has(skin.id)}
               onSelect={() => onChoose(skin.id)}
             >
-              <Preview skin={skin} />
+              <Preview
+                skin={skin}
+                onUnsupported={() =>
+                  setUnsupported((known) => new Set(known).add(skin.id))
+                }
+              />
             </Choice>
           ))}
-          {available.length === 0 ? (
-            <p className="px-1 py-2 text-muted text-xs">
-              Nothing here suits the way these notes travel yet.
-            </p>
-          ) : null}
         </div>
       </div>
     </div>

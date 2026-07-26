@@ -78,6 +78,11 @@ export function createFullscreen(
       gl.deleteShader(vs);
       gl.deleteShader(fs);
       gl.deleteBuffer(quad);
+      // A browser allows only a handful of live contexts per page and evicts
+      // the oldest to make room, which would be the background behind the roll.
+      // The picker mints one per preview every time it opens, so each has to be
+      // handed back rather than left for the collector.
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
     },
   };
 }

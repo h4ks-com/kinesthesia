@@ -8,8 +8,7 @@ import {
   defaultTranspose,
   type Transpose,
 } from "@/lib/midi/song";
-import { findSkin } from "@/lib/skins/registry";
-import type { SkinId } from "@/lib/skins/types";
+import { type SkinId, skinIds } from "@/lib/skins/types";
 
 export const playerModes = ["watch", "learn", "multiplayer"] as const;
 
@@ -191,7 +190,7 @@ const localBase = "http://player.local";
 /** Only a background this build ships, so a stale or invented link falls back
  * to the plain roll rather than leaving a blank layer. */
 function readSkin(raw: string | null): SkinId | null {
-  return raw !== null && findSkin(raw) !== null ? raw : null;
+  return skinIds.find((id) => id === raw) ?? null;
 }
 
 export function playerPath(mode: PlayerMode, params: PlayerParams): string {

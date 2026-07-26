@@ -24,7 +24,7 @@ import {
   whiteKeys,
 } from "@/lib/render/keyboard";
 import { SparkField } from "@/lib/render/sparks";
-import type { NoteDirection } from "@/lib/skins/types";
+import type { NoteDirection, Traveller } from "@/lib/skins/types";
 
 const lookAhead = 3.5;
 /** Real seconds of warning before an owed note lands. Scaled by playback speed
@@ -94,11 +94,27 @@ export type Frame = {
 };
 
 /** What the roll hands a skin. Written to during the note passes, so a skinned
- * frame costs one push per drawn note and nothing else. */
+ * frame costs one push per drawn note and nothing else. The geometry comes from
+ * here too, so nothing has to measure the canvas a second time. */
 export type SkinReport = {
-  travellers: { x: number; y: number; radius: number; color: string }[];
-  strikes: { x: number; color: string }[];
+  keyboardTop: number;
+  travellers: Traveller[];
 };
+
+function reportTraveller(
+  report: SkinReport | null,
+  pitch: number,
+  top: number,
+  whiteWidth: number,
+  color: NoteColor,
+): void {
+  report?.travellers.push({
+    x: keyCenter(pitch, whiteWidth),
+    y: top,
+    radius: whiteWidth * 0.5,
+    color: color.glow,
+  });
+}
 
 /** A fixed drawing surface for an offline render, where there is no laid-out
  * canvas to read a size or device ratio from. */
@@ -241,6 +257,7 @@ export class PianoRollRenderer {
       ctx.fillRect(0, 0, width, height);
     } else {
       ctx.clearRect(0, 0, width, height);
+      frame.report.keyboardTop = keyboardTop;
     }
     ctx.translate(-this.pan, 0);
     if (frame.report === null) {
@@ -436,29 +453,23 @@ export class PianoRollRenderer {
       }
       const ghost = frame.yours !== null && !frame.yours.has(note.id);
       const color = trackColor(note.track);
-      const sounding = note.start <= position;
+      const started = note.start <= position;
+      // A rising note outlives its own sound, so a key is lit by the note still
+      // making a noise rather than by one that is merely on the roll.
+      const sounding = started && position < note.release;
       // Marked before any branch below returns, so a note whose whole length
       // falls inside one frame still counts as having landed.
-      if (!ghost && sounding && since !== null && note.start > since) {
+      if (!ghost && started && since !== null && note.start > since) {
         this.onsets.add(note.pitch);
-        frame.report?.strikes.push({
-          x: keyCenter(note.pitch, whiteWidth),
-          color: color.glow,
-        });
       }
-      // A drum key decays on its own, so the pedal has no say over it.
       // A rising note is only starting its climb when its end passes, so this
       // is the moment it leaves the keys rather than the moment it is spent.
       if (note.end < position && !rising) {
-        if (!ghost && !drums.has(note.track) && position < note.release) {
+        // A drum key decays on its own, so the pedal has no say over it.
+        if (!ghost && !drums.has(note.track) && sounding) {
           active.set(note.pitch, color);
         }
         continue;
-      }
-      if (rising && note.end < position) {
-        if (!ghost && !drums.has(note.track) && position < note.release) {
-          active.set(note.pitch, color);
-        }
       }
 
       // A drum is an impulse: the mark falls to the line and is spent there,
@@ -468,8 +479,10 @@ export class PianoRollRenderer {
         if (!ghost && struck >= 0 && struck < drumDecay) {
           active.set(note.pitch, color);
         }
-        const strike = (keyboardTop * (struck + lookAhead)) / lookAhead;
-        if (strike <= keyboardTop) {
+        const strike = rising
+          ? keyboardTop - struck * riseScale
+          : (keyboardTop * (struck + lookAhead)) / lookAhead;
+        if (rising ? struck >= 0 && strike >= 0 : strike <= keyboardTop) {
           const half =
             Math.min(isBlackKey(note.pitch) ? blackNote : whiteNote, 13) / 2;
           const centre = keyCenter(note.pitch, whiteWidth);
@@ -529,12 +542,7 @@ export class PianoRollRenderer {
       // Only a note climbing away from the keys travels through the scene; a
       // falling one is heading for the line and never reaches anything.
       if (rising && !ghost) {
-        frame.report?.travellers.push({
-          x: keyCenter(note.pitch, whiteWidth),
-          y: top,
-          radius: whiteWidth * 0.5,
-          color: color.glow,
-        });
+        reportTraveller(frame.report, note.pitch, top, whiteWidth, color);
       }
 
       // The hue holds across the body and only lifts in the last of the bar,
@@ -647,12 +655,7 @@ export class PianoRollRenderer {
       }
 
       const top = keyboardTop - headAge * scale;
-      frame.report?.travellers.push({
-        x: keyCenter(note.pitch, whiteWidth),
-        y: top,
-        radius: whiteWidth * 0.5,
-        color: color.glow,
-      });
+      reportTraveller(frame.report, note.pitch, top, whiteWidth, color);
       const noteWidth = isBlackKey(note.pitch) ? blackNote : whiteNote;
       const x = keyCenter(note.pitch, whiteWidth) - noteWidth / 2;
       const y = Math.max(0, top);

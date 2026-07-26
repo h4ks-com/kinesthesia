@@ -36,7 +36,7 @@ import {
   playerModes,
   speeds,
 } from "@/lib/player-url";
-import { findSkin, skins } from "@/lib/skins/registry";
+import { skinIds } from "@/lib/skins/types";
 import { config } from "@/server/config";
 import { sourceFetch } from "@/server/http/fetch";
 import { analyseMidi } from "@/server/midi/analyse";
@@ -170,10 +170,11 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
   ) {
     return { ok: false, why: `speed must be one of ${speeds.join(", ")}` };
   }
-  if (input.skin !== undefined && findSkin(input.skin) === null) {
+  const skin = skinIds.find((id) => id === input.skin) ?? null;
+  if (input.skin !== undefined && skin === null) {
     return {
       ok: false,
-      why: `unknown background: ${input.skin}. Try ${skins.map((skin) => skin.id).join(" or ")}`,
+      why: `unknown background: ${input.skin}. Try ${skinIds.join(" or ")}`,
     };
   }
   if (input.skin !== undefined && input.mode !== "watch") {
@@ -199,7 +200,7 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
       melodyRate: clampMelodyRate(input.melodyRate ?? defaultMelodyRate),
       transpose: clampTranspose(input.transpose ?? defaultTranspose),
       focus: input.focus ?? false,
-      skin: input.skin ?? null,
+      skin,
       start: input.start ?? defaultStart,
     }),
   );

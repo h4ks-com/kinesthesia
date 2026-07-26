@@ -69,6 +69,7 @@ src/lib/
   player-url.ts               builds and parses player URLs
   use-player-settings.ts      the settings a song plays with, restored from this
                               device and written back to the URL
+  use-reduced-motion.ts       whether the system asks for less movement
   search-params.ts            route search params to URLSearchParams
   format/clock.ts             seconds as m:ss
   midi/song.ts                parses a .mid into a flat note list, moves it to another key
@@ -101,6 +102,8 @@ src/lib/
   skins/registry.ts           the backgrounds on offer, and which suit a direction
   skins/fullscreen.ts         the one triangle a shader background draws on, and
                               the gas both space backgrounds share
+  skins/rubble.ts             the asteroids notes break, the field they drift in,
+                              and the dust and chips a break leaves
   skins/starfield.ts          drifting gas, stars, and rocks the notes break
   skins/cruise.ts             the same space travelled through, stars streaking past
   render/export.ts            the watch view as a render job: size, frame, files

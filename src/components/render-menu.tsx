@@ -25,6 +25,7 @@ import {
   isFastVideo,
   renderSongVideo,
 } from "@/lib/render/video";
+import type { NoteDirection } from "@/lib/skins/types";
 
 type RenderMenuProps = {
   song: Song;
@@ -32,6 +33,7 @@ type RenderMenuProps = {
   hiddenTracks: ReadonlySet<number>;
   plain: boolean;
   speed: number;
+  direction: NoteDirection;
   title: string;
 };
 
@@ -54,6 +56,7 @@ export function RenderMenu({
   hiddenTracks,
   plain,
   speed,
+  direction,
   title,
 }: RenderMenuProps) {
   const [job, setJob] = useState<Job | null>(null);
@@ -71,6 +74,7 @@ export function RenderMenu({
       hiddenTracks,
       plain,
       rate: speed,
+      direction,
     };
     const controller = new AbortController();
     abort.current = controller;

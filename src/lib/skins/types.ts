@@ -2,7 +2,11 @@
  * can fall onto them or rise out of them. */
 export type NoteDirection = "up" | "down";
 
-export type SkinId = string;
+/** Named here rather than in the registry so a link or an MCP argument can be
+ * validated without pulling a shader and a particle pool into the bundle. */
+export const skinIds = ["starfield", "cruise"] as const;
+
+export type SkinId = (typeof skinIds)[number];
 
 /** A note head as it sits on screen this frame, so a skin can react to where
  * notes are without knowing anything about the song. */
@@ -13,22 +17,13 @@ export type Traveller = {
   readonly color: string;
 };
 
-export type Strike = {
-  readonly x: number;
-  readonly color: string;
-};
-
 /** Everything a skin is told, in screen pixels. It never sees the song, only
  * where things are now. */
 export type SkinFrame = {
-  readonly width: number;
-  readonly height: number;
   /** Where the keys begin, which is the line notes travel from or toward. */
   readonly keyboardTop: number;
   readonly elapsed: number;
-  readonly direction: NoteDirection;
   readonly travellers: readonly Traveller[];
-  readonly strikes: readonly Strike[];
 };
 
 export type SkinInstance = {

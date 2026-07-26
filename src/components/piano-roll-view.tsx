@@ -8,16 +8,15 @@ import {
 import type { Reach } from "@/lib/input/keyboard-map";
 import type { ExpressionTrail } from "@/lib/midi/expression";
 import type { LiveNote, Song } from "@/lib/midi/song";
-import { keyboardBand } from "@/lib/render/keyboard";
 import { PianoRollRenderer, type SkinReport } from "@/lib/render/piano-roll";
 import type { NoteDirection, Skin, SkinInstance } from "@/lib/skins/types";
 
-/** Each pointer keeps its own gesture, so one finger panning the roll and
- * another walking the keys never read each other's start position. */
-/** A skin is decoration, so it is never worth more than one device pixel per
- * css pixel even on a dense screen. */
+/** A skin is decoration, so it is drawn at most half again the css resolution
+ * however dense the screen is. */
 const maxSkinRatio = 1.5;
 
+/** Each pointer keeps its own gesture, so one finger panning the roll and
+ * another walking the keys never read each other's start position. */
 type Gesture =
   | { readonly kind: "keys"; pitch: number | null }
   | { readonly kind: "pan"; readonly x: number; readonly pan: number };
@@ -39,7 +38,7 @@ type PianoRollViewProps = {
   /** How the bend and modulation wheels moved, per track. Play mode only. */
   expression?: ExpressionTrail;
   /** The cosmetic layer drawn behind the roll. Null leaves the roll opaque. */
-  skin?: Skin | null;
+  skin: Skin | null;
   /** Which way notes travel, which decides what a skin is looking at. */
   direction?: NoteDirection;
   /** Playback speed, so the owed-note foreshadow leads by a constant reaction
@@ -74,7 +73,7 @@ export function PianoRollView({
   keyLabels = null,
   plain = false,
   expression,
-  skin = null,
+  skin,
   direction = "down",
   onStrike,
   onRelease,
@@ -90,7 +89,11 @@ export function PianoRollView({
   const skinRef = useRef<SkinInstance | null>(null);
   const directionRef = useRef(direction);
   directionRef.current = direction;
-  const reportRef = useRef<SkinReport>({ travellers: [], strikes: [] });
+  const reportRef = useRef<SkinReport>({ keyboardTop: 0, travellers: [] });
+  // Kept out of the render loop's effect, which restarts whenever the song
+  // changes: a skin outlives that, and a clock that jumped back would throw its
+  // whole field off screen.
+  const skinClock = useRef<number | null>(null);
   const rateRef = useRef(rate);
   rateRef.current = rate;
   const playTrackRef = useRef(playTrack);
@@ -123,13 +126,10 @@ export function PianoRollView({
     if (focusRef.current !== null) {
       renderer.centreOn(focusRef.current);
     }
-    const started = performance.now();
     let frame = requestAnimationFrame(function loop() {
       const skinned = skinRef.current;
       if (skinned !== null) {
-        const report = reportRef.current;
-        report.travellers.length = 0;
-        report.strikes.length = 0;
+        reportRef.current.travellers.length = 0;
       }
       renderer.draw({
         song,
@@ -152,15 +152,11 @@ export function PianoRollView({
       // Drawn after the roll, which is what fills the report for this frame, so
       // a skin reacts to where the notes are now rather than a frame behind.
       if (skinned !== null) {
-        const box = canvas.getBoundingClientRect();
+        skinClock.current ??= performance.now();
         skinned.draw({
-          width: box.width,
-          height: box.height,
-          keyboardTop: keyboardBand(box.height).top,
-          elapsed: (performance.now() - started) / 1000,
-          direction: directionRef.current,
+          keyboardTop: reportRef.current.keyboardTop,
+          elapsed: (performance.now() - skinClock.current) / 1000,
           travellers: reportRef.current.travellers,
-          strikes: reportRef.current.strikes,
         });
       }
       frame = requestAnimationFrame(loop);

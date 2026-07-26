@@ -4,7 +4,9 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 
 type PopoverProps = {
   trigger: (open: boolean) => ReactNode;
-  children: ReactNode;
+  /** Given a way to dismiss the panel, so a row that opens something bigger
+   * does not leave the menu hanging over it. */
+  children: ReactNode | ((close: () => void) => ReactNode);
   align?: "left" | "right";
   side?: "top" | "bottom";
   /** Keeps the panel clear of what it would otherwise cover on a phone, where
@@ -78,7 +80,9 @@ export function Popover({
                 : "max-sm:bottom-20"
           }`}
         >
-          {children}
+          {typeof children === "function"
+            ? children(() => setOpen(false))
+            : children}
         </div>
       ) : null}
     </div>

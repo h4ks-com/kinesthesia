@@ -73,118 +73,123 @@ export function SettingsMenu({
         </span>
       )}
     >
-      <div className="flex w-56 flex-col gap-2 p-1 max-sm:w-full">
-        <Section title="Key size">
-          <SliderRow
-            ariaLabel="Piano key width"
-            min={keyWidthRange.min}
-            max={keyWidthRange.max}
-            step={2}
-            value={keyWidth}
-            valueText={`${keyWidth}px`}
-            onChange={onKeyWidth}
-          />
-        </Section>
-
-        <Section title="Style">
-          <Toggle
-            label="disable effects"
-            checked={plainStyle}
-            onChange={onPlainStyle}
-            tip="Flat colour, no glow, no sparks and no background. Calmer to read, and lighter on a slow device."
-          />
-          {onPickSkin === undefined ? null : (
-            <button
-              type="button"
-              disabled={plainStyle}
-              onClick={onPickSkin}
-              data-tip="What is drawn behind the notes"
-              data-tip-side="left"
-              className="flex w-full items-center justify-between rounded-lg px-1 py-1.5 font-mono text-muted text-xs transition-colors hover:text-accent disabled:cursor-not-allowed disabled:text-faint disabled:hover:text-faint"
-            >
-              <span>background</span>
-              <span className="text-faint">
-                {plainStyle ? "off" : skinName}
-              </span>
-            </button>
-          )}
-        </Section>
-
-        {keyLabels === null ? null : (
-          <Section title="Keyboard">
-            <Toggle
-              label="letters on keys"
-              checked={keyLabels}
-              onChange={onKeyLabels}
-              tip="Prints the computer key that plays each piano key, for the octave under your hands."
-            />
-          </Section>
-        )}
-
-        {octave === null ? null : (
-          <Section title="Octave">
-            <div className="flex items-center gap-1 px-1">
-              <OctaveButton
-                label="Lower octave"
-                onClick={() => onOctave(octave - 1)}
-              >
-                lower
-              </OctaveButton>
-              <span className="w-8 text-center font-mono text-accent text-xs">
-                {octave}
-              </span>
-              <OctaveButton
-                label="Higher octave"
-                onClick={() => onOctave(octave + 1)}
-              >
-                higher
-              </OctaveButton>
-            </div>
-          </Section>
-        )}
-
-        {showLatency ? (
-          <Section
-            title="Timing"
-            badge={
-              <span
-                className={`ml-auto font-mono text-[0.7rem] ${
-                  advice === null ? "text-faint" : "text-danger"
-                }`}
-              >
-                output {Math.round(measuredLatency * 1000)}ms
-              </span>
-            }
-          >
+      {(close) => (
+        <div className="flex w-56 flex-col gap-2 p-1 max-sm:w-full">
+          <Section title="Key size">
             <SliderRow
-              ariaLabel="Timing offset in milliseconds"
-              min={latencyRange.min}
-              max={latencyRange.max}
-              step={5}
-              value={latencyOffset}
-              valueText={`${latencyOffset > 0 ? "+" : ""}${latencyOffset}ms`}
-              onChange={onLatencyOffset}
+              ariaLabel="Piano key width"
+              min={keyWidthRange.min}
+              max={keyWidthRange.max}
+              step={2}
+              value={keyWidth}
+              valueText={`${keyWidth}px`}
+              onChange={onKeyWidth}
             />
-            <Note>{advice ?? "Raise it if your playing scores late."}</Note>
           </Section>
-        ) : null}
 
-        <Section title="Input">
-          <p className="flex items-center gap-2 px-2 pb-1 font-mono text-[0.7rem] text-faint">
-            <span
-              aria-hidden="true"
-              className={`size-2 shrink-0 rounded-full ${
-                inputStatus === "midi"
-                  ? "bg-good shadow-[0_0_8px_var(--good)]"
-                  : "bg-warn shadow-[0_0_8px_var(--warn)]"
-              }`}
+          <Section title="Style">
+            <Toggle
+              label="disable effects"
+              checked={plainStyle}
+              onChange={onPlainStyle}
+              tip="Flat colour, no glow, no sparks and no background. Calmer to read, and lighter on a slow device."
             />
-            {inputStatus === "midi"
-              ? "midi device connected"
-              : "computer keyboard"}
-          </p>
-        </Section>
-      </div>
+            {onPickSkin === undefined ? null : (
+              <button
+                type="button"
+                disabled={plainStyle}
+                onClick={() => {
+                  close();
+                  onPickSkin();
+                }}
+                data-tip="What is drawn behind the notes"
+                data-tip-side="left"
+                className="flex w-full items-center justify-between rounded-lg px-1 py-1.5 font-mono text-muted text-xs transition-colors hover:text-accent disabled:cursor-not-allowed disabled:text-faint disabled:hover:text-faint"
+              >
+                <span>background</span>
+                <span className="text-faint">
+                  {plainStyle ? "off" : skinName}
+                </span>
+              </button>
+            )}
+          </Section>
+
+          {keyLabels === null ? null : (
+            <Section title="Keyboard">
+              <Toggle
+                label="letters on keys"
+                checked={keyLabels}
+                onChange={onKeyLabels}
+                tip="Prints the computer key that plays each piano key, for the octave under your hands."
+              />
+            </Section>
+          )}
+
+          {octave === null ? null : (
+            <Section title="Octave">
+              <div className="flex items-center gap-1 px-1">
+                <OctaveButton
+                  label="Lower octave"
+                  onClick={() => onOctave(octave - 1)}
+                >
+                  lower
+                </OctaveButton>
+                <span className="w-8 text-center font-mono text-accent text-xs">
+                  {octave}
+                </span>
+                <OctaveButton
+                  label="Higher octave"
+                  onClick={() => onOctave(octave + 1)}
+                >
+                  higher
+                </OctaveButton>
+              </div>
+            </Section>
+          )}
+
+          {showLatency ? (
+            <Section
+              title="Timing"
+              badge={
+                <span
+                  className={`ml-auto font-mono text-[0.7rem] ${
+                    advice === null ? "text-faint" : "text-danger"
+                  }`}
+                >
+                  output {Math.round(measuredLatency * 1000)}ms
+                </span>
+              }
+            >
+              <SliderRow
+                ariaLabel="Timing offset in milliseconds"
+                min={latencyRange.min}
+                max={latencyRange.max}
+                step={5}
+                value={latencyOffset}
+                valueText={`${latencyOffset > 0 ? "+" : ""}${latencyOffset}ms`}
+                onChange={onLatencyOffset}
+              />
+              <Note>{advice ?? "Raise it if your playing scores late."}</Note>
+            </Section>
+          ) : null}
+
+          <Section title="Input">
+            <p className="flex items-center gap-2 px-2 pb-1 font-mono text-[0.7rem] text-faint">
+              <span
+                aria-hidden="true"
+                className={`size-2 shrink-0 rounded-full ${
+                  inputStatus === "midi"
+                    ? "bg-good shadow-[0_0_8px_var(--good)]"
+                    : "bg-warn shadow-[0_0_8px_var(--warn)]"
+                }`}
+              />
+              {inputStatus === "midi"
+                ? "midi device connected"
+                : "computer keyboard"}
+            </p>
+          </Section>
+        </div>
+      )}
     </Popover>
   );
 }

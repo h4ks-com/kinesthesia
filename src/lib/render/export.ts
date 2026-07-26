@@ -1,6 +1,7 @@
 import type { SongVoicing } from "@/lib/audio/voicing";
 import type { Song } from "@/lib/midi/song";
 import type { Frame } from "@/lib/render/piano-roll";
+import type { NoteDirection } from "@/lib/skins/types";
 
 /** The watch view exactly as it stands, handed to an offline render. Nothing
  * here is interactive, so a frame is a pure function of position. */
@@ -11,6 +12,9 @@ export type RenderConfig = {
   readonly plain: boolean;
   /** Playback speed, so a render matches the sped up or slowed view. */
   readonly rate: number;
+  /** Which way the notes were travelling on screen, so the file matches what
+   * was being watched. */
+  readonly direction: NoteDirection;
 };
 
 export const renderSize = { width: 1280, height: 720 } as const;
@@ -25,7 +29,7 @@ export function watchFrame(config: RenderConfig, position: number): Frame {
     live: null,
     sustain: false,
     expression: null,
-    direction: "down",
+    direction: config.direction,
     report: null,
     rate: config.rate,
     playTrack: 0,

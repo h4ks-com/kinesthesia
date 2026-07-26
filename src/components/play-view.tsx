@@ -21,13 +21,14 @@ import {
 } from "@/lib/play/parts";
 import { usePlayNotes } from "@/lib/play/use-play-notes";
 import { clampKeyWidth, defaultKeyWidth } from "@/lib/render/keyboard";
-import { findSkin, noSkin } from "@/lib/skins/registry";
+import { findSkin } from "@/lib/skins/registry";
 import type { SkinId } from "@/lib/skins/types";
 import {
   type GlobalSettings,
   loadGlobalSettings,
   updateGlobalSettings,
 } from "@/lib/storage/settings";
+import { useReducedMotion } from "@/lib/use-reduced-motion";
 import type { Viewer } from "@/server/auth";
 
 type PlayViewProps = {
@@ -73,7 +74,7 @@ export function PlayView({
   const [keyWidth, setKeyWidth] = useState(defaultKeyWidth);
   const [showKeyLabels, setShowKeyLabels] = useState(true);
   const [plainStyle, setPlainStyle] = useState(false);
-  const [skinId, setSkinId] = useState<SkinId>(noSkin);
+  const [skinId, setSkinId] = useState<SkinId | null>(null);
   const [pickingSkin, setPickingSkin] = useState(false);
   const [hasKeyboard, setHasKeyboard] = useState(false);
   const [focus, setFocus] = useState(false);
@@ -112,7 +113,7 @@ export function PlayView({
         setKeyWidth(clampKeyWidth(stored.keyWidth));
         setShowKeyLabels(stored.showKeyLabels ?? true);
         setPlainStyle(stored.plainStyle ?? false);
-        setSkinId(stored.skin ?? noSkin);
+        setSkinId(stored.skin ?? null);
       }
     });
   }, []);
@@ -346,13 +347,14 @@ export function PlayView({
   );
   // Free roam shoots notes out of the keys, so that is the direction a skin is
   // told about and the one the picker offers for.
-  const skin = useMemo(() => findSkin(skinId), [skinId]);
+  const still = useReducedMotion();
+  const skin = plainStyle || still ? null : findSkin(skinId);
 
   const onSkin = useCallback(
-    (next: SkinId) => {
+    (next: SkinId | null) => {
       setSkinId(next);
       setPickingSkin(false);
-      settleGlobal({ skin: next });
+      settleGlobal({ skin: next ?? undefined });
     },
     [settleGlobal],
   );
@@ -431,7 +433,7 @@ export function PlayView({
         ) : null}
 
         <PianoRollView
-          skin={plainStyle ? null : skin}
+          skin={skin}
           direction="up"
           song={song}
           hiddenTracks={noAutoNotes}

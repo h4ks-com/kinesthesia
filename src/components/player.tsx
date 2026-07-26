@@ -38,11 +38,17 @@ import { busiestTrack } from "@/lib/scoring/gates";
 import type { Judgement, Score } from "@/lib/scoring/judge";
 import { useGates } from "@/lib/scoring/use-gates";
 import { useRunRecord } from "@/lib/scoring/use-run-record";
-import { findSkin, noSkin } from "@/lib/skins/registry";
+import {
+  directionFor,
+  findSkin,
+  skinsFor,
+  suitsDirection,
+} from "@/lib/skins/registry";
 import type { NoteDirection, SkinId } from "@/lib/skins/types";
 import { tourFor } from "@/lib/tour/steps";
 import { useWalkthrough } from "@/lib/tour/use-walkthrough";
 import { usePlayerSettings } from "@/lib/use-player-settings";
+import { useReducedMotion } from "@/lib/use-reduced-motion";
 
 type PlayerProps = {
   mode: PlayerMode;
@@ -107,18 +113,13 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const original = load.status === "ready" ? load.song : null;
   // A link may name a background, which is never written back to this device:
   // it belongs to the link, not to the person opening it.
-  const [skinId, setSkinId] = useState<SkinId>(params.skin ?? noSkin);
+  const [skinId, setSkinId] = useState<SkinId | null>(params.skin);
   const [pickingSkin, setPickingSkin] = useState(false);
 
   const interactive = mode !== "watch";
   // Notes may only leave the keys where nobody has to read them coming: in
   // learn and match the approach is how you know what to play.
   const mayRise = mode === "watch";
-  const skin = useMemo(() => findSkin(skinId), [skinId]);
-  const direction: NoteDirection =
-    mayRise && skin !== null && skin.directions.includes("up") ? "up" : "down";
-  const usable =
-    skin !== null && skin.directions.includes(direction) ? skin : null;
   const waitsForYou = mode === "learn";
 
   const [hiddenTracks, setHiddenTracks] = useState<ReadonlySet<number>>(
@@ -157,6 +158,16 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     changeSpeed,
     togglePlayerTrack,
   } = usePlayerSettings({ mode, params, locked, getFocus });
+
+  // Plain style means plain: no background either. A system asking for less
+  // movement is honoured the same way, since a link can turn a background on
+  // without it ever being saved here.
+  const still = useReducedMotion();
+  const chosen = plainStyle || still ? null : findSkin(skinId);
+  const direction: NoteDirection = directionFor(chosen, mayRise);
+  const skin =
+    chosen !== null && suitsDirection(chosen, direction) ? chosen : null;
+  const offered = skinsFor(mayRise ? "up" : "down");
 
   const song = useMemo(
     () => (original === null ? null : transposeSong(original, transpose)),
@@ -559,6 +570,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                     hiddenTracks={hiddenTracks}
                     plain={plainStyle}
                     speed={speed}
+                    direction={direction}
                     title={songTitle}
                   />
                 ) : null
@@ -585,7 +597,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
               />
             ) : null}
             <PianoRollView
-              skin={plainStyle ? null : usable}
+              skin={skin}
               direction={direction}
               song={song}
               hiddenTracks={hiddenTracks}
@@ -646,8 +658,10 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             onKeyLabels={changeKeyLabels}
             plainStyle={plainStyle}
             onPlainStyle={changePlainStyle}
-            onPickSkin={() => setPickingSkin(true)}
-            skinName={usable?.name.toLowerCase() ?? "plain"}
+            onPickSkin={
+              offered.length > 0 ? () => setPickingSkin(true) : undefined
+            }
+            skinName={skin?.name.toLowerCase() ?? "plain"}
             inputStatus={input.status}
             // A running match owns the clock, so nobody plays or seeks by hand.
             onToggle={matchActive ? null : () => void playback.toggle()}

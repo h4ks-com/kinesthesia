@@ -153,6 +153,7 @@ export function OpponentPanel({
 
       <div className="relative min-h-0 flex-1">
         <PianoRollView
+          skin={null}
           song={song}
           hiddenTracks={hidden}
           keyWidth={defaultKeyWidth}

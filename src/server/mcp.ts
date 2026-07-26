@@ -36,6 +36,7 @@ import {
   playerModes,
   speeds,
 } from "@/lib/player-url";
+import { findSkin, skins } from "@/lib/skins/registry";
 import { config } from "@/server/config";
 import { sourceFetch } from "@/server/http/fetch";
 import { analyseMidi } from "@/server/midi/analyse";
@@ -107,6 +108,12 @@ const playerLinkShape = {
     .describe(
       "Strip the page back to the keys and the falling notes, for recording. Watch only",
     ),
+  skin: z
+    .string()
+    .optional()
+    .describe(
+      "Background drawn behind the notes, purely cosmetic. 'starfield' is a still nebula, 'cruise' flies through it and sends the notes out of the keys instead of onto them. Watch only, and left out for the plain roll",
+    ),
   start: z
     .number()
     .min(0)
@@ -128,6 +135,7 @@ type PlayerLinkInput = {
   readonly simplified?: boolean;
   readonly melodyRate?: number;
   readonly focus?: boolean;
+  readonly skin?: string;
   readonly start?: number;
 };
 
@@ -162,6 +170,18 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
   ) {
     return { ok: false, why: `speed must be one of ${speeds.join(", ")}` };
   }
+  if (input.skin !== undefined && findSkin(input.skin) === null) {
+    return {
+      ok: false,
+      why: `unknown background: ${input.skin}. Try ${skins.map((skin) => skin.id).join(" or ")}`,
+    };
+  }
+  if (input.skin !== undefined && input.mode !== "watch") {
+    return {
+      ok: false,
+      why: "a background sends the notes the wrong way for a mode that is played, so it is only offered in watch",
+    };
+  }
   if (input.focus === true && input.mode !== "watch") {
     return {
       ok: false,
@@ -179,6 +199,7 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
       melodyRate: clampMelodyRate(input.melodyRate ?? defaultMelodyRate),
       transpose: clampTranspose(input.transpose ?? defaultTranspose),
       focus: input.focus ?? false,
+      skin: input.skin ?? null,
       start: input.start ?? defaultStart,
     }),
   );
@@ -501,9 +522,15 @@ track, which is how to answer how long or how hard a song is and how to pick a
 track to play.
 
 Those player links take the song as it comes. To open one at a different speed,
-in another key, on chosen tracks, partway through, or stripped back for
-recording, build it with player_link, passing the same source and id: it
-validates every value and refuses a combination the player would ignore.
+in another key, on chosen tracks, partway through, stripped back for recording,
+or against a background, build it with player_link, passing the same source and
+id: it validates every value and refuses a combination the player would ignore.
+
+The background is the skin argument, and it is decoration only: it never changes
+the song, the notes or the timing. Everything about it rides in the link and
+nothing is saved to the listener's device, so a link opens looking the way it was
+sent. Backgrounds are watch only, because one of them sends the notes out of the
+keys rather than onto them and a mode that is played needs them approaching.
 
 player_link also accepts a direct .mid url in place of source and id, as long as
 the url is on an origin the deployment trusts. That is how a file from elsewhere,

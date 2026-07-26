@@ -16,6 +16,7 @@ import { PianoRollView } from "@/components/piano-roll-view";
 import { PlayerHeader } from "@/components/player-header";
 import { PlayerTransport, TransportBar } from "@/components/player-transport";
 import { RenderMenu } from "@/components/render-menu";
+import { SkinPicker } from "@/components/skin-picker";
 import { Walkthrough } from "@/components/walkthrough";
 import { judgedPosition } from "@/lib/audio/latency";
 import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
@@ -37,6 +38,8 @@ import { busiestTrack } from "@/lib/scoring/gates";
 import type { Judgement, Score } from "@/lib/scoring/judge";
 import { useGates } from "@/lib/scoring/use-gates";
 import { useRunRecord } from "@/lib/scoring/use-run-record";
+import { findSkin, noSkin } from "@/lib/skins/registry";
+import type { NoteDirection, SkinId } from "@/lib/skins/types";
 import { tourFor } from "@/lib/tour/steps";
 import { useWalkthrough } from "@/lib/tour/use-walkthrough";
 import { usePlayerSettings } from "@/lib/use-player-settings";
@@ -102,7 +105,20 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const sound = useSongVoicing(params, viewerId);
   const load = useSong(params);
   const original = load.status === "ready" ? load.song : null;
+  // A link may name a background, which is never written back to this device:
+  // it belongs to the link, not to the person opening it.
+  const [skinId, setSkinId] = useState<SkinId>(params.skin ?? noSkin);
+  const [pickingSkin, setPickingSkin] = useState(false);
+
   const interactive = mode !== "watch";
+  // Notes may only leave the keys where nobody has to read them coming: in
+  // learn and match the approach is how you know what to play.
+  const mayRise = mode === "watch";
+  const skin = useMemo(() => findSkin(skinId), [skinId]);
+  const direction: NoteDirection =
+    mayRise && skin !== null && skin.directions.includes("up") ? "up" : "down";
+  const usable =
+    skin !== null && skin.directions.includes(direction) ? skin : null;
   const waitsForYou = mode === "learn";
 
   const [hiddenTracks, setHiddenTracks] = useState<ReadonlySet<number>>(
@@ -557,7 +573,20 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             tabIndex={-1}
             className="relative min-h-0 flex-1 outline-none"
           >
+            {pickingSkin ? (
+              <SkinPicker
+                chosen={skinId}
+                direction={mayRise ? "up" : "down"}
+                onChoose={(next) => {
+                  setSkinId(next);
+                  setPickingSkin(false);
+                }}
+                onClose={() => setPickingSkin(false)}
+              />
+            ) : null}
             <PianoRollView
+              skin={plainStyle ? null : usable}
+              direction={direction}
               song={song}
               hiddenTracks={hiddenTracks}
               keyWidth={keyWidth}
@@ -617,6 +646,8 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             onKeyLabels={changeKeyLabels}
             plainStyle={plainStyle}
             onPlainStyle={changePlainStyle}
+            onPickSkin={() => setPickingSkin(true)}
+            skinName={usable?.name.toLowerCase() ?? "plain"}
             inputStatus={input.status}
             // A running match owns the clock, so nobody plays or seeks by hand.
             onToggle={matchActive ? null : () => void playback.toggle()}

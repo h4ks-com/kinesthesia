@@ -17,6 +17,7 @@ const song: PlayerParams = {
   melodyRate: 6,
   transpose: 0,
   focus: false,
+  skin: null,
   start: defaultStart,
 };
 
@@ -145,5 +146,34 @@ describe("start", () => {
     expect(read("")).toBe(0);
     expect(read("&start=-5")).toBe(0);
     expect(read("&start=abc")).toBe(0);
+  });
+});
+
+describe("the background in a link", () => {
+  it("carries a background it ships", () => {
+    const url = buildPlayerUrl("https://x", "watch", {
+      ...song,
+      skin: "cruise",
+    });
+    expect(new URL(url).searchParams.get("skin")).toBe("cruise");
+  });
+
+  it("leaves the plain roll out of the link", () => {
+    const url = buildPlayerUrl("https://x", "watch", { ...song, skin: null });
+    expect(new URL(url).searchParams.has("skin")).toBe(false);
+  });
+
+  it("reads a background back off a link", () => {
+    const read = parse(
+      new URLSearchParams(`url=${encodeURIComponent(song.url)}&skin=cruise`),
+    );
+    expect(read?.skin).toBe("cruise");
+  });
+
+  it("ignores a background this build does not ship", () => {
+    const read = parse(
+      new URLSearchParams(`url=${encodeURIComponent(song.url)}&skin=made-up`),
+    );
+    expect(read?.skin).toBeNull();
   });
 });

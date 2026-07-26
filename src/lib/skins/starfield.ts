@@ -102,7 +102,7 @@ function createStarfield({ base, overlay }: SkinSurface): SkinInstance | null {
         drawRock(rocksCtx, rock);
       }
 
-      rubble.paint(rocksCtx);
+      rubble.paint(rocksCtx, width, height);
     },
 
     dispose() {

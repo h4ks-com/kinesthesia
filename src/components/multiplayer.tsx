@@ -441,6 +441,7 @@ export function Multiplayer({
         melodyRate: clampMelodyRate(room.melodyRate),
         transpose: clampTranspose(room.transpose ?? defaultTranspose),
         focus: false,
+        skin: null,
         start: defaultStart,
       });
       const { Peer } = await import("peerjs");

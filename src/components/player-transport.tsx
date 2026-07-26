@@ -36,6 +36,8 @@ type PlayerTransportProps = {
   keyLabels: boolean | null;
   onKeyLabels: (show: boolean) => void;
   plainStyle: boolean;
+  onPickSkin?: () => void;
+  skinName?: string;
   onPlainStyle: (plain: boolean) => void;
   /** Null once a round owns the clock, leaving the bar to report it. */
   onToggle: (() => void) | null;
@@ -62,6 +64,8 @@ export function PlayerTransport({
   keyLabels,
   onKeyLabels,
   plainStyle,
+  onPickSkin,
+  skinName,
   onPlainStyle,
   onToggle,
   onSeek,
@@ -227,6 +231,8 @@ export function PlayerTransport({
           keyLabels={keyLabels}
           onKeyLabels={onKeyLabels}
           plainStyle={plainStyle}
+          onPickSkin={onPickSkin}
+          skinName={skinName}
           onPlainStyle={onPlainStyle}
         />
       </div>

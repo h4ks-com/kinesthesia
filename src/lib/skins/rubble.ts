@@ -201,7 +201,22 @@ export class Rubble {
     }
   }
 
-  paint(ctx: CanvasRenderingContext2D): void {
+  /** Swap the last entry into the hole rather than shifting everything after
+   * it, so a busy frame costs the same as a quiet one. */
+  private static drop<T>(pool: T[], index: number): void {
+    const last = pool.pop();
+    if (last !== undefined && index < pool.length) {
+      pool[index] = last;
+    }
+  }
+
+  get busy(): boolean {
+    return (
+      this.chunks.length > 0 || this.flashes.length > 0 || this.dust.length > 0
+    );
+  }
+
+  paint(ctx: CanvasRenderingContext2D, width: number, height: number): void {
     // The dust sits under everything, so the bright parts read against it.
     for (let index = this.dust.length - 1; index >= 0; index -= 1) {
       const puff = this.dust[index];
@@ -210,7 +225,7 @@ export class Rubble {
       }
       puff.life -= 0.011;
       if (puff.life <= 0) {
-        this.dust.splice(index, 1);
+        Rubble.drop(this.dust, index);
         continue;
       }
       const spread = puff.reach * (1.6 - puff.life);
@@ -241,7 +256,7 @@ export class Rubble {
       }
       flash.life -= 0.055;
       if (flash.life <= 0) {
-        this.flashes.splice(index, 1);
+        Rubble.drop(this.flashes, index);
         continue;
       }
       // A short dull bloom in the note's colour, gone almost at once, so the
@@ -277,8 +292,13 @@ export class Rubble {
       chunk.vx *= 0.995;
       chunk.angle += chunk.spin;
       chunk.life -= chunk.fade;
-      if (chunk.life <= 0) {
-        this.chunks.splice(index, 1);
+      if (
+        chunk.life <= 0 ||
+        chunk.y - chunk.size > height ||
+        chunk.x + chunk.size < 0 ||
+        chunk.x - chunk.size > width
+      ) {
+        Rubble.drop(this.chunks, index);
         continue;
       }
       ctx.save();

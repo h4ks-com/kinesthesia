@@ -137,6 +137,7 @@ export function PianoRollView({
         live: liveRef.current?.() ?? null,
         sustain: sustainRef.current?.() ?? false,
         expression: expressionRef.current ?? null,
+        direction: directionRef.current,
         report: skinRef.current === null ? null : reportRef.current,
         rate: rateRef.current,
         playTrack: playTrackRef.current,

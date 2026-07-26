@@ -8,6 +8,8 @@ import {
   defaultTranspose,
   type Transpose,
 } from "@/lib/midi/song";
+import { findSkin } from "@/lib/skins/registry";
+import type { SkinId } from "@/lib/skins/types";
 
 export const playerModes = ["watch", "learn", "multiplayer"] as const;
 
@@ -32,6 +34,9 @@ export type PlayerParams = {
   readonly transpose: Transpose;
   /** Strips the page back to the keys and the falling notes, for recording. */
   readonly focus: boolean;
+  /** The background drawn behind the roll. Carried in the link so a shared one
+   * arrives looking the way it was sent, and never saved to this device. */
+  readonly skin: SkinId | null;
   /** Seconds the playhead opens at, so a link can start partway through. */
   readonly start: number;
 };
@@ -169,6 +174,9 @@ export function buildPlayerUrl(
   if (explicit || params.transpose !== defaultTranspose) {
     target.searchParams.set("transpose", String(params.transpose));
   }
+  if (params.skin !== null) {
+    target.searchParams.set("skin", params.skin);
+  }
   if (params.focus) {
     target.searchParams.set("focus", "1");
   }
@@ -179,6 +187,12 @@ export function buildPlayerUrl(
 }
 
 const localBase = "http://player.local";
+
+/** Only a background this build ships, so a stale or invented link falls back
+ * to the plain roll rather than leaving a blank layer. */
+function readSkin(raw: string | null): SkinId | null {
+  return raw !== null && findSkin(raw) !== null ? raw : null;
+}
 
 export function playerPath(mode: PlayerMode, params: PlayerParams): string {
   return buildPlayerUrl(localBase, mode, params).slice(localBase.length);
@@ -217,6 +231,7 @@ export function parsePlayerParams(
     melodyRate: readRate(searchParams.get("rate")),
     transpose: clampTranspose(transpose),
     focus: searchParams.get("focus") === "1",
+    skin: readSkin(searchParams.get("skin")),
     start: readStart(searchParams.get("start")),
   };
 }

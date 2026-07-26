@@ -69,6 +69,7 @@ function watchHref(song: SongLink): string {
     melodyRate: defaultMelodyRate,
     transpose: defaultTranspose,
     focus: false,
+    skin: null,
     start: defaultStart,
   });
 }

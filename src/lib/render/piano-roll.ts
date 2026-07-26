@@ -24,6 +24,7 @@ import {
   whiteKeys,
 } from "@/lib/render/keyboard";
 import { SparkField } from "@/lib/render/sparks";
+import type { NoteDirection } from "@/lib/skins/types";
 
 const lookAhead = 3.5;
 /** Real seconds of warning before an owed note lands. Scaled by playback speed
@@ -60,6 +61,9 @@ export type Frame = {
   readonly sustain: boolean;
   /** Null outside play mode, where there is no live device to read. */
   readonly expression: ExpressionTrail | null;
+  /** Which way the song's notes travel. Rising shoots them out of the keys as
+   * they sound, which is a look rather than a way to read ahead. */
+  readonly direction: NoteDirection;
   /** Playback speed, so the foreshadow lead is a constant reaction time rather
    * than a fixed song distance that shrinks as the song speeds up. */
   readonly rate: number;
@@ -413,7 +417,12 @@ export class PianoRollRenderer {
     // and a long song's played history is skipped.
     const notes = frame.song.notes;
     const horizon = position + lookAhead;
-    const first = firstFrom(notes, position - this.maxNoteDuration);
+    const first = firstFrom(
+      notes,
+      position -
+        this.maxNoteDuration -
+        (frame.direction === "up" ? lookAhead : 0),
+    );
     const since = this.onsetSince;
     for (let index = first; index < notes.length; index += 1) {
       const note = notes[index];
@@ -491,11 +500,20 @@ export class PianoRollRenderer {
         }
       }
 
-      const bottom = Math.min(
-        keyboardTop,
-        (keyboardTop * (position - note.start + lookAhead)) / lookAhead,
-      );
-      const top = (keyboardTop * (position - note.end + lookAhead)) / lookAhead;
+      const rising = frame.direction === "up";
+      const scale = keyboardTop / lookAhead;
+      const bottom = rising
+        ? keyboardTop - Math.max(0, position - note.end) * scale
+        : Math.min(
+            keyboardTop,
+            (keyboardTop * (position - note.start + lookAhead)) / lookAhead,
+          );
+      const top = rising
+        ? keyboardTop - Math.max(0, position - note.start) * scale
+        : (keyboardTop * (position - note.end + lookAhead)) / lookAhead;
+      if (rising && (bottom < 0 || note.start > position)) {
+        continue;
+      }
       const noteWidth = isBlackKey(note.pitch) ? blackNote : whiteNote;
       const x = keyCenter(note.pitch, whiteWidth) - noteWidth / 2;
       const y = Math.min(top, bottom);

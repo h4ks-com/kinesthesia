@@ -106,7 +106,9 @@ function createCruise({ base, overlay }: SkinSurface): SkinInstance | null {
       overlay.width = base.width;
       overlay.height = base.height;
       gl.viewport(0, 0, base.width, base.height);
-      seedStars();
+      if (stars.length === 0) {
+        seedStars();
+      }
     },
 
     draw(frame: SkinFrame) {
@@ -188,7 +190,7 @@ function createCruise({ base, overlay }: SkinSurface): SkinInstance | null {
         drawRock(ctx, rock);
       }
 
-      rubble.paint(ctx);
+      rubble.paint(ctx, width, height);
     },
 
     dispose() {

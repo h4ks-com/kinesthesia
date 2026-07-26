@@ -79,6 +79,7 @@ export function SongRow({
     melodyRate: defaultMelodyRate,
     transpose: defaultTranspose,
     focus: false,
+    skin: null,
     start: defaultStart,
   });
 
@@ -180,6 +181,7 @@ export function SongRow({
                 melodyRate: defaultMelodyRate,
                 transpose: defaultTranspose,
                 focus: false,
+                skin: null,
                 start: defaultStart,
               })}
               data-tip={tip}

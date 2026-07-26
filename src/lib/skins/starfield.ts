@@ -1,4 +1,5 @@
 import { createFullscreen, nebulaSource } from "@/lib/skins/fullscreen";
+import { drawRock, makeRock, type Rock, Rubble } from "@/lib/skins/rubble";
 import type {
   Skin,
   SkinFrame,
@@ -10,28 +11,7 @@ import type {
  * it. The skin sits behind the notes, and this keeps it behind them in tone. */
 const nebulaGain = 0.66;
 
-type Rock = {
-  x: number;
-  y: number;
-  drift: number;
-  fall: number;
-  spin: number;
-  angle: number;
-  radius: number;
-  hit: number;
-};
-
-type Shard = {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  color: string;
-};
-
 const maxRocks = 14;
-const maxShards = 260;
 
 /** The gas and stars are a shader on one quad; the rocks are drawn over it on a
  * 2D layer, because they are a handful of shapes that have to answer to where
@@ -52,7 +32,7 @@ function createStarfield({ base, overlay }: SkinSurface): SkinInstance | null {
   const rocksCtx = overlay.getContext("2d");
 
   const rocks: Rock[] = [];
-  const shards: Shard[] = [];
+  const rubble = new Rubble();
   let width = 0;
   let height = 0;
   let ratio = 1;
@@ -61,31 +41,13 @@ function createStarfield({ base, overlay }: SkinSurface): SkinInstance | null {
     if (rocks.length >= maxRocks || width === 0) {
       return;
     }
-    rocks.push({
-      x: Math.random() * width,
-      y: -30 - Math.random() * 90,
-      drift: (Math.random() - 0.5) * 0.4,
-      fall: 0.9 + Math.random() * 1.1,
-      spin: (Math.random() - 0.5) * 0.02,
-      angle: Math.random() * Math.PI * 2,
-      radius: 11 + Math.random() * 17,
-      hit: 0,
-    });
-  }
-
-  function burst(rock: Rock, color: string): void {
-    for (let index = 0; index < 14 && shards.length < maxShards; index += 1) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 0.6 + Math.random() * 2.4;
-      shards.push({
-        x: rock.x,
-        y: rock.y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 0.4,
-        life: 1,
-        color: Math.random() < 0.45 ? color : "#c9b9a4",
-      });
-    }
+    rocks.push(
+      makeRock(
+        Math.random() * width,
+        -30 - Math.random() * 90,
+        11 + Math.random() * 17,
+      ),
+    );
   }
 
   return {
@@ -120,12 +82,9 @@ function createStarfield({ base, overlay }: SkinSurface): SkinInstance | null {
         if (rock === undefined) {
           continue;
         }
-        rock.y += rock.fall;
+        rock.y += rock.fall * 0.016;
         rock.x += rock.drift;
         rock.angle += rock.spin;
-        if (rock.hit > 0) {
-          rock.hit -= 0.08;
-        }
         if (rock.y - rock.radius > frame.keyboardTop) {
           rocks.splice(index, 1);
           continue;
@@ -136,46 +95,14 @@ function createStarfield({ base, overlay }: SkinSurface): SkinInstance | null {
             Math.abs(traveller.y - rock.y) < rock.radius + traveller.radius,
         );
         if (struck !== undefined) {
-          burst(rock, struck.color);
+          rubble.burst(rock.x, rock.y, rock.radius, struck.color);
           rocks.splice(index, 1);
           continue;
         }
-        rocksCtx.save();
-        rocksCtx.translate(rock.x, rock.y);
-        rocksCtx.rotate(rock.angle);
-        rocksCtx.beginPath();
-        for (let point = 0; point < 7; point += 1) {
-          const around = (point / 7) * Math.PI * 2;
-          const reach = rock.radius * (0.72 + ((point * 37) % 11) / 34);
-          rocksCtx.lineTo(Math.cos(around) * reach, Math.sin(around) * reach);
-        }
-        rocksCtx.closePath();
-        rocksCtx.fillStyle = "#241f1b";
-        rocksCtx.fill();
-        rocksCtx.strokeStyle = rock.hit > 0 ? "#8d7f6b" : "#4a4038";
-        rocksCtx.lineWidth = 1.4;
-        rocksCtx.stroke();
-        rocksCtx.restore();
+        drawRock(rocksCtx, rock);
       }
 
-      for (let index = shards.length - 1; index >= 0; index -= 1) {
-        const shard = shards[index];
-        if (shard === undefined) {
-          continue;
-        }
-        shard.x += shard.vx;
-        shard.y += shard.vy;
-        shard.vy += 0.04;
-        shard.life -= 0.02;
-        if (shard.life <= 0) {
-          shards.splice(index, 1);
-          continue;
-        }
-        rocksCtx.globalAlpha = Math.max(0, shard.life) * 0.85;
-        rocksCtx.fillStyle = shard.color;
-        rocksCtx.fillRect(shard.x, shard.y, 2.2, 2.2);
-      }
-      rocksCtx.globalAlpha = 1;
+      rubble.paint(rocksCtx);
     },
 
     dispose() {

@@ -88,21 +88,24 @@ export function SettingsMenu({
 
         <Section title="Style">
           <Toggle
-            label="simplify style"
+            label="disable effects"
             checked={plainStyle}
             onChange={onPlainStyle}
-            tip="Flat colour with no glow or sparks. Calmer to read, and lighter on a slow device."
+            tip="Flat colour, no glow, no sparks and no background. Calmer to read, and lighter on a slow device."
           />
           {onPickSkin === undefined ? null : (
             <button
               type="button"
+              disabled={plainStyle}
               onClick={onPickSkin}
               data-tip="What is drawn behind the notes"
               data-tip-side="left"
-              className="flex w-full items-center justify-between rounded-lg px-1 py-1.5 font-mono text-muted text-xs transition-colors hover:text-accent"
+              className="flex w-full items-center justify-between rounded-lg px-1 py-1.5 font-mono text-muted text-xs transition-colors hover:text-accent disabled:cursor-not-allowed disabled:text-faint disabled:hover:text-faint"
             >
               <span>background</span>
-              <span className="text-faint">{skinName}</span>
+              <span className="text-faint">
+                {plainStyle ? "off" : skinName}
+              </span>
             </button>
           )}
         </Section>

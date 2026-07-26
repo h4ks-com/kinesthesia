@@ -1,4 +1,5 @@
 import { createFullscreen, nebulaSource } from "@/lib/skins/fullscreen";
+import { drawRock, makeRock, type Rock, Rubble } from "@/lib/skins/rubble";
 import type {
   Skin,
   SkinFrame,
@@ -11,42 +12,36 @@ import type {
  * the eye and the notes still have to win. */
 const nebulaGain = 0.5;
 
-/** Layers of stars at different speeds, which is what reads as distance. The
- * near ones streak, the far ones barely move. */
-const starLayers = [
-  { count: 90, speed: 34, length: 0.5, size: 0.7, glow: 0.35 },
-  { count: 55, speed: 96, length: 1.6, size: 1.0, glow: 0.6 },
-  { count: 26, speed: 210, length: 4.2, size: 1.5, glow: 0.95 },
+/** Stars are held in a space with depth and projected, so they spread out of
+ * the point being travelled toward and streak more the nearer they come. A
+ * column of falling lines reads as rain; this reads as motion. */
+const starCount = 200;
+/** How fast depth is eaten. The whole field crosses in a few seconds. */
+const approach = 0.55;
+const nearest = 0.06;
+
+/** Real starlight is not white. A few warm and blue ones stop the field looking
+ * like static. */
+const starColours = [
+  "#ffffff",
+  "#dce8ff",
+  "#bcd4ff",
+  "#ffe9c8",
+  "#ffd3a8",
 ] as const;
 
 const maxRocks = 9;
-const maxShards = 300;
 /** Roughly one rock every few seconds, so they are an event rather than a field
  * to fly through. */
 const rockChance = 0.02;
-/** A rock breaking up on its own, which happens far more rarely than one being
- * hit, so a struck one still reads as the player's doing. */
-const spontaneous = 0.0016;
 
-type Star = { x: number; y: number; layer: number };
-
-type Rock = {
+type Star = {
+  /** Direction from the vanishing point, before depth is applied. */
   x: number;
   y: number;
-  drift: number;
-  fall: number;
-  spin: number;
-  angle: number;
-  radius: number;
-};
-
-type Shard = {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
+  z: number;
   color: string;
+  twinkle: number;
 };
 
 function createCruise({ base, overlay }: SkinSurface): SkinInstance | null {
@@ -66,37 +61,27 @@ function createCruise({ base, overlay }: SkinSurface): SkinInstance | null {
 
   const stars: Star[] = [];
   const rocks: Rock[] = [];
-  const shards: Shard[] = [];
+  const rubble = new Rubble();
   let width = 0;
   let height = 0;
   let ratio = 1;
   let last = 0;
 
-  function seedStars(): void {
-    stars.length = 0;
-    starLayers.forEach((layer, index) => {
-      for (let count = 0; count < layer.count; count += 1) {
-        stars.push({
-          x: Math.random() * width,
-          y: Math.random() * height,
-          layer: index,
-        });
-      }
-    });
+  function placeStar(star: Star, fresh: boolean): void {
+    star.x = (Math.random() - 0.5) * 2.4;
+    star.y = (Math.random() - 0.5) * 2.4;
+    star.z = fresh ? Math.random() : 1;
+    star.color =
+      starColours[Math.floor(Math.random() * starColours.length)] ?? "#ffffff";
+    star.twinkle = Math.random() * Math.PI * 2;
   }
 
-  function shatter(x: number, y: number, color: string): void {
-    for (let index = 0; index < 16 && shards.length < maxShards; index += 1) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 0.7 + Math.random() * 2.6;
-      shards.push({
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 1,
-        color: Math.random() < 0.5 ? color : "#cbbba6",
-      });
+  function seedStars(): void {
+    stars.length = 0;
+    for (let count = 0; count < starCount; count += 1) {
+      const star: Star = { x: 0, y: 0, z: 1, color: "#ffffff", twinkle: 0 };
+      placeStar(star, true);
+      stars.push(star);
     }
   }
 
@@ -137,34 +122,49 @@ function createCruise({ base, overlay }: SkinSurface): SkinInstance | null {
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       ctx.clearRect(0, 0, width, height);
 
+      // Travelling toward the top of the roll, so the field spreads out of a
+      // point above it and pours down past the keys.
+      const awayX = width / 2;
+      const awayY = -height * 0.25;
+      const reach = Math.max(width, height);
+
       for (const star of stars) {
-        const layer = starLayers[star.layer] ?? starLayers[0];
-        star.y += layer.speed * step;
-        if (star.y > frame.keyboardTop) {
-          star.y = -4;
-          star.x = Math.random() * width;
+        const was = star.z;
+        star.z -= approach * step;
+        if (star.z <= nearest) {
+          placeStar(star, false);
+          continue;
         }
-        const streak = layer.speed * step * layer.length;
-        ctx.globalAlpha = layer.glow;
-        ctx.strokeStyle = "#dbe6ff";
-        ctx.lineWidth = layer.size;
+        const near = star.x / star.z;
+        const nearY = star.y / star.z;
+        const x = awayX + near * reach * 0.5;
+        const y = awayY + nearY * reach * 0.5;
+        if (y > frame.keyboardTop + 40 || x < -60 || x > width + 60) {
+          continue;
+        }
+        const wasX = awayX + (star.x / was) * reach * 0.5;
+        const wasY = awayY + (star.y / was) * reach * 0.5;
+        const closeness = 1 - star.z;
+        const shine =
+          (0.25 + closeness * 0.75) *
+          (0.75 + 0.25 * Math.sin(frame.elapsed * 3 + star.twinkle));
+
+        ctx.globalAlpha = Math.min(1, shine);
+        ctx.strokeStyle = star.color;
+        ctx.lineWidth = 0.5 + closeness * 2.1;
+        ctx.lineCap = "round";
         ctx.beginPath();
-        ctx.moveTo(star.x, star.y - streak);
-        ctx.lineTo(star.x, star.y);
+        ctx.moveTo(wasX, wasY);
+        ctx.lineTo(x, y);
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
+      ctx.lineCap = "butt";
 
       if (Math.random() < rockChance && rocks.length < maxRocks) {
-        rocks.push({
-          x: Math.random() * width,
-          y: -40,
-          drift: (Math.random() - 0.5) * 0.5,
-          fall: 60 + Math.random() * 70,
-          spin: (Math.random() - 0.5) * 1.4,
-          angle: Math.random() * Math.PI * 2,
-          radius: 12 + Math.random() * 16,
-        });
+        rocks.push(
+          makeRock(Math.random() * width, -40, 13 + Math.random() * 17),
+        );
       }
 
       for (let index = rocks.length - 1; index >= 0; index -= 1) {
@@ -181,51 +181,14 @@ function createCruise({ base, overlay }: SkinSurface): SkinInstance | null {
         }
         const struck = reached(rock, frame.travellers);
         if (struck !== undefined) {
-          shatter(rock.x, rock.y, struck.color);
+          rubble.burst(rock.x, rock.y, rock.radius, struck.color);
           rocks.splice(index, 1);
           continue;
         }
-        if (Math.random() < spontaneous) {
-          shatter(rock.x, rock.y, "#e8a33c");
-          rocks.splice(index, 1);
-          continue;
-        }
-        ctx.save();
-        ctx.translate(rock.x, rock.y);
-        ctx.rotate(rock.angle);
-        ctx.beginPath();
-        for (let point = 0; point < 7; point += 1) {
-          const around = (point / 7) * Math.PI * 2;
-          const reach = rock.radius * (0.72 + ((point * 37) % 11) / 34);
-          ctx.lineTo(Math.cos(around) * reach, Math.sin(around) * reach);
-        }
-        ctx.closePath();
-        ctx.fillStyle = "#241f1b";
-        ctx.fill();
-        ctx.strokeStyle = "#544a3f";
-        ctx.lineWidth = 1.4;
-        ctx.stroke();
-        ctx.restore();
+        drawRock(ctx, rock);
       }
 
-      for (let index = shards.length - 1; index >= 0; index -= 1) {
-        const shard = shards[index];
-        if (shard === undefined) {
-          continue;
-        }
-        shard.x += shard.vx;
-        shard.y += shard.vy;
-        shard.vy += 0.05;
-        shard.life -= 0.018;
-        if (shard.life <= 0) {
-          shards.splice(index, 1);
-          continue;
-        }
-        ctx.globalAlpha = Math.max(0, shard.life) * 0.9;
-        ctx.fillStyle = shard.color;
-        ctx.fillRect(shard.x, shard.y, 2.4, 2.4);
-      }
-      ctx.globalAlpha = 1;
+      rubble.paint(ctx);
     },
 
     dispose() {
@@ -238,7 +201,7 @@ export const cruise: Skin = {
   id: "cruise",
   name: "Cruising",
   blurb:
-    "The keys fly through space. Stars streak past, and the rocks you reach break up.",
+    "The keys fly through space. Stars streak past, and the rocks your notes reach break apart.",
   directions: ["up"],
   create: createCruise,
 };

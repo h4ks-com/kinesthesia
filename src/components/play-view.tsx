@@ -431,7 +431,7 @@ export function PlayView({
         ) : null}
 
         <PianoRollView
-          skin={skin}
+          skin={plainStyle ? null : skin}
           direction="up"
           song={song}
           hiddenTracks={noAutoNotes}

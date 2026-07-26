@@ -23,6 +23,7 @@ import {
   whiteKeyLeft,
   whiteKeys,
 } from "@/lib/render/keyboard";
+import { SparkField, type SparkKind } from "@/lib/render/sparks";
 
 const lookAhead = 3.5;
 /** Real seconds of warning before an owed note lands. Scaled by playback speed
@@ -34,11 +35,6 @@ const maxDevicePixelRatio = 1.5;
  * drum is arbitrary and often runs for a beat, which would hold the key long
  * after the hit it stands for. */
 const drumDecay = 0.09;
-/** A dense passage lights hundreds of new notes a frame, each a spark burst, so
- * without a ceiling the particle list runs to tens of thousands and the frame
- * is spent redrawing sparks no one can pick out. Capped, the swarm reads the
- * same and stops spawning once it is full. */
-const maxParticles = 1100;
 /** Below this a falling note is a sliver where a vertical gradient and rounded
  * corners cannot be seen, so it is filled flat and square. The bodies tall
  * enough to read a gradient keep it. */
@@ -53,27 +49,6 @@ const maxOnsetAdvance = 0.5;
 const bendSpanKeys = 1.35;
 const vibratoWidth = 0.22;
 const vibratoHz = 5.5;
-
-type SparkKind = "note" | "strike" | "bloom";
-
-const sparkBursts: Record<
-  SparkKind,
-  { count: number; speed: number; radius: number; white: number }
-> = {
-  note: { count: 14, speed: 1, radius: 1, white: 0.35 },
-  strike: { count: 18, speed: 1.15, radius: 1.1, white: 0.55 },
-  bloom: { count: 30, speed: 1.5, radius: 1.35, white: 0.85 },
-};
-
-type Particle = {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  radius: number;
-  color: string;
-};
 
 export type Frame = {
   readonly song: Song;
@@ -122,7 +97,7 @@ export class PianoRollRenderer {
   private readonly canvas: HTMLCanvasElement;
   private readonly context: CanvasRenderingContext2D;
   private readonly fixed: FixedSurface | null;
-  private readonly particles: Particle[] = [];
+  private readonly sparks = new SparkField();
   /** The keys an owed note is approaching, with how near it is (0 far, 1 at the
    * line), so learn and match can foreshadow what to press. */
   private readonly foreshadow = new Map<
@@ -290,7 +265,7 @@ export class PianoRollRenderer {
       whiteWidth,
       total,
     );
-    this.paintParticles();
+    this.sparks.paint(this.context);
     if (frame.sustain) {
       this.paintSustain(keyboardTop, total);
     }
@@ -746,7 +721,7 @@ export class PianoRollRenderer {
         continue;
       }
       sparked.add(pitch);
-      this.spawnSparks(
+      this.sparks.spawn(
         keyCenter(pitch, whiteWidth),
         keyboardTop,
         active.get(pitch) ?? trackColor(frame.playTrack),
@@ -758,7 +733,7 @@ export class PianoRollRenderer {
       if (!fresh || sparked.has(pitch)) {
         continue;
       }
-      this.spawnSparks(
+      this.sparks.spawn(
         keyCenter(pitch, whiteWidth),
         keyboardTop,
         color,
@@ -767,37 +742,6 @@ export class PianoRollRenderer {
     }
     this.previouslyActive = new Set(active.keys());
     this.previouslyPressed = new Set(frame.pressed);
-  }
-
-  private spawnSparks(
-    centerX: number,
-    keyboardTop: number,
-    color: NoteColor,
-    kind: SparkKind,
-  ): void {
-    if (this.particles.length >= maxParticles) {
-      return;
-    }
-    const burst = sparkBursts[kind];
-    const count = burst.count + Math.floor(Math.random() * 8);
-    for (let index = 0; index < count; index += 1) {
-      const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.15;
-      const speed = Math.random() * 4 * burst.speed + 1;
-      this.particles.push({
-        x: centerX + (Math.random() - 0.5) * 7,
-        y: keyboardTop,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 1,
-        radius: Math.random() * 2.2 * burst.radius + 0.7,
-        color:
-          Math.random() < burst.white
-            ? "#ffffff"
-            : Math.random() < 0.5
-              ? color.core
-              : color.glow,
-      });
-    }
   }
 
   private paintKeyboard(
@@ -1025,38 +969,6 @@ export class PianoRollRenderer {
     ctx.shadowColor = right ? "#ffffff" : color.glow;
     ctx.shadowBlur = right ? blur * 2 : blur * 1.4;
     ctx.fillStyle = "#ffffff";
-  }
-
-  private paintParticles(): void {
-    const ctx = this.context;
-    ctx.globalCompositeOperation = "lighter";
-    for (let index = this.particles.length - 1; index >= 0; index -= 1) {
-      const particle = this.particles[index];
-      if (particle === undefined) {
-        continue;
-      }
-      particle.x += particle.vx;
-      particle.y += particle.vy;
-      particle.vy += 0.16;
-      particle.life -= 0.03;
-      if (particle.life <= 0) {
-        this.particles.splice(index, 1);
-        continue;
-      }
-      ctx.globalAlpha = Math.max(0, particle.life);
-      ctx.fillStyle = particle.color;
-      ctx.beginPath();
-      ctx.arc(
-        particle.x,
-        particle.y,
-        particle.radius * particle.life + 0.4,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = "source-over";
   }
 }
 

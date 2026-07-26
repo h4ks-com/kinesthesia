@@ -93,9 +93,9 @@ src/lib/
   tour/steps.ts               what the walkthrough points at, per mode
   tour/use-walkthrough.ts     first-run auto play and the replay it hands back
   render/keyboard.ts          key geometry, sizing and the pitch under a point
-  render/piano-roll.ts        draws notes, keyboard, glow, sparks and the bend
-                              trace, and play mode's live notes rising from the
-                              keys
+  render/piano-roll.ts        draws notes, keyboard, glow and the bend trace,
+                              and play mode's live notes rising from the keys
+  render/sparks.ts            the swarm thrown up from the keys, and its ceiling
   render/export.ts            the watch view as a render job: size, frame, files
   render/audio.ts             offline audio render to a WAV, at the live voicing
   render/video.ts             offline video render, WebCodecs with a recorder fallback

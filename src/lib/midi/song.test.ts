@@ -236,3 +236,40 @@ describe("parseSong expression", () => {
     expect(parsed.expression.touched(0)).toBe(false);
   });
 });
+
+describe("parseSong wheels on a control track", () => {
+  /** A conductor track carrying the wheels for a channel whose notes live on a
+   * sibling track, which is what several editors write. */
+  function splitMidi(): ArrayBuffer {
+    const midi = new Midi();
+    const control = midi.addTrack();
+    control.channel = 0;
+    control.addPitchBend({ time: 5, value: 8191 });
+    const voice = midi.addTrack();
+    voice.channel = 0;
+    voice.addNote({ midi: 60, time: 4, duration: 4 });
+    return midi.toArray().buffer as ArrayBuffer;
+  }
+
+  it("bends the notes the wheel was written for", () => {
+    const parsed = parseSong(splitMidi(), "x");
+    const track = parsed.notes[0]?.track ?? -1;
+    expect(track).toBeGreaterThanOrEqual(0);
+    expect(parsed.expression.at(track, 5.5).bend).toBeCloseTo(1, 1);
+  });
+
+  it("leaves a channel that carries no wheel alone", () => {
+    const midi = new Midi();
+    const bent = midi.addTrack();
+    bent.channel = 0;
+    bent.addNote({ midi: 60, time: 4, duration: 4 });
+    bent.addPitchBend({ time: 5, value: 8191 });
+    const plain = midi.addTrack();
+    plain.channel = 1;
+    plain.addNote({ midi: 67, time: 4, duration: 4 });
+
+    const parsed = parseSong(midi.toArray().buffer as ArrayBuffer, "x");
+    const quiet = parsed.notes.find((note) => note.pitch === 67)?.track ?? -1;
+    expect(parsed.expression.at(quiet, 5.5).bend).toBe(0);
+  });
+});

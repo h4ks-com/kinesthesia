@@ -30,8 +30,9 @@ const startLeadIn = 2.5;
  * exhausting the tab's memory as it parses. */
 export const maxMidiBytes = 5 * 1024 * 1024;
 
-/** One wheel event before the song's runway shift is known. */
-type WheelMove = { readonly track: number; readonly at: number } & (
+/** One wheel event before the song's runway shift is known. A wheel belongs to
+ * a channel, which is not always the track holding that channel's notes. */
+type WheelMove = { readonly channel: number; readonly at: number } & (
   | { readonly bend: number; readonly depth?: undefined }
   | { readonly depth: number; readonly bend?: undefined }
 );
@@ -129,6 +130,16 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
   const wheels: WheelMove[] = [];
 
   for (const [index, track] of midi.tracks.entries()) {
+    for (const bend of track.pitchBends) {
+      wheels.push({ channel: track.channel, at: bend.time, bend: bend.value });
+    }
+    for (const wheel of track.controlChanges[1] ?? []) {
+      wheels.push({
+        channel: track.channel,
+        at: wheel.time,
+        depth: wheel.value,
+      });
+    }
     if (track.notes.length === 0) {
       continue;
     }
@@ -145,16 +156,6 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
       0,
     );
     const spans = pedalSpans(track.controlChanges[64] ?? [], trackEnd);
-    for (const bend of track.pitchBends) {
-      wheels.push({
-        track: index,
-        at: bend.time,
-        bend: bend.value,
-      });
-    }
-    for (const wheel of track.controlChanges[1] ?? []) {
-      wheels.push({ track: index, at: wheel.time, depth: wheel.value });
-    }
     for (const note of track.notes) {
       const end = note.time + note.duration;
       notes.push({
@@ -193,12 +194,23 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
   // Pushed in time order: the trail treats a backwards stamp as a restart and
   // drops what it has.
   const expression = new ExpressionTrail({ keepAll: true });
+  const playedBy = new Map<number, number[]>();
+  for (const [index, track] of midi.tracks.entries()) {
+    if (track.notes.length > 0) {
+      playedBy.set(track.channel, [
+        ...(playedBy.get(track.channel) ?? []),
+        index,
+      ]);
+    }
+  }
   wheels.sort((left, right) => left.at - right.at);
   for (const move of wheels) {
-    if (move.bend !== undefined) {
-      expression.setBend(move.track, move.at + shift, move.bend);
-    } else if (move.depth !== undefined) {
-      expression.setDepth(move.track, move.at + shift, move.depth);
+    for (const track of playedBy.get(move.channel) ?? []) {
+      if (move.bend !== undefined) {
+        expression.setBend(track, move.at + shift, move.bend);
+      } else if (move.depth !== undefined) {
+        expression.setDepth(track, move.at + shift, move.depth);
+      }
     }
   }
 

@@ -424,6 +424,8 @@ export class PianoRollRenderer {
         (frame.direction === "up" ? lookAhead : 0),
     );
     const since = this.onsetSince;
+    const rising = frame.direction === "up";
+    const riseScale = keyboardTop / lookAhead;
     for (let index = first; index < notes.length; index += 1) {
       const note = notes[index];
       if (note === undefined || note.start > horizon) {
@@ -445,11 +447,18 @@ export class PianoRollRenderer {
         });
       }
       // A drum key decays on its own, so the pedal has no say over it.
-      if (note.end < position) {
+      // A rising note is only starting its climb when its end passes, so this
+      // is the moment it leaves the keys rather than the moment it is spent.
+      if (note.end < position && !rising) {
         if (!ghost && !drums.has(note.track) && position < note.release) {
           active.set(note.pitch, color);
         }
         continue;
+      }
+      if (rising && note.end < position) {
+        if (!ghost && !drums.has(note.track) && position < note.release) {
+          active.set(note.pitch, color);
+        }
       }
 
       // A drum is an impulse: the mark falls to the line and is spent there,
@@ -500,16 +509,14 @@ export class PianoRollRenderer {
         }
       }
 
-      const rising = frame.direction === "up";
-      const scale = keyboardTop / lookAhead;
       const bottom = rising
-        ? keyboardTop - Math.max(0, position - note.end) * scale
+        ? keyboardTop - Math.max(0, position - note.end) * riseScale
         : Math.min(
             keyboardTop,
             (keyboardTop * (position - note.start + lookAhead)) / lookAhead,
           );
       const top = rising
-        ? keyboardTop - Math.max(0, position - note.start) * scale
+        ? keyboardTop - Math.max(0, position - note.start) * riseScale
         : (keyboardTop * (position - note.end + lookAhead)) / lookAhead;
       if (rising && (bottom < 0 || note.start > position)) {
         continue;
@@ -518,6 +525,17 @@ export class PianoRollRenderer {
       const x = keyCenter(note.pitch, whiteWidth) - noteWidth / 2;
       const y = Math.min(top, bottom);
       const noteHeight = Math.max(2, bottom - y);
+
+      // Only a note climbing away from the keys travels through the scene; a
+      // falling one is heading for the line and never reaches anything.
+      if (rising && !ghost) {
+        frame.report?.travellers.push({
+          x: keyCenter(note.pitch, whiteWidth),
+          y: top,
+          radius: whiteWidth * 0.5,
+          color: color.glow,
+        });
+      }
 
       // The hue holds across the body and only lifts in the last of the bar,
       // so the leading edge reads as lit without the note becoming a ramp. A

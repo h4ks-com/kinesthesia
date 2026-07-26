@@ -2,17 +2,13 @@
 
 import { Check, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { skinsFor } from "@/lib/skins/registry";
-import type {
-  NoteDirection,
-  Skin,
-  SkinId,
-  SkinInstance,
-} from "@/lib/skins/types";
+import type { Skin, SkinId, SkinInstance } from "@/lib/skins/types";
 
 type SkinPickerProps = {
   chosen: SkinId | null;
-  direction: NoteDirection;
+  /** Decided by the caller, which is the only place that knows which of these
+   * read the way its notes travel. */
+  available: readonly Skin[];
   onChoose: (id: SkinId | null) => void;
   onClose: () => void;
 };
@@ -20,6 +16,12 @@ type SkinPickerProps = {
 /** How a skin looks in the preview, with note heads climbing so a skin that
  * answers to them has something to answer to. */
 const previewTravellers = [0.28, 0.52, 0.74];
+
+/** Roughly three landings a second, without a clock to remember between
+ * frames: the tile only has to look alive. */
+function beat(elapsed: number): boolean {
+  return Math.floor(elapsed * 3) !== Math.floor((elapsed - 1 / 60) * 3);
+}
 
 /** Runs one skin small, so the choice is made by looking rather than by name.
  * A skin the device cannot run reports it, so the tile can refuse the choice
@@ -62,6 +64,11 @@ function Preview({
           radius: 7,
           color: index === 1 ? "#f0a93a" : "#35d6a4",
         })),
+        // A landing every so often, so a skin that only answers to strikes has
+        // something to show in its tile.
+        strikes: beat(elapsed)
+          ? [{ x: box.width * (0.2 + Math.random() * 0.6), color: "#35d6a4" }]
+          : [],
       });
       frame = requestAnimationFrame(loop);
     });
@@ -126,11 +133,10 @@ function Choice({
 
 export function SkinPicker({
   chosen,
-  direction,
+  available,
   onChoose,
   onClose,
 }: SkinPickerProps) {
-  const available = skinsFor(direction);
   const dialog = useRef<HTMLDivElement | null>(null);
   const [unsupported, setUnsupported] = useState<ReadonlySet<SkinId>>(
     new Set(),

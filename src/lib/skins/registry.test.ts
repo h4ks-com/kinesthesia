@@ -2,22 +2,17 @@ import { describe, expect, it } from "vitest";
 import {
   directionFor,
   findSkin,
+  offeredSkins,
   skins,
   skinsFor,
   suitsDirection,
 } from "@/lib/skins/registry";
-import type { Skin } from "@/lib/skins/types";
 import { skinIds } from "@/lib/skins/types";
 
-const flying: Skin = {
-  id: "cruise",
-  name: "Flying",
-  blurb: "Only reads while notes leave the keys.",
-  directions: ["up"],
-  create: () => null,
-};
-
-const grounded: Skin = { ...flying, directions: ["down"] };
+/** Real skins, because a hand-built one would carry directions the table no
+ * longer takes its answer from. */
+const flying = findSkin("cruise");
+const grounded = findSkin("rainfall");
 
 describe("the skin registry", () => {
   it("ships one skin per declared id, since a link may name any of them", () => {
@@ -33,8 +28,9 @@ describe("the skin registry", () => {
   });
 
   it("offers a skin only where it reads the right way round", () => {
-    expect(suitsDirection(flying, "up")).toBe(true);
-    expect(suitsDirection(flying, "down")).toBe(false);
+    expect(flying).not.toBeNull();
+    expect(flying === null || suitsDirection(flying, "up")).toBe(true);
+    expect(flying !== null && suitsDirection(flying, "down")).toBe(false);
   });
 
   it("keeps every shipped skin describable, since the picker shows it", () => {
@@ -57,6 +53,14 @@ describe("which way the notes travel", () => {
 
   it("keeps them falling where they have to be read coming", () => {
     expect(directionFor(flying, false)).toBe("down");
+  });
+
+  it("offers every background in watch and only the falling ones elsewhere", () => {
+    expect(offeredSkins(true)).toEqual(skins);
+    for (const skin of offeredSkins(false)) {
+      expect(suitsDirection(skin, "down")).toBe(true);
+    }
+    expect(offeredSkins(false).length).toBeGreaterThan(0);
   });
 
   it("keeps them falling on the plain roll", () => {

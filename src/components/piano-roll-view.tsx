@@ -89,7 +89,11 @@ export function PianoRollView({
   const skinRef = useRef<SkinInstance | null>(null);
   const directionRef = useRef(direction);
   directionRef.current = direction;
-  const reportRef = useRef<SkinReport>({ keyboardTop: 0, travellers: [] });
+  const reportRef = useRef<SkinReport>({
+    keyboardTop: 0,
+    travellers: [],
+    strikes: [],
+  });
   // Kept out of the render loop's effect, which restarts whenever the song
   // changes: a skin outlives that, and a clock that jumped back would throw its
   // whole field off screen.
@@ -130,6 +134,7 @@ export function PianoRollView({
       const skinned = skinRef.current;
       if (skinned !== null) {
         reportRef.current.travellers.length = 0;
+        reportRef.current.strikes.length = 0;
       }
       renderer.draw({
         song,
@@ -157,6 +162,7 @@ export function PianoRollView({
           keyboardTop: reportRef.current.keyboardTop,
           elapsed: (performance.now() - skinClock.current) / 1000,
           travellers: reportRef.current.travellers,
+          strikes: reportRef.current.strikes,
         });
       }
       frame = requestAnimationFrame(loop);

@@ -21,7 +21,7 @@ import {
 } from "@/lib/play/parts";
 import { usePlayNotes } from "@/lib/play/use-play-notes";
 import { clampKeyWidth, defaultKeyWidth } from "@/lib/render/keyboard";
-import { findSkin } from "@/lib/skins/registry";
+import { findSkin, skinsFor } from "@/lib/skins/registry";
 import type { SkinId } from "@/lib/skins/types";
 import {
   type GlobalSettings,
@@ -347,6 +347,9 @@ export function PlayView({
   );
   // Free roam shoots notes out of the keys, so that is the direction a skin is
   // told about and the one the picker offers for.
+  // Free roam always shoots notes out of the keys, so only the backgrounds
+  // that read that way round are worth offering.
+  const freeRoamSkins = skinsFor("up");
   const still = useReducedMotion();
   const skin = plainStyle || still ? null : findSkin(skinId);
 
@@ -426,7 +429,7 @@ export function PlayView({
         {pickingSkin ? (
           <SkinPicker
             chosen={skinId}
-            direction="up"
+            available={freeRoamSkins}
             onChoose={onSkin}
             onClose={() => setPickingSkin(false)}
           />

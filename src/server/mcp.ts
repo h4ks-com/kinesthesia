@@ -36,7 +36,7 @@ import {
   playerModes,
   speeds,
 } from "@/lib/player-url";
-import { skinIds } from "@/lib/skins/types";
+import { skinIds, skinReads } from "@/lib/skins/types";
 import { config } from "@/server/config";
 import { sourceFetch } from "@/server/http/fetch";
 import { analyseMidi } from "@/server/midi/analyse";
@@ -112,7 +112,7 @@ const playerLinkShape = {
     .string()
     .optional()
     .describe(
-      "Background drawn behind the notes, purely cosmetic. 'starfield' is a still nebula, 'cruise' flies through it and sends the notes out of the keys instead of onto them. Watch only, and left out for the plain roll",
+      "Background drawn behind the notes, purely cosmetic. Some of them send the notes out of the keys instead of onto them, and those are watch only. Left out for the plain roll",
     ),
   start: z
     .number()
@@ -177,10 +177,11 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
       why: `unknown background: ${input.skin}. Try ${skinIds.join(" or ")}`,
     };
   }
-  if (input.skin !== undefined && input.mode !== "watch") {
+  if (skin !== null && input.mode !== "watch" && !skinReads(skin, "down")) {
+    const falling = skinIds.filter((id) => skinReads(id, "down"));
     return {
       ok: false,
-      why: "a background sends the notes the wrong way for a mode that is played, so it is only offered in watch",
+      why: `${skin} sends the notes out of the keys, and a mode that is played needs them approaching. In ${input.mode} try ${falling.join(" or ")}`,
     };
   }
   if (input.focus === true && input.mode !== "watch") {
@@ -530,8 +531,10 @@ id: it validates every value and refuses a combination the player would ignore.
 The background is the skin argument, and it is decoration only: it never changes
 the song, the notes or the timing. Everything about it rides in the link and
 nothing is saved to the listener's device, so a link opens looking the way it was
-sent. Backgrounds are watch only, because one of them sends the notes out of the
-keys rather than onto them and a mode that is played needs them approaching.
+sent. Watch takes any of them. Some send the notes out of the keys rather than
+onto them, and those are refused in learn and multiplayer, where the approach is
+how a player knows what to play; player_link names the ones that still work
+there when it refuses.
 
 player_link also accepts a direct .mid url in place of source and id, as long as
 the url is on an origin the deployment trusts. That is how a file from elsewhere,

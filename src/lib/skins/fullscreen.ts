@@ -1,8 +1,42 @@
 /** One triangle covering the viewport, which is the whole of the geometry any
  * of these backgrounds needs. Each supplies its own fragment source; the
  * compiling, linking and buffer setup are the same every time. */
+/** One context per canvas, for the life of that canvas. Asking twice returns
+ * the same one, because a skin is torn down and rebuilt on the very same canvas
+ * whenever React re-runs the effect that owns it, and a canvas only ever hands
+ * out one context anyway. Losing it instead would poison the canvas: every
+ * later request returns the dead one. */
+const contexts = new WeakMap<HTMLCanvasElement, WebGL2RenderingContext>();
+
+export function shaderContext(
+  canvas: HTMLCanvasElement,
+): WebGL2RenderingContext | null {
+  const known = contexts.get(canvas);
+  if (known !== undefined) {
+    return known;
+  }
+  const made = canvas.getContext("webgl2", {
+    alpha: false,
+    antialias: false,
+    powerPreference: "low-power",
+  });
+  if (made !== null) {
+    contexts.set(canvas, made);
+  }
+  return made;
+}
+
+export type ShaderInputs = {
+  readonly time: number;
+  readonly gain: number;
+  /** Where the sound sits across the keyboard, 0 low and 1 high. */
+  readonly tone: number;
+  /** How much is sounding, 0 to 1. */
+  readonly energy: number;
+};
+
 export type Fullscreen = {
-  draw(size: readonly [number, number], time: number, gain: number): void;
+  draw(size: readonly [number, number], inputs: ShaderInputs): void;
   dispose(): void;
 };
 
@@ -22,6 +56,9 @@ function compile(
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    // A background that silently fails to appear is indistinguishable from one
+    // the device cannot run, so say which it was.
+    console.error("skin shader failed to compile", gl.getShaderInfoLog(shader));
     gl.deleteShader(shader);
     return null;
   }
@@ -60,17 +97,24 @@ export function createFullscreen(
   gl.enableVertexAttribArray(place);
   gl.vertexAttribPointer(place, 2, gl.FLOAT, false, 0, 0);
 
+  // A shader that does not declare one gets null here, and setting a null
+  // uniform is a no-op, so every shader takes the same inputs and uses what it
+  // needs.
   const sizeAt = gl.getUniformLocation(program, "size");
   const timeAt = gl.getUniformLocation(program, "time");
   const gainAt = gl.getUniformLocation(program, "gain");
+  const toneAt = gl.getUniformLocation(program, "tone");
+  const energyAt = gl.getUniformLocation(program, "energy");
 
   return {
-    draw([width, height], time, gain) {
+    draw([width, height], inputs) {
       // biome-ignore lint/correctness/useHookAtTopLevel: gl.useProgram is a WebGL call, not a React hook
       gl.useProgram(program);
       gl.uniform2f(sizeAt, width, height);
-      gl.uniform1f(timeAt, time);
-      gl.uniform1f(gainAt, gain);
+      gl.uniform1f(timeAt, inputs.time);
+      gl.uniform1f(gainAt, inputs.gain);
+      gl.uniform1f(toneAt, inputs.tone);
+      gl.uniform1f(energyAt, inputs.energy);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     },
     dispose() {
@@ -78,24 +122,21 @@ export function createFullscreen(
       gl.deleteShader(vs);
       gl.deleteShader(fs);
       gl.deleteBuffer(quad);
-      // A browser allows only a handful of live contexts per page and evicts
-      // the oldest to make room, which would be the background behind the roll.
-      // The picker mints one per preview every time it opens, so each has to be
-      // handed back rather than left for the collector.
-      gl.getExtension("WEBGL_lose_context")?.loseContext();
     },
   };
 }
 
-/** The gas both space backgrounds sit in. `drift` decides how fast it is being
- * travelled through, which is the only thing that separates them. */
-export function nebulaSource(drift: number): string {
-  return `#version 300 es
+/** What every one of these shaders is built out of: the uniforms the host sets
+ * and value noise to shape them with. Prepended so a new background is only its
+ * own `void main`. */
+export const shaderPrelude = `#version 300 es
 precision highp float;
 out vec4 colour;
 uniform vec2 size;
 uniform float time;
 uniform float gain;
+uniform float tone;
+uniform float energy;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 
@@ -117,7 +158,12 @@ float clouds(vec2 p) {
   }
   return sum;
 }
+`;
 
+/** The gas both space backgrounds sit in. `drift` decides how fast it is being
+ * travelled through, which is the only thing that separates them. */
+export function nebulaSource(drift: number): string {
+  return `${shaderPrelude}
 void main() {
   vec2 uv = gl_FragCoord.xy / size;
   vec2 p = uv * vec2(size.x / size.y, 1.0);

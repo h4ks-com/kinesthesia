@@ -1,11 +1,6 @@
-import { createFullscreen, nebulaSource } from "@/lib/skins/fullscreen";
+import { nebulaSource } from "@/lib/skins/fullscreen";
 import { RockField } from "@/lib/skins/rubble";
-import type {
-  Skin,
-  SkinFrame,
-  SkinInstance,
-  SkinSurface,
-} from "@/lib/skins/types";
+import { defineSkin, type SceneView } from "@/lib/skins/scene";
 
 /** Dimmer than the still field, because streaking stars are already carrying
  * the eye and the notes still have to win. */
@@ -29,10 +24,6 @@ const starColours = [
   "#ffd3a8",
 ] as const;
 
-/** Roughly one rock a second, so they are an event rather than a field to fly
- * through. */
-const rockRate = 1.2;
-
 type Star = {
   /** Direction from the vanishing point, before depth is applied. */
   x: number;
@@ -42,133 +33,88 @@ type Star = {
   twinkle: number;
 };
 
-function createCruise({ base, overlay }: SkinSurface): SkinInstance | null {
-  const gl = base.getContext("webgl2", {
-    alpha: false,
-    antialias: false,
-    powerPreference: "low-power",
-  });
-  if (gl === null) {
-    return null;
-  }
-  const gas = createFullscreen(gl, nebulaSource(0.06));
-  if (gas === null) {
-    return null;
-  }
-  const ctx = overlay.getContext("2d");
+function place(star: Star, fresh: boolean): void {
+  star.x = (Math.random() - 0.5) * 2.4;
+  star.y = (Math.random() - 0.5) * 2.4;
+  star.z = fresh ? Math.random() : 1;
+  star.color =
+    starColours[Math.floor(Math.random() * starColours.length)] ?? "#ffffff";
+  star.twinkle = Math.random() * Math.PI * 2;
+}
 
+function seed(): Star[] {
   const stars: Star[] = [];
-  const field = new RockField({
-    max: 9,
-    rate: rockRate,
-    smallest: 13,
-    largest: 30,
-  });
-  let width = 0;
-  let height = 0;
-  let ratio = 1;
-  let last = 0;
-
-  function placeStar(star: Star, fresh: boolean): void {
-    star.x = (Math.random() - 0.5) * 2.4;
-    star.y = (Math.random() - 0.5) * 2.4;
-    star.z = fresh ? Math.random() : 1;
-    star.color =
-      starColours[Math.floor(Math.random() * starColours.length)] ?? "#ffffff";
-    star.twinkle = Math.random() * Math.PI * 2;
+  for (let count = 0; count < starCount; count += 1) {
+    const star: Star = { x: 0, y: 0, z: 1, color: "#ffffff", twinkle: 0 };
+    place(star, true);
+    stars.push(star);
   }
+  return stars;
+}
 
-  function seedStars(): void {
-    stars.length = 0;
-    for (let count = 0; count < starCount; count += 1) {
-      const star: Star = { x: 0, y: 0, z: 1, color: "#ffffff", twinkle: 0 };
-      placeStar(star, true);
-      stars.push(star);
-    }
-  }
-
+/** Travelling toward the top of the roll, so the field spreads out of a point
+ * above it and pours down past the keys. */
+function vanishing(view: SceneView): { x: number; y: number; reach: number } {
   return {
-    resize(nextWidth, nextHeight, nextRatio) {
-      width = nextWidth;
-      height = nextHeight;
-      ratio = nextRatio;
-      base.width = Math.round(nextWidth * nextRatio);
-      base.height = Math.round(nextHeight * nextRatio);
-      overlay.width = base.width;
-      overlay.height = base.height;
-      gl.viewport(0, 0, base.width, base.height);
-      if (stars.length === 0) {
-        seedStars();
-      }
-    },
-
-    draw(frame: SkinFrame) {
-      gas.draw([base.width, base.height], frame.elapsed, nebulaGain);
-      if (ctx === null) {
-        return;
-      }
-      // Measured rather than assumed, so the travel reads the same whatever
-      // rate the frames arrive at.
-      const step =
-        last === 0 ? 1 / 60 : Math.max(0, Math.min(0.05, frame.elapsed - last));
-      last = frame.elapsed;
-
-      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-      ctx.clearRect(0, 0, width, height);
-
-      // Travelling toward the top of the roll, so the field spreads out of a
-      // point above it and pours down past the keys.
-      const awayX = width / 2;
-      const awayY = -height * 0.25;
-      const reach = Math.max(width, height);
-
-      for (const star of stars) {
-        const was = star.z;
-        star.z -= approach * step;
-        if (star.z <= nearest) {
-          placeStar(star, false);
-          continue;
-        }
-        const near = star.x / star.z;
-        const nearY = star.y / star.z;
-        const x = awayX + near * reach * 0.5;
-        const y = awayY + nearY * reach * 0.5;
-        if (y > frame.keyboardTop + 40 || x < -60 || x > width + 60) {
-          continue;
-        }
-        const wasX = awayX + (star.x / was) * reach * 0.5;
-        const wasY = awayY + (star.y / was) * reach * 0.5;
-        const closeness = 1 - star.z;
-        const shine =
-          (0.25 + closeness * 0.75) *
-          (0.75 + 0.25 * Math.sin(frame.elapsed * 3 + star.twinkle));
-
-        ctx.globalAlpha = Math.min(1, shine);
-        ctx.strokeStyle = star.color;
-        ctx.lineWidth = 0.5 + closeness * 2.1;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(wasX, wasY);
-        ctx.lineTo(x, y);
-        ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
-      ctx.lineCap = "butt";
-
-      field.paint(ctx, width, height, step, frame);
-    },
-
-    dispose() {
-      gas.dispose();
-    },
+    x: view.width / 2,
+    y: -view.height * 0.25,
+    reach: Math.max(view.width, view.height),
   };
 }
 
-export const cruise: Skin = {
+export const cruise = defineSkin({
   id: "cruise",
   name: "Cruising",
   blurb:
     "The keys fly through space. Stars streak past, and the rocks your notes reach break apart.",
-  directions: ["up"],
-  create: createCruise,
-};
+  shader: { source: nebulaSource(0.06), gain: nebulaGain },
+
+  createScene() {
+    const stars = seed();
+    const field = new RockField({
+      max: 9,
+      rate: 1.2,
+      smallest: 13,
+      largest: 30,
+    });
+
+    return {
+      paint(ctx, view, frame, step) {
+        const away = vanishing(view);
+
+        for (const star of stars) {
+          const was = star.z;
+          star.z -= approach * step;
+          if (star.z <= nearest) {
+            place(star, false);
+            continue;
+          }
+          const x = away.x + (star.x / star.z) * away.reach * 0.5;
+          const y = away.y + (star.y / star.z) * away.reach * 0.5;
+          if (y > frame.keyboardTop + 40 || x < -60 || x > view.width + 60) {
+            continue;
+          }
+          const wasX = away.x + (star.x / was) * away.reach * 0.5;
+          const wasY = away.y + (star.y / was) * away.reach * 0.5;
+          const closeness = 1 - star.z;
+          const shine =
+            (0.25 + closeness * 0.75) *
+            (0.75 + 0.25 * Math.sin(frame.elapsed * 3 + star.twinkle));
+
+          ctx.globalAlpha = Math.min(1, shine);
+          ctx.strokeStyle = star.color;
+          ctx.lineWidth = 0.5 + closeness * 2.1;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(wasX, wasY);
+          ctx.lineTo(x, y);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        ctx.lineCap = "butt";
+
+        field.paint(ctx, view.width, view.height, step, frame);
+      },
+    };
+  },
+});

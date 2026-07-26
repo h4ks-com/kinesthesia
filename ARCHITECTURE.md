@@ -99,13 +99,23 @@ src/lib/
                               and play mode's live notes rising from the keys
   render/sparks.ts            the swarm thrown up from the keys, and its ceiling
   skins/types.ts              what a background is told and what it must answer
-  skins/registry.ts           the backgrounds on offer, and which suit a direction
-  skins/fullscreen.ts         the one triangle a shader background draws on, and
-                              the gas both space backgrounds share
+  skins/scene.ts              turns a paint function into a background: contexts,
+                              sizing, the clock and the shader inputs
+  skins/registry.ts           the backgrounds on offer, which suit a direction,
+                              and which way notes travel under one
+  skins/fullscreen.ts         the one triangle a shader background draws on, the
+                              uniforms every shader takes, and the shared nebula
+  skins/particles.ts          a pool with a ceiling for anything thrown in the air
   skins/rubble.ts             the asteroids notes break, the field they drift in,
                               and the dust and chips a break leaves
   skins/starfield.ts          drifting gas, stars, and rocks the notes break
   skins/cruise.ts             the same space travelled through, stars streaking past
+  skins/aurora.ts             curtains of light that lift and change hue as you play
+  skins/rainfall.ts           a storm behind glass, rings where notes land
+  skins/abyss.ts              deep water, light shafts, bubbles trailing the notes
+  skins/horizon.ts            a grid out to a banded sun, a beam per struck key
+  skins/ember.ts              black rock, sparks off the keys, heat in the keybed
+  skins/ink.ts                near-black paper a struck key blooms ink across
   render/export.ts            the watch view as a render job: size, frame, files
   render/audio.ts             offline audio render to a WAV, at the live voicing
   render/video.ts             offline video render, WebCodecs with a recorder fallback

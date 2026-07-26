@@ -24,7 +24,7 @@ import {
   whiteKeys,
 } from "@/lib/render/keyboard";
 import { SparkField } from "@/lib/render/sparks";
-import type { NoteDirection, Traveller } from "@/lib/skins/types";
+import type { NoteDirection, Strike, Traveller } from "@/lib/skins/types";
 
 const lookAhead = 3.5;
 /** Real seconds of warning before an owed note lands. Scaled by playback speed
@@ -99,6 +99,7 @@ export type Frame = {
 export type SkinReport = {
   keyboardTop: number;
   travellers: Traveller[];
+  strikes: Strike[];
 };
 
 function reportTraveller(
@@ -461,6 +462,10 @@ export class PianoRollRenderer {
       // falls inside one frame still counts as having landed.
       if (!ghost && started && since !== null && note.start > since) {
         this.onsets.add(note.pitch);
+        frame.report?.strikes.push({
+          x: keyCenter(note.pitch, whiteWidth),
+          color: color.glow,
+        });
       }
       // A rising note is only starting its climb when its end passes, so this
       // is the moment it leaves the keys rather than the moment it is spent.
@@ -652,6 +657,10 @@ export class PianoRollRenderer {
       const since = this.onsetSince;
       if (since !== null && note.start > since) {
         this.onsets.add(note.pitch);
+        frame.report?.strikes.push({
+          x: keyCenter(note.pitch, whiteWidth),
+          color: color.glow,
+        });
       }
 
       const top = keyboardTop - headAge * scale;

@@ -41,7 +41,7 @@ import { useRunRecord } from "@/lib/scoring/use-run-record";
 import {
   directionFor,
   findSkin,
-  skinsFor,
+  offeredSkins,
   suitsDirection,
 } from "@/lib/skins/registry";
 import type { NoteDirection, SkinId } from "@/lib/skins/types";
@@ -167,7 +167,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const direction: NoteDirection = directionFor(chosen, mayRise);
   const skin =
     chosen !== null && suitsDirection(chosen, direction) ? chosen : null;
-  const offered = skinsFor(mayRise ? "up" : "down");
+  const offered = offeredSkins(mayRise);
 
   const song = useMemo(
     () => (original === null ? null : transposeSong(original, transpose)),
@@ -588,7 +588,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             {pickingSkin ? (
               <SkinPicker
                 chosen={skinId}
-                direction={mayRise ? "up" : "down"}
+                available={offered}
                 onChoose={(next) => {
                   setSkinId(next);
                   setPickingSkin(false);

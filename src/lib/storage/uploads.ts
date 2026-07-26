@@ -51,10 +51,10 @@ export async function listUploads(): Promise<LibraryEntry[]> {
   );
   return all
     .map((upload): LibraryEntry => {
-      const local = `${scheme}${upload.key}`;
+      const url = upload.sharedUrl ?? `${scheme}${upload.key}`;
       return {
-        key: entryKey("local", local),
-        url: upload.sharedUrl ?? local,
+        key: entryKey("local", url),
+        url,
         name: upload.name,
         source: "local",
         playedAt: upload.uploadedAt,
@@ -90,22 +90,20 @@ export async function clearUploads(): Promise<void> {
 /** Records where a file was published. The local bytes stay, so the row keeps
  * playing from this device without waiting on the network. */
 export async function markShared(
-  key: string,
+  url: string,
   sharedUrl: string,
 ): Promise<void> {
-  const stored = await run<StoredUpload | undefined>(
-    uploadStore,
-    "readonly",
-    (store) => store.get(key),
-  );
+  const key = await storeKeyFor(url);
+  const stored =
+    key === null
+      ? undefined
+      : await run<StoredUpload | undefined>(uploadStore, "readonly", (store) =>
+          store.get(key),
+        );
   if (stored === undefined) {
     return;
   }
   await run(uploadStore, "readwrite", (store) =>
     store.put({ ...stored, sharedUrl }),
   );
-}
-
-export function uploadKey(url: string): string {
-  return url.slice(scheme.length);
 }

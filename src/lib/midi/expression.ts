@@ -12,14 +12,21 @@ type Sample = {
   depth: number;
 };
 
-/** Seconds of wheel movement kept per track. Outlasts the roll's look ahead,
- * so every note still on screen can be read from it. */
+/** Seconds of wheel movement a live trail keeps. Outlasts the roll's look
+ * ahead, so every note still on screen can be read from it. */
 const trailSeconds = 8;
 
 /** Bend and modulation are channel wide, so one trail per track covers every
  * note on it. */
 export class ExpressionTrail {
   private readonly tracks = new Map<number, Sample[]>();
+  /** A file is handed over whole and drawn from end to end, so its trail keeps
+   * every sample. A live one only has to outlast the screen. */
+  private readonly keepAll: boolean;
+
+  constructor({ keepAll = false }: { keepAll?: boolean } = {}) {
+    this.keepAll = keepAll;
+  }
 
   private samplesFor(track: number): Sample[] {
     const existing = this.tracks.get(track);
@@ -40,6 +47,9 @@ export class ExpressionTrail {
       samples.length = 0;
     }
     samples.push({ at, bend: next.bend, depth: next.depth });
+    if (this.keepAll) {
+      return;
+    }
     const cutoff = at - trailSeconds;
     let drop = 0;
     while (drop < samples.length - 1 && (samples[drop + 1]?.at ?? 0) < cutoff) {
@@ -93,5 +103,23 @@ export class ExpressionTrail {
 
   touched(track: number): boolean {
     return (this.tracks.get(track)?.length ?? 0) > 0;
+  }
+
+  /** Whether either wheel leaves centre anywhere across a span, so a note the
+   * wheels sat still through is drawn as a plain bar without tracing it. */
+  moves(track: number, from: number, to: number): boolean {
+    const samples = this.tracks.get(track);
+    if (samples === undefined) {
+      return false;
+    }
+    if (this.at(track, from).bend !== 0 || this.at(track, from).depth !== 0) {
+      return true;
+    }
+    return samples.some(
+      (sample) =>
+        sample.at > from &&
+        sample.at <= to &&
+        (sample.bend !== 0 || sample.depth !== 0),
+    );
   }
 }

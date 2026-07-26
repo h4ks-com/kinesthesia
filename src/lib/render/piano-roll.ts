@@ -537,6 +537,7 @@ export class PianoRollRenderer {
       const written = frame.song.expression;
       const bent =
         written.touched(note.track) &&
+        written.moves(note.track, note.start, note.release) &&
         this.traceBentNote(
           written,
           note.track,

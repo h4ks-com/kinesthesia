@@ -18,12 +18,15 @@ import {
 } from "@/lib/player-url";
 import { clampKeyWidth, defaultKeyWidth } from "@/lib/render/keyboard";
 import {
+  type GlobalSettings,
   loadGlobalSettings,
   loadSongSettings,
-  saveGlobalSettings,
   saveSongSettings,
   songSettingsKey,
+  updateGlobalSettings,
 } from "@/lib/storage/settings";
+
+const settleMs = 250;
 
 type SongSettingsValue = {
   tracks: readonly number[];
@@ -95,6 +98,7 @@ export function usePlayerSettings({
 
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const globalTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingGlobal = useRef<Partial<GlobalSettings>>({});
   useEffect(
     () => () => {
       if (settleTimer.current !== null) {
@@ -244,47 +248,40 @@ export function usePlayerSettings({
     settleTimer.current = setTimeout(() => commit(next), 250);
   }
 
-  function settleGlobal(
-    keyWidthNext: number,
-    latencyNext: number,
-    labelsNext: boolean,
-    plainNext: boolean,
-  ) {
+  // Gathers the changes made inside one settle and writes only the fields this
+  // view owns, so a setting another view changed meanwhile survives.
+  function settleGlobal(patch: Partial<GlobalSettings>) {
+    pendingGlobal.current = { ...pendingGlobal.current, ...patch };
     if (globalTimer.current !== null) {
       clearTimeout(globalTimer.current);
     }
-    globalTimer.current = setTimeout(
-      () =>
-        void saveGlobalSettings({
-          keyWidth: keyWidthNext,
-          latencyOffset: latencyNext,
-          showKeyLabels: labelsNext,
-          plainStyle: plainNext,
-        }),
-      250,
-    );
+    globalTimer.current = setTimeout(() => {
+      const next = pendingGlobal.current;
+      pendingGlobal.current = {};
+      void updateGlobalSettings(next);
+    }, settleMs);
   }
 
   function changeKeyWidth(next: number) {
     const width = clampKeyWidth(next);
     setKeyWidth(width);
-    settleGlobal(width, latencyOffset, showKeyLabels, plainStyle);
+    settleGlobal({ keyWidth: width });
   }
 
   function changeLatency(next: number) {
     const offset = clampLatency(next);
     setLatencyOffset(offset);
-    settleGlobal(keyWidth, offset, showKeyLabels, plainStyle);
+    settleGlobal({ latencyOffset: offset });
   }
 
   function changeKeyLabels(next: boolean) {
     setShowKeyLabels(next);
-    settleGlobal(keyWidth, latencyOffset, next, plainStyle);
+    settleGlobal({ showKeyLabels: next });
   }
 
   function changePlainStyle(next: boolean) {
     setPlainStyle(next);
-    settleGlobal(keyWidth, latencyOffset, showKeyLabels, next);
+    settleGlobal({ plainStyle: next });
   }
 
   function changeSimplified(next: boolean) {

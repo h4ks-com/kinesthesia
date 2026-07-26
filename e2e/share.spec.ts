@@ -52,7 +52,9 @@ test("a file kept on this device offers no link until it is shared", async ({
   await addFile(page);
 
   // Signed out, the offer is visible but closed, and says what would open it.
-  const offer = page.getByRole("button", { name: /Sign in to share mine.mid/ });
+  const offer = page.getByRole("button", {
+    name: /Sign in to put mine.mid online/,
+  });
   await expect(offer).toBeVisible();
   await expect(
     page.getByRole("button", { name: /^Share mine.mid/ }),

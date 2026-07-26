@@ -70,9 +70,8 @@ export async function saveGlobalSettings(
   );
 }
 
-/** One row holds every global setting, so a writer that owns only some of them
- * has to read the rest first. Those reads and writes are queued because two
- * overlapping ones would each save what the other had already replaced. */
+/** Queued because two overlapping read-modify-writes would each save over what
+ * the other had already replaced. */
 let globalWrites: Promise<unknown> = Promise.resolve();
 
 export function updateGlobalSettings(
@@ -81,10 +80,9 @@ export function updateGlobalSettings(
   const next = globalWrites.then(async () => {
     const stored = await loadGlobalSettings();
     await saveGlobalSettings({
-      keyWidth: stored?.keyWidth ?? defaultKeyWidth,
-      latencyOffset: stored?.latencyOffset ?? 0,
-      showKeyLabels: stored?.showKeyLabels,
-      plainStyle: stored?.plainStyle,
+      keyWidth: defaultKeyWidth,
+      latencyOffset: 0,
+      ...(stored ?? {}),
       ...patch,
     });
   });

@@ -51,15 +51,22 @@ describe("uploads", () => {
 
   it("hands out the published address once there is one", async () => {
     const local = await storeUpload("mine.mid", new ArrayBuffer(8));
-    await markShared(local.slice("local:".length), "https://files.test/a.mid");
+    await markShared(local, "https://files.test/a.mid");
 
     const [entry] = await listUploads();
     expect(entry?.url).toBe("https://files.test/a.mid");
   });
 
+  it("keys a published row by the address it is listed under, so its star still works", async () => {
+    const local = await storeUpload("mine.mid", new ArrayBuffer(8));
+    await markShared(local, "https://files.test/a.mid");
+    const [entry] = await listUploads();
+    expect(entry?.key).toContain("https://files.test/a.mid");
+  });
+
   it("removes a published row, which is no longer listed under the key it is stored against", async () => {
     const local = await storeUpload("mine.mid", new ArrayBuffer(8));
-    await markShared(local.slice("local:".length), "https://files.test/a.mid");
+    await markShared(local, "https://files.test/a.mid");
 
     const [entry] = await listUploads();
     await deleteUpload(entry?.url ?? "");

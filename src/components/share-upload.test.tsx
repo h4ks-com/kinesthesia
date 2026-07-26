@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { ShareUpload } from "@/components/share-upload";
 
 function offer(props: Partial<Parameters<typeof ShareUpload>[0]> = {}) {
@@ -19,22 +19,21 @@ function offer(props: Partial<Parameters<typeof ShareUpload>[0]> = {}) {
 describe("ShareUpload", () => {
   it("waits for the confirm before publishing anything", () => {
     const onShare = offer();
-    fireEvent.click(screen.getByRole("button", { name: "Share mine.mid" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Put mine.mid online" }),
+    );
     expect(onShare).not.toHaveBeenCalled();
-    expect(screen.getByText(/no taking it down/i)).toBeTruthy();
-  });
-
-  it("says the copy is permanent before it is made", () => {
-    offer();
-    fireEvent.click(screen.getByRole("button", { name: "Share mine.mid" }));
-    const panel = screen.getByText(/anyone with the link can play it/i);
-    expect(panel.textContent).toMatch(/no taking it down/i);
+    expect(screen.getByRole("dialog").textContent).toMatch(
+      /cannot take it down/i,
+    );
   });
 
   it("publishes on the confirm", async () => {
     const onShare = offer();
-    fireEvent.click(screen.getByRole("button", { name: "Share mine.mid" }));
-    fireEvent.click(screen.getByRole("button", { name: "share" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Put mine.mid online" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "put it online" }));
     await waitFor(() => expect(onShare).toHaveBeenCalledTimes(1));
   });
 
@@ -50,8 +49,10 @@ describe("ShareUpload", () => {
         signedIn={true}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Share mine.mid" }));
-    fireEvent.click(screen.getByRole("button", { name: "share" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Put mine.mid online" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "put it online" }));
     await waitFor(() =>
       expect(screen.getByText("That file is too large to share")).toBeTruthy(),
     );
@@ -60,7 +61,7 @@ describe("ShareUpload", () => {
   it("offers no way to publish when nobody is signed in", () => {
     const onShare = offer({ signedIn: false });
     const button = screen.getByRole("button", {
-      name: "Sign in to share mine.mid",
+      name: "Sign in to put mine.mid online",
     });
     fireEvent.click(button);
     expect(onShare).not.toHaveBeenCalled();
@@ -69,6 +70,7 @@ describe("ShareUpload", () => {
 
   it("hands out a whole address once the file is up", async () => {
     const written: string[] = [];
+    const original = Object.getOwnPropertyDescriptor(navigator, "clipboard");
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: {
@@ -76,6 +78,13 @@ describe("ShareUpload", () => {
           written.push(text);
         },
       },
+    });
+    onTestFinished(() => {
+      if (original === undefined) {
+        Reflect.deleteProperty(navigator, "clipboard");
+      } else {
+        Object.defineProperty(navigator, "clipboard", original);
+      }
     });
     render(
       <ShareUpload

@@ -55,8 +55,26 @@ const pitchClasses = [
 const defaultBpm = 120;
 const defaultMeter: readonly [number, number] = [4, 4];
 
+/** Parsing a file is cheap; reading the time off every note is not. Tick to
+ * seconds walks the tempo map, and that walk degrades when many events share a
+ * tick, so a small file can carry minutes of work. These bound the walk before
+ * anything asks for a note time. The densest real files sit far under both. */
+const maxNotes = 200_000;
+const maxTempos = 5_000;
+
 export function readMidi(bytes: ArrayBuffer | Uint8Array): Midi {
-  return new Midi(bytes);
+  const midi = new Midi(bytes);
+  if (midi.header.tempos.length > maxTempos) {
+    throw new Error("That MIDI has too many tempo changes to play.");
+  }
+  let notes = 0;
+  for (const track of midi.tracks) {
+    notes += track.notes.length;
+    if (notes > maxNotes) {
+      throw new Error("That MIDI has too many notes to play.");
+    }
+  }
+  return midi;
 }
 
 export function detectTempo(midi: Midi): Tempo {

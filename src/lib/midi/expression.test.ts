@@ -59,3 +59,23 @@ describe("ExpressionTrail", () => {
     expect(trail.at(0, 0)).toEqual(flat);
   });
 });
+
+describe("a trail that keeps everything", () => {
+  it("still answers for movement made long ago", () => {
+    // A parsed file hands over the whole song at once. Dropping the early part
+    // would leave most of a three minute piece unbent.
+    const trail = new ExpressionTrail({ keepAll: true });
+    for (let step = 0; step < 500; step += 1) {
+      trail.setBend(0, step * 0.4, step === 10 ? 1 : 0);
+    }
+    expect(trail.at(0, 4.1).bend).toBe(1);
+  });
+
+  it("keeps culling the live trail, which only has to outlast the screen", () => {
+    const trail = new ExpressionTrail();
+    for (let step = 0; step < 500; step += 1) {
+      trail.setBend(0, step * 0.4, step === 10 ? 1 : 0);
+    }
+    expect(trail.at(0, 4.1).bend).toBe(0);
+  });
+});

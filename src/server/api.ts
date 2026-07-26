@@ -685,6 +685,30 @@ api.openapi(deleteVoicingRoute, async (c) => {
   return c.json({ deleted: true }, 200);
 });
 
+/** The object store is shared with the generated files the MCP tools write and
+ * has a fixed size, so one account cannot be allowed to fill it. Held in memory
+ * like the multiplayer rooms: a restart forgives, which is the right trade for
+ * a limit this generous. */
+const sharesPerHour = 30;
+const shareWindowMs = 60 * 60 * 1000;
+const shareTimes = new Map<string, number[]>();
+
+function withinShareRate(viewerId: string): boolean {
+  const now = Date.now();
+  const recent = (shareTimes.get(viewerId) ?? []).filter(
+    (at) => now - at < shareWindowMs,
+  );
+  if (recent.length >= sharesPerHour) {
+    shareTimes.set(viewerId, recent);
+    return false;
+  }
+  recent.push(now);
+  shareTimes.set(viewerId, recent);
+  return true;
+}
+
+const tooLarge = "That file is over the size this server accepts";
+
 const shareUploadRoute = createRoute({
   method: "post",
   path: "/uploads",
@@ -707,8 +731,20 @@ const shareUploadRoute = createRoute({
         "application/json": { schema: z.object({ error: z.string() }) },
       },
     },
+    400: {
+      description: "Empty, or not a MIDI this server will play",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
     413: {
       description: "Larger than the server accepts",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+    429: {
+      description: "Too many shares from this account for now",
       content: {
         "application/json": { schema: z.object({ error: z.string() }) },
       },
@@ -728,22 +764,37 @@ api.openapi(shareUploadRoute, async (c) => {
     return c.json({ error: "Sign in to share a file" }, 401);
   }
   if (!bucketEnabled()) {
-    return c.json({ error: "Sharing is unavailable on this server" }, 503);
+    return c.json({ error: "Sharing is turned off here" }, 503);
+  }
+  if (!withinShareRate(viewer.id)) {
+    return c.json({ error: "That is a lot of sharing. Try again later" }, 429);
+  }
+  // Checked before the body is read, so an oversized one is refused rather
+  // than held in memory first.
+  const declared = Number(c.req.header("content-length") ?? "");
+  if (!Number.isFinite(declared) || declared > config.maxMidiBytes) {
+    return c.json({ error: tooLarge }, 413);
   }
   const body = await c.req.arrayBuffer();
-  if (body.byteLength === 0) {
-    return c.json({ error: "That file is empty" }, 413);
-  }
   if (body.byteLength > config.maxMidiBytes) {
-    return c.json({ error: "That file is too large to share" }, 413);
+    return c.json({ error: tooLarge }, 413);
+  }
+  if (body.byteLength === 0) {
+    return c.json({ error: "That file is empty" }, 400);
   }
   const bytes = new Uint8Array(body);
-  // Reading it proves it is a MIDI before it is given a public url that is
-  // meant to keep resolving.
   try {
     readMidi(bytes);
-  } catch {
-    return c.json({ error: "That file is not a valid MIDI" }, 413);
+  } catch (error) {
+    return c.json(
+      {
+        error:
+          error instanceof Error && error.message.startsWith("That MIDI")
+            ? error.message
+            : "That doesn't look like a MIDI file",
+      },
+      400,
+    );
   }
   const url = await uploadMidi(`shared/${crypto.randomUUID()}.mid`, bytes);
   return c.json({ url }, 200);

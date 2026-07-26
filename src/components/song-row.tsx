@@ -160,9 +160,9 @@ export function SongRow({
               type="button"
               aria-disabled="true"
               onClick={(event) => event.preventDefault()}
-              data-tip="Uploaded files can't be shared"
+              data-tip="Put it online first to play together"
               data-tip-side="top"
-              aria-label="Multiplayer unavailable for uploaded files"
+              aria-label={`Put ${name} online first to play together`}
               className="cursor-not-allowed rounded-lg border border-line p-2 text-line-strong"
             >
               <Icon className="size-4" aria-hidden="true" />

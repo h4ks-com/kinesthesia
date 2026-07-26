@@ -1,4 +1,5 @@
-import { Midi } from "@tonejs/midi";
+import type { Midi } from "@tonejs/midi";
+import { readMidi } from "@/lib/midi/analysis";
 import { ExpressionTrail } from "@/lib/midi/expression";
 import { pedalSpans, releaseAt } from "@/lib/midi/sustain";
 import { isLocalUrl, readUpload } from "@/lib/storage/uploads";
@@ -30,21 +31,23 @@ const startLeadIn = 2.5;
 export const maxMidiBytes = 5 * 1024 * 1024;
 
 /** One wheel event before the song's runway shift is known. */
-type WheelMove = {
-  readonly track: number;
-  readonly at: number;
-  readonly bend?: number;
-  readonly depth?: number;
-};
+type WheelMove = { readonly track: number; readonly at: number } & (
+  | { readonly bend: number; readonly depth?: undefined }
+  | { readonly depth: number; readonly bend?: undefined }
+);
 
 function decodeMidi(data: ArrayBuffer): Midi {
   if (data.byteLength > maxMidiBytes) {
     throw new Error("That MIDI file is too large to play.");
   }
   try {
-    return new Midi(data);
-  } catch {
-    throw new Error("That file is not a valid MIDI.");
+    return readMidi(data);
+  } catch (error) {
+    // The reader's own limits name what is wrong, so they reach the player
+    // rather than being flattened into "not a valid MIDI".
+    throw error instanceof Error && error.message.startsWith("That MIDI")
+      ? error
+      : new Error("That file is not a valid MIDI.");
   }
 }
 
@@ -86,8 +89,7 @@ export type Song = {
   readonly duration: number;
   readonly notes: readonly SongNote[];
   readonly tracks: readonly SongTrack[];
-  /** The bend and modulation the file writes, per track. Empty for the many
-   * files that carry neither. */
+  /** The bend and modulation the file writes, per track. */
   readonly expression: ExpressionTrail;
 };
 
@@ -188,9 +190,9 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
           release: note.release + shift,
         }));
 
-  // Built after the runway is known, so a wheel lines up with the notes it
-  // moves rather than with where they sat before the song was nudged along.
-  const expression = new ExpressionTrail();
+  // Pushed in time order: the trail treats a backwards stamp as a restart and
+  // drops what it has.
+  const expression = new ExpressionTrail({ keepAll: true });
   wheels.sort((left, right) => left.at - right.at);
   for (const move of wheels) {
     if (move.bend !== undefined) {

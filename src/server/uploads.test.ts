@@ -27,7 +27,10 @@ function midiBytes(): Uint8Array {
 async function post(body: Uint8Array): Promise<Response> {
   return api.request("/api/uploads", {
     method: "POST",
-    headers: { "content-type": "audio/midi" },
+    headers: {
+      "content-type": "audio/midi",
+      "content-length": String(body.byteLength),
+    },
     body: body.slice().buffer as ArrayBuffer,
   });
 }
@@ -63,13 +66,37 @@ describe("POST /api/uploads", () => {
   it("refuses something that is not a MIDI, so a link cannot go out dead", async () => {
     viewer.mockResolvedValue({ id: "u1", name: "Player" });
     const response = await post(new Uint8Array([1, 2, 3, 4]));
-    expect(response.status).toBe(413);
+    expect(response.status).toBe(400);
     expect(upload).not.toHaveBeenCalled();
   });
 
   it("refuses an empty body", async () => {
     viewer.mockResolvedValue({ id: "u1", name: "Player" });
-    expect((await post(new Uint8Array())).status).toBe(413);
+    expect((await post(new Uint8Array())).status).toBe(400);
+  });
+
+  it("refuses a body larger than the server accepts, before reading it", async () => {
+    viewer.mockResolvedValue({ id: "u1", name: "Player" });
+    const response = await api.request("/api/uploads", {
+      method: "POST",
+      headers: {
+        "content-type": "audio/midi",
+        "content-length": String(50 * 1024 * 1024),
+      },
+      body: midiBytes().slice().buffer as ArrayBuffer,
+    });
+    expect(response.status).toBe(413);
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it("stops one account filling the shared store", async () => {
+    viewer.mockResolvedValue({ id: "greedy", name: "Player" });
+    const codes: number[] = [];
+    for (let attempt = 0; attempt < 32; attempt += 1) {
+      codes.push((await post(midiBytes())).status);
+    }
+    expect(codes.filter((code) => code === 200)).toHaveLength(30);
+    expect(codes.at(-1)).toBe(429);
   });
 
   it("says so when the server has no object store", async () => {

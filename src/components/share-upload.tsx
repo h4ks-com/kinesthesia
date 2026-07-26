@@ -5,20 +5,14 @@ import { useEffect, useRef, useState } from "react";
 
 type ShareUploadProps = {
   name: string;
-  /** Null once the file has been published, leaving only its link to copy. */
   onShare: (() => Promise<void>) | null;
-  /** The player path to hand out, or null while the file is still only on this
-   * device. Resolved against this origin so what is copied is a whole address. */
+  /** The player path to hand out, resolved against this origin when copied. */
   sharedHref: string | null;
   signedIn: boolean;
 };
 
 const copiedFor = 1600;
 
-/** Publishing a file is a one-way door, so the offer sits behind a short panel
- * that says so plainly. It reuses the row's icon shape rather than announcing
- * itself, because the visible result is the multiplayer control on this row
- * coming alive. */
 export function ShareUpload({
   name,
   onShare,
@@ -29,7 +23,11 @@ export function ShareUpload({
   const [working, setWorking] = useState(false);
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+  /** Shown when the browser refuses the clipboard, so the link is still
+   * reachable rather than lost with the panel. */
+  const [refused, setRefused] = useState<string | null>(null);
   const shell = useRef<HTMLDivElement | null>(null);
+  const copyRef = useRef<HTMLButtonElement | null>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
@@ -41,8 +39,16 @@ export function ShareUpload({
     [],
   );
 
+  // The confirm button unmounts the moment the file lands, so focus is moved
+  // to what replaced it rather than falling back to the top of the page.
   useEffect(() => {
-    if (!open) {
+    if (sharedHref !== null) {
+      copyRef.current?.focus();
+    }
+  }, [sharedHref]);
+
+  useEffect(() => {
+    if (!open || working) {
       return;
     }
     const onPointerDown = (event: PointerEvent) => {
@@ -65,33 +71,54 @@ export function ShareUpload({
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, working]);
 
   if (sharedHref !== null) {
     return (
-      <button
-        type="button"
-        onClick={() => {
-          const link = new URL(sharedHref, window.location.origin).toString();
-          void navigator.clipboard.writeText(link).then(() => {
-            setCopied(true);
-            if (copiedTimer.current !== null) {
-              clearTimeout(copiedTimer.current);
-            }
-            copiedTimer.current = setTimeout(() => setCopied(false), copiedFor);
-          });
-        }}
-        aria-label={`Copy the link to ${name}`}
-        data-tip={copied ? "Copied" : "Copy link"}
-        data-tip-side="top"
-        className="rounded-lg p-2 text-muted transition-colors hover:bg-raised hover:text-accent"
-      >
-        {copied ? (
-          <Check className="size-4 text-accent" aria-hidden="true" />
-        ) : (
-          <Link2 className="size-4" aria-hidden="true" />
+      <>
+        <p aria-live="polite" role="status" className="sr-only">
+          {copied ? `Link to ${name} copied` : ""}
+        </p>
+        <button
+          ref={copyRef}
+          type="button"
+          onClick={() => {
+            const link = new URL(sharedHref, window.location.origin).toString();
+            void navigator.clipboard
+              ?.writeText(link)
+              .then(() => {
+                setCopied(true);
+                if (copiedTimer.current !== null) {
+                  clearTimeout(copiedTimer.current);
+                }
+                copiedTimer.current = setTimeout(
+                  () => setCopied(false),
+                  copiedFor,
+                );
+              })
+              .catch(() => setRefused(link));
+          }}
+          aria-label={`Copy the link to ${name}`}
+          data-tip={copied ? "Copied" : "Copy link"}
+          data-tip-side="top"
+          className="rounded-lg p-2 text-muted transition-colors hover:bg-raised hover:text-accent"
+        >
+          {copied ? (
+            <Check className="size-4 text-accent" aria-hidden="true" />
+          ) : (
+            <Link2 className="size-4" aria-hidden="true" />
+          )}
+        </button>
+        {refused === null ? null : (
+          <input
+            readOnly
+            value={refused}
+            aria-label={`Link to ${name}`}
+            onFocus={(event) => event.currentTarget.select()}
+            className="w-40 min-w-0 truncate bg-transparent font-mono text-accent text-xs outline-none"
+          />
         )}
-      </button>
+      </>
     );
   }
 
@@ -101,7 +128,7 @@ export function ShareUpload({
         type="button"
         aria-disabled="true"
         onClick={(event) => event.preventDefault()}
-        aria-label={`Sign in to share ${name}`}
+        aria-label={`Sign in to put ${name} online`}
         data-tip="Sign in to share"
         data-tip-side="top"
         className="cursor-not-allowed rounded-lg p-2 text-faint/50"
@@ -116,8 +143,10 @@ export function ShareUpload({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        aria-label={`Share ${name}`}
-        data-tip="Share"
+        aria-label={`Put ${name} online`}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        data-tip="Put it online"
         data-tip-side="top"
         className={`rounded-lg p-2 transition-colors hover:bg-raised hover:text-accent ${
           open ? "text-accent" : "text-muted"
@@ -126,10 +155,14 @@ export function ShareUpload({
         <Globe className="size-4" aria-hidden="true" />
       </button>
       {open ? (
-        <div className="absolute right-0 z-50 mt-1 w-60 rounded-lg border border-line-strong bg-raised p-3 text-left shadow-xl">
+        <div
+          role="dialog"
+          aria-label={`Put ${name} online`}
+          className="absolute right-0 z-50 mt-1 w-60 rounded-lg border border-line-strong bg-raised p-3 text-left shadow-xl"
+        >
           <p className="mb-2.5 text-text text-xs leading-relaxed">
-            Puts a copy online so anyone with the link can play it. The link
-            stays up, and there is no taking it down.
+            Anyone with the link can play {name}, and you cannot take it down.
+            The copy stays online.
           </p>
           {failed === null ? null : (
             <p className="mb-2.5 text-danger text-xs">{failed}</p>
@@ -137,8 +170,9 @@ export function ShareUpload({
           <div className="flex justify-end gap-2">
             <button
               type="button"
+              disabled={working}
               onClick={() => setOpen(false)}
-              className="rounded-md px-2 py-1 font-mono text-faint text-xs transition-colors hover:text-text"
+              className="rounded-md px-2 py-1 font-mono text-faint text-xs transition-colors hover:text-text disabled:opacity-40"
             >
               cancel
             </button>
@@ -164,7 +198,7 @@ export function ShareUpload({
               }}
               className="rounded-md border border-accent/50 px-2 py-1 font-mono text-accent text-xs transition-colors hover:bg-accent/10 disabled:opacity-50"
             >
-              {working ? "sharing" : "share"}
+              {working ? "putting it online" : "put it online"}
             </button>
           </div>
         </div>

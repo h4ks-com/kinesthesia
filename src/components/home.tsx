@@ -35,7 +35,6 @@ import {
   markShared,
   readUpload,
   storeUpload,
-  uploadKey,
 } from "@/lib/storage/uploads";
 import { shortestQuery, useLiveSearch } from "@/lib/use-live-search";
 import type { Viewer } from "@/server/auth";
@@ -43,6 +42,9 @@ import type { Viewer } from "@/server/auth";
 type HomeProps = {
   viewer: Viewer | null;
   authEnabled: boolean;
+  /** Off where no object store is configured, so the offer is not made on a
+   * server that cannot keep the file. */
+  shareEnabled: boolean;
   homeLink: string | null;
   chatLink: string | null;
   signIn: () => Promise<void>;
@@ -91,6 +93,7 @@ function midiUrlFrom(query: string): SongLink | null {
 export function Home({
   viewer,
   authEnabled,
+  shareEnabled,
   homeLink,
   chatLink,
   signIn,
@@ -166,12 +169,12 @@ export function Home({
         const body: unknown = await response.json().catch(() => null);
         const reason =
           typeof body === "object" && body !== null && "error" in body
-            ? String((body as { error: unknown }).error)
-            : "That did not go through";
+            ? String(body.error)
+            : "That did not go through. Try again.";
         throw new Error(reason);
       }
-      const { url } = (await response.json()) as { url: string };
-      await markShared(uploadKey(entry.url), url);
+      const { url }: { url: string } = await response.json();
+      await markShared(entry.url, url);
       refreshLibrary();
     },
     [refreshLibrary],
@@ -450,9 +453,13 @@ export function Home({
                 plays={null}
                 favorite={favoriteKeys.has(entry.key)}
                 onToggleFavorite={() => void onToggleFavorite(entry)}
-                signedIn={viewer !== null}
+                signedIn={authEnabled && viewer !== null}
                 onShare={
-                  isLocalUrl(entry.url) ? () => shareUpload(entry) : null
+                  !shareEnabled
+                    ? undefined
+                    : isLocalUrl(entry.url)
+                      ? () => shareUpload(entry)
+                      : null
                 }
                 onRemove={() =>
                   void deleteUpload(entry.url).then(refreshLibrary)

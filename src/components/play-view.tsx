@@ -39,8 +39,7 @@ const noNotes: readonly SongNote[] = [];
 /** The computer keyboard and touch always play this part; MIDI channels get
  * their own. It is never removed, so the routing target is a constant. */
 const keyboardTrack = 0;
-/** Seconds a settings write waits for the change after it. */
-const settleDelay = 250;
+const settleMs = 250;
 
 /** A key struck through one input, so its release ends the note on the same
  * part even after the octave has moved on. */
@@ -123,6 +122,7 @@ export function PlayView({
   const programByChannel = useRef(new Map<number, number>());
   const nextId = useRef(1);
   const globalTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingGlobal = useRef<Partial<GlobalSettings>>({});
   const sustainRef = useRef(false);
   const sustained = useRef(new Set<string>());
 
@@ -130,6 +130,7 @@ export function PlayView({
     () => () => {
       if (globalTimer.current !== null) {
         clearTimeout(globalTimer.current);
+        void updateGlobalSettings(pendingGlobal.current);
       }
     },
     [],
@@ -310,13 +311,17 @@ export function PlayView({
   // A write per slider step would spend a read and a write on a value the next
   // step replaces, so the save settles a moment after the last change.
   const settleGlobal = useCallback((patch: Partial<GlobalSettings>) => {
+    // Changes made inside one settle are gathered, so a second one does not
+    // replace the first and leave it unwritten.
+    pendingGlobal.current = { ...pendingGlobal.current, ...patch };
     if (globalTimer.current !== null) {
       clearTimeout(globalTimer.current);
     }
-    globalTimer.current = setTimeout(
-      () => void updateGlobalSettings(patch),
-      settleDelay,
-    );
+    globalTimer.current = setTimeout(() => {
+      const next = pendingGlobal.current;
+      pendingGlobal.current = {};
+      void updateGlobalSettings(next);
+    }, settleMs);
   }, []);
 
   const onKeyWidth = useCallback(

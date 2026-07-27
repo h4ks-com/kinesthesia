@@ -456,6 +456,12 @@ export class PianoRollRenderer {
     const since = this.onsetSince;
     const rising = frame.direction === "up";
     const riseScale = keyboardTop / lookAhead;
+    // Every row of a bar is a moment, and which moment depends on which way the
+    // bar travels: a falling note carries its future below the line, a rising
+    // one carries its past above it. Reading the wheels off the wrong one pins
+    // the bend to the screen instead of to the note.
+    const bendTime = (at: number): number =>
+      position + ((keyboardTop - at) / riseScale) * (rising ? -1 : 1);
     for (let index = first; index < notes.length; index += 1) {
       const note = notes[index];
       if (note === undefined || note.start > horizon) {
@@ -603,7 +609,7 @@ export class PianoRollRenderer {
         this.traceBentNote(
           written,
           note.track,
-          (at) => position + lookAhead * (1 - at / keyboardTop),
+          bendTime,
           { x, y, width: noteWidth, height: noteHeight },
           whiteWidth,
         );

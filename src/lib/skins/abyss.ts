@@ -1,3 +1,4 @@
+import { DeepLife } from "@/lib/skins/deep-life";
 import { drift, Particles } from "@/lib/skins/particles";
 import { defineSkin, type SceneView } from "@/lib/skins/scene";
 
@@ -32,12 +33,13 @@ export const abyss = defineSkin({
   id: "abyss",
   name: "Abyss",
   blurb:
-    "Deep water with almost no light left in it. Motes drift through the shafts, and every note leaving the keys drags a column of bubbles up behind it.",
+    "Deep water with almost no light left in it. Schools of fish cross the shafts, a submarine passes now and then, and every note leaving the keys drags a column of bubbles up behind it.",
 
   createScene() {
     let motes: Mote[] = [];
     let seeded = 0;
     const bubbles = new Particles(260);
+    const life = new DeepLife();
 
     return {
       paint(ctx, view, frame, step) {
@@ -75,6 +77,8 @@ export const abyss = defineSkin({
           ctx.fill();
         });
         ctx.restore();
+
+        life.paint(ctx, view, frame.elapsed, step);
 
         ctx.fillStyle = "rgba(103,232,249,0.20)";
         for (const mote of motes) {

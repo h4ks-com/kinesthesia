@@ -15,11 +15,16 @@ function bentMidi(): Uint8Array {
   return new Uint8Array(midi.toArray());
 }
 
-async function open(page: import("@playwright/test").Page): Promise<void> {
+async function open(
+  page: import("@playwright/test").Page,
+  rising = false,
+): Promise<void> {
   await seenTour(page);
   await serveMidi(page, songUrl, bentMidi());
   await page.goto(
-    `/watch?url=${encodeURIComponent(songUrl)}&name=Bent&source=bitmidi`,
+    `/watch?url=${encodeURIComponent(songUrl)}&name=Bent&source=bitmidi${
+      rising ? "&rise=1" : ""
+    }`,
   );
   await expect(page.locator("canvas")).toBeVisible();
   await page.waitForTimeout(700);
@@ -67,4 +72,24 @@ test("a bend written in the file bends the falling note", async ({ page }) => {
   expect(nearLine).not.toBeNull();
   expect(higher).not.toBeNull();
   expect(higher ?? 0).toBeGreaterThan((nearLine ?? 0) + 15);
+});
+
+test("a rising note carries the bend on the half that has been played", async ({
+  page,
+}) => {
+  await open(page, true);
+  const seek = page.getByRole("slider", { name: "Song position" });
+  // Climbing, with the wheel swept two seconds ago. A rising bar reads oldest at
+  // the top and newest at the keys, which is the reverse of a falling one, so
+  // the bend belongs near the line and the straight stretch above it.
+  await seek.fill("8");
+  await page.waitForTimeout(400);
+
+  const nearLine = await centreAt(page, 0.72);
+  const higher = await centreAt(page, 0.2);
+  expect(nearLine).not.toBeNull();
+  expect(higher).not.toBeNull();
+  // Reading the wheel the falling way round pins the bend to a row of the
+  // screen rather than to the note, which shows up here as the two swapping.
+  expect(nearLine ?? 0).toBeGreaterThan((higher ?? 0) + 15);
 });

@@ -116,6 +116,7 @@ src/lib/
   skins/aurora.ts             curtains of light that lift and change hue as you play
   skins/rainfall.ts           a storm behind glass, rings where notes land
   skins/abyss.ts              deep water, light shafts, bubbles trailing the notes
+  skins/deep-life.ts          the schools and the submarine that cross the deep
   skins/horizon.ts            a grid out to a banded sun, a beam per struck key
   skins/ember.ts              black rock, sparks off the keys, heat in the keybed
   skins/ink.ts                near-black paper a struck key blooms ink across

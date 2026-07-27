@@ -1,5 +1,9 @@
 import type { Reach } from "@/lib/input/keyboard-map";
-import type { ExpressionTrail } from "@/lib/midi/expression";
+import {
+  bendSemitones,
+  type ExpressionTrail,
+  vibratoHz,
+} from "@/lib/midi/expression";
 import { type NoteColor, pitchColor, trackColor } from "@/lib/midi/palette";
 import {
   highestPitch,
@@ -44,12 +48,11 @@ const roundNoteSize = 10;
 /** Past this a playhead jump is a seek, and the notes passed over never
  * landed, so they spark nothing. */
 const maxOnsetAdvance = 0.5;
-/** How far a wheel at full travel throws a note, in white keys. A bend is
- * usually two semitones, so a little over one key reads as the interval
- * without the note wandering into its neighbour's lane. */
-const bendSpanKeys = 1.35;
+/** How far a wheel at full travel throws a note, in white keys. Wider than the
+ * two semitones it sounds, so the interval reads at a glance without the note
+ * wandering into its neighbour's lane. */
+const bendSpanKeys = bendSemitones * 0.675;
 const vibratoWidth = 0.16;
-const vibratoHz = 5.5;
 /** Seconds between samples along a bent bar. A wheel is read at these moments
  * whatever the bar is doing, which is what keeps the trace rigid. */
 const bendGrain = 1 / 30;

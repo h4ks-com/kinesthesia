@@ -5,7 +5,9 @@ import {
   type Scheduler,
   type StopFn,
 } from "smplr";
+import { soundfontFor } from "@/lib/audio/general-midi";
 import { InstrumentBank } from "@/lib/audio/instruments";
+import { playedNote, SampleVoices } from "@/lib/audio/sample-voices";
 import { programFor, scheduledNote } from "@/lib/audio/voicing";
 import type { RenderConfig } from "@/lib/render/export";
 import { renderDuration } from "@/lib/render/export";
@@ -41,12 +43,19 @@ export async function renderSongAudio(
     async (context) => {
       onStage?.("Loading instruments");
       const bank = new InstrumentBank(context, immediateScheduler);
-      await bank.warm(
-        audible.map((track) => ({
-          program: programFor(voicing.get(track.index) ?? null, track.program),
-          percussion: track.percussion,
-        })),
-      );
+      // The same voices the live engine plays, so a bend, an attack and a note
+      // held past its recording all survive into the file.
+      const voices = new SampleVoices(context);
+      const wanted = audible.map((track) => ({
+        program: programFor(voicing.get(track.index) ?? null, track.program),
+        percussion: track.percussion,
+      }));
+      await Promise.all([
+        bank.warm(wanted.filter((entry) => entry.percussion)),
+        ...wanted
+          .filter((entry) => !entry.percussion)
+          .map((entry) => voices.load(soundfontFor(entry.program))),
+      ]);
       onStage?.("Rendering sound");
       let placed = 0;
       for (const note of song.notes) {
@@ -55,14 +64,25 @@ export async function renderSongAudio(
           continue;
         }
         const shaped = voicing.get(note.track) ?? null;
-        const voice = bank.voiceFor({
-          program: programFor(shaped, track.program),
-          percussion: track.percussion,
-        });
-        voice?.start({
-          ...scheduledNote(note, shaped, rate),
-          time: note.start / rate,
-        });
+        const startAt = note.start / rate;
+        const asked = playedNote(song, voicing, note, startAt, rate);
+        const played =
+          asked === null
+            ? null
+            : voices.start(
+                asked.instrument,
+                asked.played,
+                asked.trail,
+                context.destination,
+              );
+        if (played === null) {
+          bank
+            .voiceFor({
+              program: programFor(shaped, track.program),
+              percussion: track.percussion,
+            })
+            ?.start({ ...scheduledNote(note, shaped, rate), time: startAt });
+        }
         // A dense song is thousands of nodes built up front; yielding keeps the
         // scheduling from blocking the main thread in one burst.
         placed += 1;

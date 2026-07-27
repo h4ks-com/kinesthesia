@@ -1,5 +1,7 @@
+import { soundfontFor } from "@/lib/audio/general-midi";
 import { InstrumentBank, type Voice } from "@/lib/audio/instruments";
 import { unmuteWebAudio } from "@/lib/audio/ios-unmute";
+import { playedNote, SampleVoices } from "@/lib/audio/sample-voices";
 import { Transport } from "@/lib/audio/transport";
 import {
   programFor,
@@ -48,6 +50,9 @@ export function adaptedVoiceLimit(
 export class PlaybackEngine {
   private context: AudioContext | null = null;
   private bank: InstrumentBank | null = null;
+  /** Every melodic note is played here: the sampler cannot bend a sounding
+   * note, hold one past the end of its recording, or fade one in. */
+  private voices: SampleVoices | null = null;
   private transport: Transport | null = null;
   private song: Song | null = null;
   private autoNotes: ReadonlySet<number> = new Set();
@@ -85,6 +90,17 @@ export class PlaybackEngine {
   setVoicing(voicing: SongVoicing): void {
     this.voicing = voicing;
     this.stopVoices();
+    // A track handed a new instrument has none of its recordings yet, and would
+    // otherwise drop back to the sampler until the next play.
+    for (const track of this.song?.tracks ?? []) {
+      if (!track.percussion) {
+        void this.voices?.load(
+          soundfontFor(
+            programFor(voicing.get(track.index) ?? null, track.program),
+          ),
+        );
+      }
+    }
   }
 
   /** A player who owes only the melody still hears the rest of their part. */
@@ -111,6 +127,7 @@ export class PlaybackEngine {
     if (this.context === null) {
       this.context = new AudioContext({ latencyHint: 0 });
       this.bank = new InstrumentBank(this.context);
+      this.voices = new SampleVoices(this.context);
       this.transport = new Transport(this.context);
       this.transport.seek(this.pendingPosition);
       this.transport.setRate(this.pendingRate);
@@ -127,15 +144,20 @@ export class PlaybackEngine {
 
   async warmInstruments(song: Song): Promise<void> {
     await this.wake();
-    await this.bank?.warm(
-      song.tracks.map((track) => ({
-        program: programFor(
-          this.voicing.get(track.index) ?? null,
-          track.program,
-        ),
-        percussion: track.percussion,
-      })),
-    );
+    const wanted = song.tracks.map((track) => ({
+      track: track.index,
+      program: programFor(this.voicing.get(track.index) ?? null, track.program),
+      percussion: track.percussion,
+    }));
+    // The sampler owns the drums. Warming it for the melodic tracks as well
+    // would fetch and decode a second copy of every instrument the voice player
+    // is about to own, so those are left to its own lazy path, which only runs
+    // if the recordings never arrive.
+    const melodic = wanted.filter((entry) => !entry.percussion);
+    await Promise.all([
+      this.bank?.warm(wanted.filter((entry) => entry.percussion)),
+      ...melodic.map((entry) => this.voices?.load(soundfontFor(entry.program))),
+    ]);
   }
 
   async play(): Promise<void> {
@@ -204,11 +226,13 @@ export class PlaybackEngine {
     void this.context?.close();
     this.context = null;
     this.bank = null;
+    this.voices = null;
     this.transport = null;
   }
 
   private stopVoices(): void {
     this.bank?.stopAll();
+    this.voices?.stopAll();
     this.voiceEnds.length = 0;
   }
 
@@ -283,8 +307,7 @@ export class PlaybackEngine {
 
   private schedule(note: SongNote, position: number): boolean {
     const context = this.context;
-    const voice = this.voiceFor(note.track);
-    if (context === null || voice === null) {
+    if (context === null) {
       return false;
     }
     // A dense passage cues more notes than can be heard apart; past the ceiling
@@ -297,8 +320,41 @@ export class PlaybackEngine {
     const shaped = this.voicing.get(note.track) ?? null;
     const startAt =
       context.currentTime + Math.max(0, note.start - position) / rate;
+    const silent = this.startVoice(note, startAt, rate);
+    if (silent !== null) {
+      this.voiceEnds.push(silent);
+      return true;
+    }
+    // Only the drums, and anything the recordings never arrived for, reach here.
+    const voice = this.voiceFor(note.track);
+    if (voice === null) {
+      return false;
+    }
     voice.start({ ...scheduledNote(note, shaped, rate), time: startAt });
     this.voiceEnds.push(startAt + (note.release - note.start) / rate);
     return true;
+  }
+
+  /** Null where the sampler should take the note instead. */
+  private startVoice(
+    note: SongNote,
+    startAt: number,
+    rate: number,
+  ): number | null {
+    const voices = this.voices;
+    const song = this.song;
+    const context = this.context;
+    if (voices === null || song === null || context === null) {
+      return null;
+    }
+    const asked = playedNote(song, this.voicing, note, startAt, rate);
+    return asked === null
+      ? null
+      : voices.start(
+          asked.instrument,
+          asked.played,
+          asked.trail,
+          context.destination,
+        );
   }
 }

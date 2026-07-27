@@ -1,3 +1,10 @@
+/** How far a full wheel throws the pitch. General MIDI's default, until a file
+ * says otherwise through the RPN that sets it. Both the sound and the drawing
+ * read it here, so a bend is heard at the width it is drawn. */
+export const bendSemitones = 2;
+/** How fast the modulation wheel swings the pitch. A real vibrato sits here. */
+export const vibratoHz = 5.5;
+
 /** Bend is signed across the wheel travel; depth is unsigned. */
 export type Expression = {
   readonly bend: number;
@@ -99,6 +106,14 @@ export class ExpressionTrail {
     return found === undefined
       ? flat
       : { bend: found.bend, depth: found.depth };
+  }
+
+  /** Every wheel movement inside a span, in order, so a note can be played with
+   * its own shape written onto the voice rather than sampled once. */
+  between(track: number, from: number, to: number): readonly Sample[] {
+    return (this.tracks.get(track) ?? []).filter(
+      (sample) => sample.at > from && sample.at <= to,
+    );
   }
 
   touched(track: number): boolean {

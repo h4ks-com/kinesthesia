@@ -87,7 +87,12 @@ src/lib/
   play/use-play-notes.ts      the notes play mode emits, rising from the keys
   audio/transport.ts          song position on the audio clock
   audio/engine.ts             instruments and the look ahead scheduler
-  audio/instruments.ts        one voice per General MIDI program
+  audio/instruments.ts        one sampler voice per General MIDI program, for the
+                              drums and for anything the recordings fail
+  audio/sample-voices.ts      plays every melodic note on a voice it holds, so a
+                              bend, an envelope and a pause all reach it
+  audio/soundfont-samples.ts  a soundfont file as decoded buffers, each marked
+                              where it loops
   audio/voicing.ts            the instrument and shaping a track sounds with
   audio/use-song-voicing.ts   whose sound is playing, and saving your own
   audio/general-midi.ts       program number to soundfont name

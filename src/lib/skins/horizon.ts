@@ -34,11 +34,12 @@ void main() {
   vec2 at = vec2((uv.x - 0.5) * aspect, uv.y - horizon - 0.11);
   float disc = length(at * vec2(1.0, 1.25));
 
-  // Yellow at the crown running to hot pink at the waterline, the way the sun
-  // in every one of these reads.
+  // Gold at the crown running down through orange to deep rose. Kept well
+  // clear of the track pink and well below the notes in brightness: a note
+  // crossing the sun has to stay the brightest thing on that pixel.
   float across = clamp((at.y + 0.10) / 0.46, 0.0, 1.0);
-  vec3 face = mix(vec3(1.0, 0.16, 0.52), vec3(1.0, 0.55, 0.32), smoothstep(0.0, 0.55, across));
-  face = mix(face, vec3(1.0, 0.93, 0.45), smoothstep(0.5, 1.0, across));
+  vec3 face = mix(vec3(0.46, 0.06, 0.20), vec3(0.62, 0.26, 0.13), smoothstep(0.0, 0.55, across));
+  face = mix(face, vec3(0.72, 0.58, 0.22), smoothstep(0.5, 1.0, across));
 
   // Slices only below the crown, widening toward the waterline, and cut off
   // where the sun meets the ground so they never band the sky.
@@ -48,8 +49,8 @@ void main() {
 
   float body = smoothstep(0.245, 0.232, disc) * sliced;
   float halo = pow(smoothstep(0.52, 0.22, disc), 2.0);
-  sky = mix(sky, face, body * 0.74);
-  sky += face * halo * 0.11;
+  sky = mix(sky, face, body * 0.92);
+  sky += face * halo * 0.09;
 
   // A skyline of peaks standing on the horizon, dark against the sun.
   float peaks = horizon + ridge(uv.x * aspect, 3.5, 0.055) + ridge(uv.x * aspect, 8.0, 0.022);
@@ -60,7 +61,7 @@ void main() {
   sky = mix(sky, vec3(0.045, 0.010, 0.075), smoothstep(horizon + 0.005, horizon - 0.02, uv.y));
 
   // A line of light where the ground meets the sky, lifted by the playing.
-  sky += vec3(1.0, 0.25, 0.62) * smoothstep(0.020, 0.0, abs(uv.y - horizon)) * (0.32 + energy * 0.45);
+  sky += vec3(1.0, 0.25, 0.62) * smoothstep(0.020, 0.0, abs(uv.y - horizon)) * (0.22 + energy * 0.30);
 
   float star = step(0.9975, hash(floor(gl_FragCoord.xy * 0.5))) * step(horizon + 0.16, uv.y);
   sky += vec3(star) * 0.5 * up;

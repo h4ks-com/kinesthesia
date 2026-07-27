@@ -34,11 +34,6 @@ async function openPicker(page: Page): Promise<void> {
   await expect(page.getByRole("dialog", { name: "Background" })).toBeVisible();
 }
 
-async function closePicker(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Close" }).click();
-  await expect(page.getByRole("dialog", { name: "Background" })).toHaveCount(0);
-}
-
 test("free roam offers a background and starts with none", async ({ page }) => {
   await openPlay(page);
   await openPicker(page);
@@ -113,6 +108,9 @@ test.describe("in watch", () => {
   test("every background on offer can be picked and takes effect", async ({
     page,
   }) => {
+    // Every open of the picker builds a live preview per background, and a
+    // machine without a real GPU takes its time over eight of them.
+    test.setTimeout(120_000);
     await openWatch(page);
     for (const name of [
       "Deep space",
@@ -126,12 +124,16 @@ test.describe("in watch", () => {
     ]) {
       await openPicker(page);
       await page.getByRole("button", { name: new RegExp(`^${name}`) }).click();
-      await expect(page.locator("canvas")).toHaveCount(3);
-      await openPicker(page);
       await expect(
-        page.getByRole("button", { name: new RegExp(`^${name}`) }),
-      ).toHaveAttribute("aria-pressed", "true");
-      await closePicker(page);
+        page.getByRole("dialog", { name: "Background" }),
+      ).toHaveCount(0);
+      await expect(page.locator("canvas")).toHaveCount(3);
+      // Read back from the menu rather than by opening the picker again, which
+      // would double the previews this test has to build.
+      await openSettings(page);
+      await expect(
+        page.getByRole("button", { name: /background/i }),
+      ).toContainText(name.toLowerCase());
     }
   });
 

@@ -1,4 +1,5 @@
 import { nebulaSource } from "@/lib/skins/fullscreen";
+import { Planets } from "@/lib/skins/planets";
 import { RockField } from "@/lib/skins/rubble";
 import { defineSkin, type SceneView } from "@/lib/skins/scene";
 
@@ -66,11 +67,12 @@ export const cruise = defineSkin({
   id: "cruise",
   name: "Cruising",
   blurb:
-    "The keys fly through space. Stars streak past, and the rocks your notes reach break apart.",
+    "The keys fly through space. Stars streak past, a world drifts by now and then, and the rocks your notes reach break apart.",
   shader: { source: nebulaSource(0.06), gain: nebulaGain },
 
   createScene() {
     const stars = seed();
+    const planets = new Planets();
     const field = new RockField({
       max: 9,
       rate: 1.2,
@@ -81,6 +83,8 @@ export const cruise = defineSkin({
     return {
       paint(ctx, view, frame, step) {
         const away = vanishing(view);
+        // Furthest thing out there, so everything else is drawn over it.
+        planets.paint(ctx, view, away, step);
 
         for (const star of stars) {
           const was = star.z;

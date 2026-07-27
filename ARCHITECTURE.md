@@ -113,6 +113,7 @@ src/lib/
                               and the dust and chips a break leaves
   skins/starfield.ts          drifting gas, stars, and rocks the notes break
   skins/cruise.ts             the same space travelled through, stars streaking past
+  skins/planets.ts            the worlds that drift by, shaded once off a sphere
   skins/aurora.ts             curtains of light that lift and change hue as you play
   skins/rainfall.ts           a storm behind glass, rings where notes land
   skins/abyss.ts              deep water, light shafts, bubbles trailing the notes

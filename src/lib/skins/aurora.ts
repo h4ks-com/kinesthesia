@@ -38,8 +38,17 @@ void main() {
              + curtain(uv, 5.7, 0.033, hue + 0.22, lift * 0.7) * 0.21
              + curtain(uv, 11.9, 0.021, hue - 0.18, lift * 0.4) * 0.15;
 
-  float star = step(0.9982, hash(floor(gl_FragCoord.xy * 0.55)));
-  sky += vec3(star) * 0.45 * (0.4 + uv.y * 0.6);
+  // Four fields at different densities and sizes, so the sky has depth rather
+  // than one even scatter, and thinner toward the horizon where the curtains are.
+  float depth = 0.35 + uv.y * 0.65;
+  float field = stars(gl_FragCoord.xy, 46.0, 0.80, 0.30) * 1.0
+              + stars(gl_FragCoord.xy, 27.0, 0.86, 0.45) * 0.62
+              + stars(gl_FragCoord.xy, 15.0, 0.91, 0.55) * 0.38
+              + stars(gl_FragCoord.xy, 9.0, 0.95, 0.65) * 0.22;
+  // Not white: a real field runs from cold blue to warm.
+  vec3 starLight = mix(vec3(0.72, 0.80, 1.0), vec3(1.0, 0.93, 0.80),
+                       hash(floor(gl_FragCoord.xy * 0.11)));
+  sky += starLight * field * 0.55 * depth;
 
   colour = vec4(sky + light * gain, 1.0);
 }`;

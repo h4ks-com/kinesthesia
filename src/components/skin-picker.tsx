@@ -86,6 +86,17 @@ function Preview({
   );
 }
 
+/** What no background looks like, drawn the same size as a live preview so the
+ * first choice reads as a choice rather than as a gap above the others. */
+function Flat() {
+  return (
+    <span
+      aria-hidden="true"
+      className="block h-24 w-full rounded-lg bg-void ring-1 ring-line ring-inset"
+    />
+  );
+}
+
 function Choice({
   title,
   blurb,
@@ -209,11 +220,13 @@ export function SkinPicker({
 
         <div className="flex flex-col gap-2.5">
           <Choice
-            title="Plain"
-            blurb="The roll on its own."
+            title="No background"
+            blurb="A flat dark backdrop. Nothing moves behind the notes."
             selected={chosen === null}
             onSelect={() => onChoose(null)}
-          />
+          >
+            <Flat />
+          </Choice>
           {available.map((skin) => (
             <Choice
               key={skin.id}

@@ -138,7 +138,15 @@ uniform float gain;
 uniform float tone;
 uniform float energy;
 
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+/* No sine: sin(dot(p, big)) loses its precision once the coordinates are a few
+   hundred pixels out, which degenerates into diagonal banding and leaves one
+   side of the screen bare. This mixes the bits instead, so it holds up across a
+   whole canvas. */
+float hash(vec2 p) {
+  vec3 mixed = fract(vec3(p.xyx) * 0.1031);
+  mixed += dot(mixed, mixed.yzx + 33.33);
+  return fract((mixed.x + mixed.y) * mixed.z);
+}
 
 float noise(vec2 p) {
   vec2 i = floor(p);
@@ -169,11 +177,14 @@ float stars(vec2 pixel, float cell, float cut, float twinkle) {
   if (pick < cut) {
     return 0.0;
   }
+  // Placed anywhere in its cell, so the grid the field is built on never shows.
   vec2 at = vec2(hash(grid + 1.7), hash(grid + 4.3));
   float bright = (pick - cut) / (1.0 - cut);
-  float near = 1.0 - smoothstep(0.0, 0.10 + bright * 0.06, length(within - at));
+  // Mostly faint with a few standing out, which is what a real field looks like.
+  float weight = pow(bright, 2.2);
+  float near = 1.0 - smoothstep(0.0, 0.055 + weight * 0.10, length(within - at));
   float breathe = 1.0 - twinkle + twinkle * sin(time * 1.4 + pick * 40.0);
-  return near * bright * bright * breathe;
+  return near * weight * breathe;
 }
 `;
 

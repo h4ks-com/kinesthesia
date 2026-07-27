@@ -35,7 +35,7 @@ export const ink = defineSkin({
   id: "ink",
   name: "Ink",
   blurb:
-    "Near-black paper. A key struck blooms a cloud of ink that spreads, thins and is gone. The quietest of them, and the only one that leaves the roll entirely alone.",
+    "Near-black paper. A key struck blooms a cloud of ink that spreads, thins and is gone. The quietest of them, and the only one that never moves on its own.",
 
   createScene() {
     const blooms = new Particles(60);

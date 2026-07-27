@@ -23,15 +23,12 @@ async function openPicker(page: Page): Promise<void> {
   await expect(page.getByRole("dialog", { name: "Background" })).toBeVisible();
 }
 
-test("free roam offers a background and starts on the plain roll", async ({
-  page,
-}) => {
+test("free roam offers a background and starts with none", async ({ page }) => {
   await openPlay(page);
   await openPicker(page);
-  await expect(page.getByRole("button", { name: /^Plain/ })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(
+    page.getByRole("button", { name: /^No background/ }),
+  ).toHaveAttribute("aria-pressed", "true");
 });
 
 test("choosing one mounts a layer behind the roll and closes the picker", async ({
@@ -67,7 +64,7 @@ test("going back to plain takes the layer away again", async ({ page }) => {
   await expect(page.locator("canvas")).toHaveCount(3);
 
   await openPicker(page);
-  await page.getByRole("button", { name: /^Plain/ }).click();
+  await page.getByRole("button", { name: /^No background/ }).click();
   await expect(page.locator("canvas")).toHaveCount(1);
 });
 
@@ -293,13 +290,13 @@ test.describe("remembering the choice", () => {
     ).toContainText("ember");
   });
 
-  test("the plain roll is a choice too, and outranks a link", async ({
+  test("choosing no background is a choice too, and outranks a link", async ({
     page,
   }) => {
     await openWatch(page);
     await page.getByRole("button", { name: "Settings" }).click();
     await page.getByRole("button", { name: /background/i }).click();
-    await page.getByRole("button", { name: /^Plain/ }).click();
+    await page.getByRole("button", { name: /^No background/ }).click();
     await settingCleared(page, "skin");
 
     await page.goto(`${watchPath}&skin=abyss`);

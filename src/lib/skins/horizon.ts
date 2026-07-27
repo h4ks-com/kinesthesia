@@ -63,8 +63,9 @@ void main() {
   // A line of light where the ground meets the sky, lifted by the playing.
   sky += vec3(1.0, 0.25, 0.62) * smoothstep(0.020, 0.0, abs(uv.y - horizon)) * (0.22 + energy * 0.30);
 
-  float star = step(0.9975, hash(floor(gl_FragCoord.xy * 0.5))) * step(horizon + 0.16, uv.y);
-  sky += vec3(star) * 0.5 * up;
+  float field = stars(gl_FragCoord.xy, 40.0, 0.82, 0.30)
+              + stars(gl_FragCoord.xy, 22.0, 0.89, 0.45) * 0.55;
+  sky += vec3(0.86, 0.90, 1.0) * field * 0.5 * up * step(horizon + 0.16, uv.y);
 
   colour = vec4(sky * gain, 1.0);
 }`;

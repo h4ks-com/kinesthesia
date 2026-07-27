@@ -17,10 +17,26 @@ async function openPlay(page: Page): Promise<void> {
   await expect(page.locator("canvas")).toBeVisible();
 }
 
+/** The settings button toggles, so opening it blind closes it when it is
+ * already open and the row underneath never becomes clickable. */
+async function openSettings(page: Page): Promise<void> {
+  const settings = page.getByRole("button", { name: "Settings" });
+  await expect(settings).toBeVisible();
+  if ((await settings.getAttribute("aria-expanded")) !== "true") {
+    await settings.click();
+  }
+  await expect(settings).toHaveAttribute("aria-expanded", "true");
+}
+
 async function openPicker(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Settings" }).click();
+  await openSettings(page);
   await page.getByRole("button", { name: /background/i }).click();
   await expect(page.getByRole("dialog", { name: "Background" })).toBeVisible();
+}
+
+async function closePicker(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("dialog", { name: "Background" })).toHaveCount(0);
 }
 
 test("free roam offers a background and starts with none", async ({ page }) => {
@@ -88,7 +104,7 @@ test.describe("in watch", () => {
     );
     await expect(page.locator("canvas")).toHaveCount(3);
 
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettings(page);
     await expect(
       page.getByRole("button", { name: /background/i }),
     ).toContainText("ember");
@@ -115,7 +131,7 @@ test.describe("in watch", () => {
       await expect(
         page.getByRole("button", { name: new RegExp(`^${name}`) }),
       ).toHaveAttribute("aria-pressed", "true");
-      await page.getByRole("button", { name: "Close" }).click();
+      await closePicker(page);
     }
   });
 
@@ -129,7 +145,7 @@ test.describe("in watch", () => {
       await serveFixture(page);
       await page.goto(`${watchPath}&skin=ember`);
       await expect(page.locator("canvas")).toBeVisible();
-      await page.getByRole("button", { name: "Settings" }).click();
+      await openSettings(page);
       await expect(
         page.getByRole("button", { name: /background/i }),
       ).toContainText("plain");
@@ -151,7 +167,7 @@ test.describe("in watch", () => {
 
   test("the notes can be turned around and back", async ({ page }) => {
     await openWatch(page);
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettings(page);
     const toggle = page.getByRole("switch", { name: /notes rise/ });
     await expect(toggle).toHaveAttribute("aria-checked", "false");
     await toggle.click();
@@ -166,7 +182,7 @@ test.describe("in watch", () => {
     await openWatch(page);
     await openPicker(page);
     await page.getByRole("button", { name: /Cruising/ }).click();
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettings(page);
     await expect(
       page.getByRole("switch", { name: /notes rise/ }),
     ).toHaveAttribute("aria-checked", "true");
@@ -176,11 +192,11 @@ test.describe("in watch", () => {
     page,
   }) => {
     await openWatch(page);
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettings(page);
     await page.getByRole("switch", { name: /notes rise/ }).click();
     await page.getByRole("button", { name: /background/i }).click();
     await page.getByRole("button", { name: /^Rainfall/ }).click();
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettings(page);
     const toggle = page.getByRole("switch", { name: /notes rise/ });
     await expect(toggle).toHaveAttribute("aria-checked", "false");
     // Held by the background, so it can never vanish under the player.
@@ -194,7 +210,7 @@ test.describe("in watch", () => {
     await openPicker(page);
     await page.getByRole("button", { name: /^Horizon/ }).click();
     await expect(page.locator("canvas")).toHaveCount(3);
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettings(page);
     await page
       .getByRole("switch", { name: /notes rise/ })
       .click({ force: true });
@@ -210,7 +226,7 @@ test.describe("in watch", () => {
     await serveFixture(page);
     await page.goto(`${watchPath}&rise=1`);
     await expect(page.locator("canvas")).toBeVisible();
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettings(page);
     await expect(
       page.getByRole("switch", { name: /notes rise/ }),
     ).toHaveAttribute("aria-checked", "true");
@@ -232,7 +248,7 @@ test("learn offers the backgrounds that read with notes coming down", async ({
   // Nothing flown through, and no way to turn the notes around.
   await expect(page.getByRole("button", { name: /Cruising/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Close" }).click();
-  await page.getByRole("button", { name: "Settings" }).click();
+  await openSettings(page);
   await expect(page.getByRole("switch", { name: /notes rise/ })).toHaveCount(0);
 });
 
@@ -247,14 +263,13 @@ test.describe("remembering the choice", () => {
     page,
   }) => {
     await openWatch(page);
-    await page.getByRole("button", { name: "Settings" }).click();
-    await page.getByRole("button", { name: /background/i }).click();
+    await openPicker(page);
     await page.getByRole("button", { name: /^Ember/ }).click();
     await settingStored(page, "skin", "ember");
 
     await page.reload();
     await expect(page.locator("canvas")).toHaveCount(3);
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettings(page);
     await expect(
       page.getByRole("button", { name: /background/i }),
     ).toContainText("ember");
@@ -262,13 +277,13 @@ test.describe("remembering the choice", () => {
 
   test("the direction is remembered with everything else", async ({ page }) => {
     await openWatch(page);
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettings(page);
     await page.getByRole("switch", { name: /notes rise/ }).click();
     await settingStored(page, "rise", true);
 
     await page.reload();
     await expect(page.locator("canvas")).toBeVisible();
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettings(page);
     await expect(
       page.getByRole("switch", { name: /notes rise/ }),
     ).toHaveAttribute("aria-checked", "true");
@@ -276,15 +291,14 @@ test.describe("remembering the choice", () => {
 
   test("what this device remembers outranks a link", async ({ page }) => {
     await openWatch(page);
-    await page.getByRole("button", { name: "Settings" }).click();
-    await page.getByRole("button", { name: /background/i }).click();
+    await openPicker(page);
     await page.getByRole("button", { name: /^Ember/ }).click();
     await settingStored(page, "skin", "ember");
 
     // Someone else's link does not get to replace a background you picked.
     await page.goto(`${watchPath}&skin=abyss`);
     await expect(page.locator("canvas")).toHaveCount(3);
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettings(page);
     await expect(
       page.getByRole("button", { name: /background/i }),
     ).toContainText("ember");
@@ -294,14 +308,13 @@ test.describe("remembering the choice", () => {
     page,
   }) => {
     await openWatch(page);
-    await page.getByRole("button", { name: "Settings" }).click();
-    await page.getByRole("button", { name: /background/i }).click();
+    await openPicker(page);
     await page.getByRole("button", { name: /^No background/ }).click();
     await settingCleared(page, "skin");
 
     await page.goto(`${watchPath}&skin=abyss`);
     await expect(page.locator("canvas")).toBeVisible();
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettings(page);
     await expect(
       page.getByRole("button", { name: /background/i }),
     ).toContainText("plain");
@@ -313,7 +326,7 @@ test.describe("remembering the choice", () => {
     await serveFixture(page);
     await page.goto(`${watchPath}&skin=abyss`);
     await expect(page.locator("canvas")).toHaveCount(3);
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettings(page);
     await expect(
       page.getByRole("button", { name: /background/i }),
     ).toContainText("abyss");
@@ -323,13 +336,12 @@ test.describe("remembering the choice", () => {
     page,
   }) => {
     await openWatch(page);
-    await page.getByRole("button", { name: "Settings" }).click();
-    await page.getByRole("button", { name: /background/i }).click();
+    await openPicker(page);
     // One that reads either way, so the direction is still the player's to set.
     await page.getByRole("button", { name: /^Ink/ }).click();
     await expect.poll(() => page.url()).toContain("skin=ink");
 
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettings(page);
     await page.getByRole("switch", { name: /notes rise/ }).click();
     await expect.poll(() => page.url()).toContain("rise=1");
   });

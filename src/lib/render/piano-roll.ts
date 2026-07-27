@@ -48,8 +48,12 @@ const maxOnsetAdvance = 0.5;
  * usually two semitones, so a little over one key reads as the interval
  * without the note wandering into its neighbour's lane. */
 const bendSpanKeys = 1.35;
-const vibratoWidth = 0.22;
+const vibratoWidth = 0.16;
 const vibratoHz = 5.5;
+/** Seconds between samples along a bent bar. A wheel is read at these moments
+ * whatever the bar is doing, which is what keeps the trace rigid. */
+const bendGrain = 1 / 30;
+const maxBendSteps = 140;
 
 export type Frame = {
   readonly song: Song;
@@ -746,32 +750,62 @@ export class PianoRollRenderer {
     const ctx = this.context;
     const span = whiteWidth * bendSpanKeys;
     const wobble = whiteWidth * vibratoWidth;
-    const steps = Math.max(2, Math.min(48, Math.round(box.height / 5)));
     const centre = box.x + box.width / 2;
-    const offsets: number[] = [];
-    for (let step = 0; step <= steps; step += 1) {
-      const y = box.y + (box.height * step) / steps;
-      const when = timeAt(y);
+    const from = timeAt(box.y);
+    const to = timeAt(box.y + box.height);
+    const reach = to - from;
+
+    // Sampled at fixed moments rather than at a share of the bar. A held note
+    // grows every frame, so spacing the samples along its height would move
+    // every one of them to a new moment and recut the whole shape each frame.
+    // On the clock they stay put, and the trace rides with the note.
+    const moments: number[] = [from];
+    if (reach !== 0) {
+      const early = Math.min(from, to);
+      const late = Math.max(from, to);
+      for (
+        let at = Math.ceil(early / bendGrain) * bendGrain;
+        at < late && moments.length < maxBendSteps;
+        at += bendGrain
+      ) {
+        moments.push(at);
+      }
+      if (reach < 0) {
+        moments.sort((first, second) => second - first);
+      }
+      moments.push(to);
+    }
+
+    const rows: { y: number; offset: number }[] = [];
+    let moved = false;
+    for (const when of moments) {
       const { bend, depth } = trail.at(track, when);
       const shimmer =
         depth === 0
           ? 0
           : Math.sin(when * vibratoHz * Math.PI * 2) * depth * wobble;
-      offsets.push(bend * span + shimmer);
+      const offset = bend * span + shimmer;
+      if (offset !== 0) {
+        moved = true;
+      }
+      const along = reach === 0 ? 0 : (when - from) / reach;
+      rows.push({ y: box.y + box.height * along, offset });
     }
+
     // A track that has moved a wheel keeps its plain corners while the wheels
     // sit at rest, so the trace is claimed by the offsets and not by a latch.
-    if (offsets.every((offset) => offset === 0)) {
+    if (!moved) {
       return false;
     }
     ctx.beginPath();
-    for (let step = 0; step <= steps; step += 1) {
-      const y = box.y + (box.height * step) / steps;
-      ctx.lineTo(centre + (offsets[step] ?? 0) - box.width / 2, y);
+    for (const row of rows) {
+      ctx.lineTo(centre + row.offset - box.width / 2, row.y);
     }
-    for (let step = steps; step >= 0; step -= 1) {
-      const y = box.y + (box.height * step) / steps;
-      ctx.lineTo(centre + (offsets[step] ?? 0) + box.width / 2, y);
+    for (let index = rows.length - 1; index >= 0; index -= 1) {
+      const row = rows[index];
+      if (row !== undefined) {
+        ctx.lineTo(centre + row.offset + box.width / 2, row.y);
+      }
     }
     ctx.closePath();
     return true;

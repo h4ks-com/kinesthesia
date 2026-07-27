@@ -23,21 +23,28 @@ export function Toggle({
       role="switch"
       aria-checked={checked}
       aria-label={tip === undefined ? undefined : `${label}: ${tip}`}
-      onClick={() => onChange(!checked)}
-      disabled={disabled}
+      onClick={() => disabled || onChange(!checked)}
+      aria-disabled={disabled}
       data-tip={tip}
+      data-tip-off={disabled ? "" : undefined}
       data-tip-side="top"
       data-tip-wide={tip === undefined ? undefined : ""}
-      className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-raised disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent pointer-coarse:min-h-11"
+      className={`flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left transition-colors pointer-coarse:min-h-11 ${
+        disabled ? "" : "hover:bg-raised"
+      }`}
     >
-      <span className="font-mono text-[0.7rem] text-muted">{label}</span>
+      <span
+        className={`font-mono text-[0.7rem] ${disabled ? "text-faint" : "text-muted"}`}
+      >
+        {label}
+      </span>
       <span
         aria-hidden="true"
         className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors ${
           checked
             ? "border-accent bg-accent-soft"
             : "border-line-strong bg-void"
-        }`}
+        } ${disabled ? "opacity-45" : ""}`}
       >
         <span
           className={`absolute size-3 rounded-full transition-all ${

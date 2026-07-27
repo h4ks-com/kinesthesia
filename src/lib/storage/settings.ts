@@ -24,10 +24,13 @@ export type GlobalSettings = {
   readonly showKeyLabels?: boolean;
   /** Absent on rows written before the plain style existed. */
   readonly plainStyle?: boolean;
-  /** Which cosmetic layer is drawn behind the roll. Absent means none. */
-  readonly skin?: SkinId;
-  /** Sends the notes out of the keys rather than onto them. Absent means they
-   * fall, which is how a song is read. */
+  /** Which cosmetic layer is drawn behind the roll. Genuinely three states:
+   * absent where this device has never been asked, null where the plain roll
+   * was picked, and an id where a background was. A link only decides it for
+   * someone who has never picked. */
+  readonly skin?: SkinId | null;
+  /** Sends the notes out of the keys rather than onto them. Absent until the
+   * player says, for the same reason. */
   readonly rise?: boolean;
 };
 

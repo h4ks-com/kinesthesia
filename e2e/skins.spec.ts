@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { seenTour, serveFixture, settingStored, songUrl } from "./fixture";
+import {
+  seenTour,
+  serveFixture,
+  settingCleared,
+  settingStored,
+  songUrl,
+} from "./fixture";
 
 const watchPath = `/watch?url=${encodeURIComponent(songUrl)}&name=Fixture`;
 
@@ -271,20 +277,63 @@ test.describe("remembering the choice", () => {
     ).toHaveAttribute("aria-checked", "true");
   });
 
-  test("a link outranks what this device remembers, for that visit", async ({
-    page,
-  }) => {
+  test("what this device remembers outranks a link", async ({ page }) => {
     await openWatch(page);
     await page.getByRole("button", { name: "Settings" }).click();
     await page.getByRole("button", { name: /background/i }).click();
     await page.getByRole("button", { name: /^Ember/ }).click();
     await settingStored(page, "skin", "ember");
 
+    // Someone else's link does not get to replace a background you picked.
+    await page.goto(`${watchPath}&skin=abyss`);
+    await expect(page.locator("canvas")).toHaveCount(3);
+    await page.getByRole("button", { name: "Settings" }).click();
+    await expect(
+      page.getByRole("button", { name: /background/i }),
+    ).toContainText("ember");
+  });
+
+  test("the plain roll is a choice too, and outranks a link", async ({
+    page,
+  }) => {
+    await openWatch(page);
+    await page.getByRole("button", { name: "Settings" }).click();
+    await page.getByRole("button", { name: /background/i }).click();
+    await page.getByRole("button", { name: /^Plain/ }).click();
+    await settingCleared(page, "skin");
+
+    await page.goto(`${watchPath}&skin=abyss`);
+    await expect(page.locator("canvas")).toBeVisible();
+    await page.getByRole("button", { name: "Settings" }).click();
+    await expect(
+      page.getByRole("button", { name: /background/i }),
+    ).toContainText("plain");
+  });
+
+  test("a link decides for a device that has never picked one", async ({
+    page,
+  }) => {
+    await serveFixture(page);
     await page.goto(`${watchPath}&skin=abyss`);
     await expect(page.locator("canvas")).toHaveCount(3);
     await page.getByRole("button", { name: "Settings" }).click();
     await expect(
       page.getByRole("button", { name: /background/i }),
     ).toContainText("abyss");
+  });
+
+  test("picking one puts it in the address, so copying it carries the view", async ({
+    page,
+  }) => {
+    await openWatch(page);
+    await page.getByRole("button", { name: "Settings" }).click();
+    await page.getByRole("button", { name: /background/i }).click();
+    // One that reads either way, so the direction is still the player's to set.
+    await page.getByRole("button", { name: /^Ink/ }).click();
+    await expect.poll(() => page.url()).toContain("skin=ink");
+
+    await page.getByRole("button", { name: "Settings" }).click();
+    await page.getByRole("switch", { name: /notes rise/ }).click();
+    await expect.poll(() => page.url()).toContain("rise=1");
   });
 });

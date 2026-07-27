@@ -122,6 +122,10 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const focusRef = useRef(focus);
   focusRef.current = focus;
   const getFocus = useCallback(() => focusRef.current, []);
+  // The background is a setting of this device, and the link carries it so
+  // copying the address hands over the view rather than the song alone.
+  const viewRef = useRef({ skin: params.skin, rise: params.rise });
+  const getView = useCallback(() => viewRef.current, []);
 
   const {
     playerTracks,
@@ -146,7 +150,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     changeTranspose,
     changeSpeed,
     togglePlayerTrack,
-  } = usePlayerSettings({ mode, params, locked, getFocus });
+  } = usePlayerSettings({ mode, params, locked, getFocus, getView });
 
   const background = useBackground({
     // Notes may only leave the keys where nobody has to read them coming: in
@@ -154,6 +158,10 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     fixed: mode === "watch" ? null : "down",
     plain: plainStyle,
     fromLink: { skin: params.skin, rise: params.rise },
+    onChange: (next) => {
+      viewRef.current = next;
+      updateUrl({});
+    },
   });
 
   const song = useMemo(

@@ -17,6 +17,7 @@ import {
   type Speed,
 } from "@/lib/player-url";
 import { clampKeyWidth, defaultKeyWidth } from "@/lib/render/keyboard";
+import type { SkinId } from "@/lib/skins/types";
 import {
   type GlobalSettings,
   loadGlobalSettings,
@@ -44,6 +45,10 @@ type Options = {
   /** Read at write time, since focus changes reach the URL in the same tick
    * they are made, before the render that carries them. */
   getFocus: () => boolean;
+  /** The background and direction on screen now, for the same reason: they are
+   * settings of this device, and the link carries them so copying it hands
+   * over the view rather than the song alone. */
+  getView: () => { skin: SkinId | null; rise: boolean };
 };
 
 export type PlayerSettings = {
@@ -81,6 +86,7 @@ export function usePlayerSettings({
   params,
   locked,
   getFocus,
+  getView,
 }: Options): PlayerSettings {
   const [playerTracks, setPlayerTracks] = useState<ReadonlySet<number>>(
     new Set(params.tracks ?? []),
@@ -147,12 +153,12 @@ export function usePlayerSettings({
         buildPlayerUrl(
           window.location.origin,
           mode,
-          { ...params, focus: getFocus(), ...merge(next) },
+          { ...params, focus: getFocus(), ...getView(), ...merge(next) },
           { explicit: true },
         ),
       );
     },
-    [params, mode, merge, getFocus],
+    [params, mode, merge, getFocus, getView],
   );
 
   // A locked match plays the agreed part, so it leaves what this device

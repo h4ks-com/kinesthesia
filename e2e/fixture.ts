@@ -314,3 +314,39 @@ export async function settingStored(
     )
     .toBe(value);
 }
+
+/** Waits until a global setting has been written as an explicit null, which is
+ * what picking the plain roll stores: a choice, not an absence. */
+export async function settingCleared(page: Page, field: string): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          (key) =>
+            new Promise<string>((resolve) => {
+              const request = indexedDB.open("kinesthesia", 3);
+              request.onsuccess = () => {
+                const row = request.result
+                  .transaction("settings", "readonly")
+                  .objectStore("settings")
+                  .get("global");
+                row.onsuccess = () => {
+                  const stored = row.result as
+                    | Record<string, unknown>
+                    | undefined;
+                  resolve(
+                    stored === undefined || !(key in stored)
+                      ? "absent"
+                      : String(stored[key]),
+                  );
+                };
+                row.onerror = () => resolve("absent");
+              };
+              request.onerror = () => resolve("absent");
+            }),
+          field,
+        ),
+      { timeout: 10_000 },
+    )
+    .toBe("null");
+}

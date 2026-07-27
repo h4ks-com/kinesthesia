@@ -132,6 +132,18 @@ body {
   scale: 1;
 }
 
+/* A disabled control is exactly where the explanation matters most, so it is
+   dimmed by colour rather than by opacity: opacity would take the tooltip with
+   it, and a browser gives a disabled button no hover at all. */
+[data-tip-off] {
+  cursor: not-allowed;
+}
+
+[data-tip-off]:hover::after {
+  opacity: 1;
+  scale: 1;
+}
+
 [data-tip-side="top"]::after {
   top: auto;
   bottom: calc(100% + 8px);

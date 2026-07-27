@@ -112,13 +112,13 @@ const playerLinkShape = {
     .string()
     .optional()
     .describe(
-      "Background drawn behind the notes, purely cosmetic. Some of them send the notes out of the keys instead of onto them, and those are watch only. Left out for the plain roll",
+      "Background drawn behind the notes, purely cosmetic. Some of them send the notes out of the keys instead of onto them, and those are watch only. Left out for the plain roll. A listener who has already picked their own background keeps it, so this decides the look only for someone who never has",
     ),
   rise: z
     .boolean()
     .optional()
     .describe(
-      "Send the notes out of the keys as they sound instead of onto them. A look rather than a way to read ahead, so it is watch only. Some backgrounds turn it on by themselves",
+      "Send the notes out of the keys as they sound instead of onto them. A look rather than a way to read ahead, so it is watch only. Some backgrounds turn it on by themselves. Kept by a listener who has set it for themselves, like the background",
     ),
   start: z
     .number()
@@ -551,6 +551,10 @@ how a player knows what to play; player_link names the ones that still work
 there when it refuses. The rise argument turns the notes around on its own, for
 a background that reads either way or for the plain roll, and is watch only for
 the same reason.
+
+Both are the listener's own setting first. Someone who has picked a background
+keeps it whatever a link says, so say a link is sent with one rather than that it
+will be seen with one. For a listener who has never picked, the link decides.
 
 player_link also accepts a direct .mid url in place of source and id, as long as
 the url is on an origin the deployment trusts. That is how a file from elsewhere,

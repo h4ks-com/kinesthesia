@@ -221,7 +221,7 @@ function drawRings(
 
 /** How often one comes past, in worlds a second. Far rarer than the rocks: a
  * planet is an event, not weather. */
-const planetRate = 0.012;
+const planetRate = 0.024;
 const spriteSize = 168;
 
 export class Planets {

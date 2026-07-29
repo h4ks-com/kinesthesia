@@ -4,7 +4,6 @@ import {
   type Scheduler,
   type StopFn,
 } from "smplr";
-import { soundfontFor } from "@/lib/audio/general-midi";
 import { InstrumentBank } from "@/lib/audio/instruments";
 import {
   instrumentPitches,
@@ -113,8 +112,15 @@ export async function renderSongAudio(
   };
 
   onStep?.("Rendering sound", 0);
-  placeUntil(lookAhead);
-  feedWhilePlaying(context, duration, placeUntil, onStep);
+  // Stopping an offline render partway is a Chrome extension to the spec.
+  // Everywhere else the whole song goes in up front, which is slower but is the
+  // only way to hold every note.
+  if (typeof context.suspend === "function") {
+    placeUntil(lookAhead);
+    feedWhilePlaying(context, duration, placeUntil, onStep);
+  } else {
+    placeUntil(duration + lookAhead);
+  }
   return context.startRendering();
 }
 
@@ -130,6 +136,7 @@ export async function renderSongAudio(
  * A stop that cannot be booked falls back to placing the rest at once, which is
  * slow but complete; a stop that failed to resume would hang the render, so
  * resuming is the last thing each one does. */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: the loop is flat; the guard clauses read better inline
 function feedWhilePlaying(
   context: OfflineAudioContext,
   duration: number,
@@ -142,14 +149,21 @@ function feedWhilePlaying(
     if (at <= 0 || at >= duration) {
       continue;
     }
-    context
-      .suspend(at)
-      .then(() => {
-        placeUntil(at + lookAhead);
-        onStep?.("Rendering sound", at / duration);
-        void context.resume();
-      })
-      .catch(() => placeUntil(duration + lookAhead));
+    // A booking that throws where it should reject would take the render with
+    // it, so the whole call is guarded, not just the promise.
+    try {
+      context
+        .suspend(at)
+        .then(() => {
+          placeUntil(at + lookAhead);
+          onStep?.("Rendering sound", at / duration);
+          void context.resume();
+        })
+        .catch(() => placeUntil(duration + lookAhead));
+    } catch {
+      placeUntil(duration + lookAhead);
+      return;
+    }
   }
 }
 

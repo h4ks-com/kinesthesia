@@ -1,4 +1,8 @@
-import { ArrayBufferTarget, Muxer } from "mp4-muxer";
+import { Muxer as Mp4Muxer, ArrayBufferTarget as Mp4Target } from "mp4-muxer";
+import {
+  Muxer as WebmMuxer,
+  ArrayBufferTarget as WebmTarget,
+} from "webm-muxer";
 import {
   type RenderConfig,
   renderDuration,
@@ -21,7 +25,30 @@ export type RenderedVideo = {
   readonly realtime: boolean;
 };
 
-const videoCodecs = ["avc1.4d0028", "avc1.640028", "avc1.42e01f"] as const;
+/** A container and the codecs that go in it. mp4 is tried first because it
+ * plays everywhere; webm is what a browser without an AAC encoder can still
+ * write, and it encodes offline just as exactly. */
+type Container = {
+  readonly extension: "mp4" | "webm";
+  readonly mime: string;
+  readonly videoCodecs: readonly string[];
+  readonly audioCodec: string;
+};
+
+const containers: readonly Container[] = [
+  {
+    extension: "mp4",
+    mime: "video/mp4",
+    videoCodecs: ["avc1.4d0028", "avc1.640028", "avc1.42e01f"],
+    audioCodec: "mp4a.40.2",
+  },
+  {
+    extension: "webm",
+    mime: "video/webm",
+    videoCodecs: ["vp09.00.10.08", "vp8"],
+    audioCodec: "opus",
+  },
+];
 const recorderMimes = [
   { type: "video/mp4", extension: "mp4" },
   { type: "video/webm;codecs=vp9,opus", extension: "webm" },
@@ -48,9 +75,9 @@ export async function renderSongVideo(
   onProgress: VideoProgress,
   signal: AbortSignal,
 ): Promise<RenderedVideo> {
-  const encoderConfig = hasWebCodecs() ? await supportedConfig() : null;
-  if (encoderConfig !== null) {
-    return withWebCodecs(config, audio, encoderConfig, onProgress, signal);
+  const encoders = hasWebCodecs() ? await supportedEncoders(audio) : null;
+  if (encoders !== null) {
+    return withWebCodecs(config, audio, encoders, onProgress, signal);
   }
   const mime = recorderMime();
   if (mime !== null) {
@@ -59,9 +86,41 @@ export async function renderSongVideo(
   throw new Error("This browser can't record video. Try the audio export.");
 }
 
-async function supportedConfig(): Promise<VideoEncoderConfig | null> {
+/** Both halves of one container, since a browser that encodes the picture may
+ * still have no encoder for the sound. Null sends the render to the recorder. */
+type Encoders = {
+  readonly container: Container;
+  readonly video: VideoEncoderConfig;
+  readonly audio: AudioEncoderConfig;
+};
+
+async function supportedEncoders(audio: AudioBuffer): Promise<Encoders | null> {
+  for (const container of containers) {
+    const video = await supportedVideoConfig(container);
+    if (video === null) {
+      continue;
+    }
+    const wanted: AudioEncoderConfig = {
+      codec: container.audioCodec,
+      numberOfChannels: audio.numberOfChannels,
+      sampleRate: audio.sampleRate,
+      bitrate: 192_000,
+    };
+    const support = await AudioEncoder.isConfigSupported(wanted).catch(
+      () => null,
+    );
+    if (support?.supported === true) {
+      return { container, video, audio: wanted };
+    }
+  }
+  return null;
+}
+
+async function supportedVideoConfig(
+  container: Container,
+): Promise<VideoEncoderConfig | null> {
   const { width, height } = renderSize;
-  for (const codec of videoCodecs) {
+  for (const codec of container.videoCodecs) {
     const config: VideoEncoderConfig = {
       codec,
       width,
@@ -69,8 +128,10 @@ async function supportedConfig(): Promise<VideoEncoderConfig | null> {
       bitrate: 6_000_000,
       framerate: renderFps,
     };
-    const support = await VideoEncoder.isConfigSupported(config);
-    if (support.supported === true) {
+    const support = await VideoEncoder.isConfigSupported(config).catch(
+      () => null,
+    );
+    if (support?.supported === true) {
       return config;
     }
   }
@@ -80,7 +141,7 @@ async function supportedConfig(): Promise<VideoEncoderConfig | null> {
 async function withWebCodecs(
   config: RenderConfig,
   audio: AudioBuffer,
-  videoConfig: VideoEncoderConfig,
+  encoders: Encoders,
   onProgress: VideoProgress,
   signal: AbortSignal,
 ): Promise<RenderedVideo> {
@@ -91,16 +152,23 @@ async function withWebCodecs(
   );
   const scene = renderScene(config);
 
-  const muxer = new Muxer({
-    target: new ArrayBufferTarget(),
-    video: { codec: "avc", width, height },
-    audio: {
-      codec: "aac",
-      numberOfChannels: audio.numberOfChannels,
-      sampleRate: audio.sampleRate,
-    },
-    fastStart: "in-memory",
-  });
+  const webm = encoders.container.extension === "webm";
+  const sound = {
+    numberOfChannels: audio.numberOfChannels,
+    sampleRate: audio.sampleRate,
+  };
+  const muxer = webm
+    ? new WebmMuxer({
+        target: new WebmTarget(),
+        video: { codec: "V_VP9", width, height, frameRate: renderFps },
+        audio: { codec: "A_OPUS", ...sound },
+      })
+    : new Mp4Muxer({
+        target: new Mp4Target(),
+        video: { codec: "avc", width, height },
+        audio: { codec: "aac", ...sound },
+        fastStart: "in-memory",
+      });
 
   let failure: DOMException | null = null;
   const videoEncoder = new VideoEncoder({
@@ -109,7 +177,7 @@ async function withWebCodecs(
       failure = error;
     },
   });
-  videoEncoder.configure(videoConfig);
+  videoEncoder.configure(encoders.video);
 
   const audioEncoder = new AudioEncoder({
     output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
@@ -117,12 +185,7 @@ async function withWebCodecs(
       failure = error;
     },
   });
-  audioEncoder.configure({
-    codec: "mp4a.40.2",
-    numberOfChannels: audio.numberOfChannels,
-    sampleRate: audio.sampleRate,
-    bitrate: 192_000,
-  });
+  audioEncoder.configure(encoders.audio);
 
   try {
     await encodeAudio(audioEncoder, audio, signal);
@@ -161,8 +224,10 @@ async function withWebCodecs(
     muxer.finalize();
     onProgress(1);
     return {
-      blob: new Blob([muxer.target.buffer], { type: "video/mp4" }),
-      extension: "mp4",
+      blob: new Blob([muxer.target.buffer], {
+        type: encoders.container.mime,
+      }),
+      extension: encoders.container.extension,
       realtime: false,
     };
   } finally {

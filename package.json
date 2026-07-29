@@ -41,6 +41,7 @@
     "react-dom": "19.2.4",
     "smplr": "1.0.0",
     "tonal": "^6.4.3",
+    "webm-muxer": "^5.1.4",
     "zod": "4.4.3"
   },
   "devDependencies": {

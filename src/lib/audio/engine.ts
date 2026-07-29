@@ -1,7 +1,11 @@
 import { soundfontFor } from "@/lib/audio/general-midi";
 import { InstrumentBank, type Voice } from "@/lib/audio/instruments";
 import { unmuteWebAudio } from "@/lib/audio/ios-unmute";
-import { playedNote, SampleVoices } from "@/lib/audio/sample-voices";
+import {
+  instrumentPitches,
+  playedNote,
+  SampleVoices,
+} from "@/lib/audio/sample-voices";
 import { Transport } from "@/lib/audio/transport";
 import {
   programFor,
@@ -11,6 +15,9 @@ import {
   velocityFor,
 } from "@/lib/audio/voicing";
 import type { Song, SongNote } from "@/lib/midi/song";
+
+/** Every track counts: the engine plays the whole song, hidden or not. */
+const noTracks: ReadonlySet<number> = new Set();
 
 const lookAhead = 0.2;
 const tickInterval = 25;
@@ -92,13 +99,14 @@ export class PlaybackEngine {
     this.stopVoices();
     // A track handed a new instrument has none of its recordings yet, and would
     // otherwise drop back to the sampler until the next play.
-    for (const track of this.song?.tracks ?? []) {
-      if (!track.percussion) {
-        void this.voices?.load(
-          soundfontFor(
-            programFor(voicing.get(track.index) ?? null, track.program),
-          ),
-        );
+    const song = this.song;
+    if (song !== null) {
+      for (const [instrument, pitches] of instrumentPitches(
+        song,
+        voicing,
+        noTracks,
+      )) {
+        void this.voices?.load(instrument, pitches);
       }
     }
   }
@@ -153,10 +161,11 @@ export class PlaybackEngine {
     // would fetch and decode a second copy of every instrument the voice player
     // is about to own, so those are left to its own lazy path, which only runs
     // if the recordings never arrive.
-    const melodic = wanted.filter((entry) => !entry.percussion);
     await Promise.all([
       this.bank?.warm(wanted.filter((entry) => entry.percussion)),
-      ...melodic.map((entry) => this.voices?.load(soundfontFor(entry.program))),
+      ...[...instrumentPitches(song, this.voicing, noTracks)].map(
+        ([instrument, pitches]) => this.voices?.load(instrument, pitches),
+      ),
     ]);
   }
 

@@ -17,7 +17,7 @@ describe("reading a soundfont file", () => {
   });
 
   it("survives the trailing comma the host leaves in", () => {
-    expect(readSoundfontFile(real)["A0"]).toBe("data:audio/mp3;base64,AAAA");
+    expect(readSoundfontFile(real).A0).toBe("data:audio/mp3;base64,AAAA");
   });
 
   it("says nothing rather than throwing on something it cannot read", () => {

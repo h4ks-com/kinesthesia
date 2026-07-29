@@ -1,5 +1,9 @@
 import { soundfontFor } from "@/lib/audio/general-midi";
-import { loadSoundfont, type Samples } from "@/lib/audio/soundfont-samples";
+import {
+  closest,
+  loadSoundfont,
+  type Samples,
+} from "@/lib/audio/soundfont-samples";
 import {
   brightnessRange,
   programFor,
@@ -8,6 +12,7 @@ import {
 } from "@/lib/audio/voicing";
 import {
   bendSemitones,
+  type Expression,
   type ExpressionTrail,
   vibratoHz,
 } from "@/lib/midi/expression";
@@ -62,7 +67,8 @@ export type PlayedNote = {
 type Live = {
   readonly source: AudioBufferSourceNode;
   readonly envelope: GainNode;
-  readonly lfo: OscillatorNode;
+  /** Null on a note with no modulation, which never needed an oscillator. */
+  readonly lfo: OscillatorNode | null;
 };
 
 /** The sampler's own curve, so both sound equally loud. */
@@ -124,12 +130,15 @@ export class SampleVoices {
   /** Null where the recordings could not be had, which the caller answers by
    * falling back to the sampler. A failure is forgotten rather than kept, so a
    * later song can try again over a network that has come back. */
-  load(instrument: string): Promise<Samples | null> {
+  load(
+    instrument: string,
+    pitches: ReadonlySet<number>,
+  ): Promise<Samples | null> {
     const known = this.loading.get(instrument);
     if (known !== undefined) {
       return known;
     }
-    const started = loadSoundfont(this.context, instrument)
+    const started = loadSoundfont(this.context, instrument, pitches)
       .catch(() => null)
       .then((samples) => {
         if (samples === null) {
@@ -181,10 +190,11 @@ export class SampleVoices {
       source.loopEnd = sample.loopEnd;
     }
 
-    const level = context.createGain();
-    level.gain.value =
+    // Velocity is folded into the envelope rather than given a gain of its own.
+    // A dense song is tens of thousands of these, so a node saved on every note
+    // is worth more than the tidier graph.
+    const peak =
       velocityGain(note.velocity) * soundfontGain * velocityGain(defaultVolume);
-
     const envelope = context.createGain();
     // Automation is played in time order whatever order it is written in, so an
     // attack reaching past the note has to be cut to fit rather than left to
@@ -194,11 +204,11 @@ export class SampleVoices {
     const opened = note.time + attack;
     if (attack > 0) {
       envelope.gain.setValueAtTime(0, note.time);
-      envelope.gain.linearRampToValueAtTime(1, opened);
+      envelope.gain.linearRampToValueAtTime(peak, opened);
     } else {
-      envelope.gain.setValueAtTime(1, note.time);
+      envelope.gain.setValueAtTime(peak, note.time);
     }
-    envelope.gain.setValueAtTime(1, Math.max(opened, releaseAt));
+    envelope.gain.setValueAtTime(peak, Math.max(opened, releaseAt));
     envelope.gain.linearRampToValueAtTime(0, silent);
 
     let tail: AudioNode = source;
@@ -209,31 +219,36 @@ export class SampleVoices {
       source.connect(filter);
       tail = filter;
     }
-    tail.connect(level);
-    level.connect(envelope);
+    tail.connect(envelope);
     envelope.connect(destination);
 
-    const lfo = context.createOscillator();
-    lfo.frequency.value = vibratoHz;
-    const depth = context.createGain();
-    depth.gain.value = 0;
-    lfo.connect(depth);
-    depth.connect(source.detune);
-    if (trail !== null) {
-      writeWheels(source.detune, depth.gain, base, note, trail);
+    // Anything connected to detune makes the source work out its playback rate
+    // sample by sample, and an oscillator per note is a voice per note on top of
+    // that. A note whose wheels never move gets neither, which is most of them.
+    const wheels = trail === null ? null : wheelsIn(note, trail);
+    let lfo: OscillatorNode | null = null;
+    if (wheels !== null) {
+      writeBend(source.detune, base, note, wheels);
+      if (wheels.vibrato) {
+        lfo = context.createOscillator();
+        lfo.frequency.value = vibratoHz;
+        const depth = context.createGain();
+        writeDepth(depth.gain, note, wheels);
+        lfo.connect(depth);
+        depth.connect(source.detune);
+        lfo.start(note.time);
+        lfo.stop(silent);
+      }
     }
 
     source.start(note.time);
     source.stop(silent);
-    lfo.start(note.time);
-    lfo.stop(silent);
 
     const held: Live = { source, envelope, lfo };
     this.live.add(held);
     source.onended = () => {
       this.live.delete(held);
       envelope.disconnect();
-      level.disconnect();
     };
     return silent;
   }
@@ -250,53 +265,95 @@ export class SampleVoices {
       gain.setValueAtTime(gain.value, now);
       gain.linearRampToValueAtTime(0, until);
       held.source.stop(until);
-      held.lfo.stop(until);
+      held.lfo?.stop(until);
     }
   }
+}
+
+/** What the wheels do across one note. Null where neither moved, which is the
+ * answer for most notes even on a track that bends somewhere. */
+type Wheels = {
+  readonly opening: Expression;
+  readonly steps: readonly (Expression & { readonly at: number })[];
+  readonly vibrato: boolean;
+};
+
+function wheelsIn(note: PlayedNote, trail: ExpressionTrail): Wheels | null {
+  const opening = trail.at(note.track, note.from);
+  const steps = trail.between(note.track, note.from, note.to);
+  const vibrato = opening.depth > 0 || steps.some((step) => step.depth > 0);
+  const bent = opening.bend !== 0 || steps.some((step) => step.bend !== 0);
+  return vibrato || bent ? { opening, steps, vibrato } : null;
 }
 
 /** Every wheel movement inside the note becomes a step, ramped so it glides
  * rather than clicks. */
-function writeWheels(
+function writeBend(
   detune: AudioParam,
-  depth: AudioParam,
   base: number,
   note: PlayedNote,
-  trail: ExpressionTrail,
+  wheels: Wheels,
 ): void {
-  const ends = note.time + note.duration;
-  const opening = trail.at(note.track, note.from);
   detune.setValueAtTime(
-    base + opening.bend * bendSemitones * centsPerSemitone,
+    base + wheels.opening.bend * bendSemitones * centsPerSemitone,
     note.time,
   );
-  depth.setValueAtTime(opening.depth * vibratoCents, note.time);
-
-  for (const sample of trail.between(note.track, note.from, note.to)) {
-    const when = note.time + (sample.at - note.from) / note.rate;
-    if (when <= note.time || when >= ends) {
-      continue;
-    }
+  for (const step of insideNote(note, wheels)) {
     detune.linearRampToValueAtTime(
-      base + sample.bend * bendSemitones * centsPerSemitone,
-      when + glide,
+      base + step.bend * bendSemitones * centsPerSemitone,
+      step.when + glide,
     );
-    depth.linearRampToValueAtTime(sample.depth * vibratoCents, when + glide);
   }
 }
 
-function closest(pitches: readonly number[], pitch: number): number | null {
-  if (pitches.length === 0) {
-    return null;
+function writeDepth(depth: AudioParam, note: PlayedNote, wheels: Wheels): void {
+  depth.setValueAtTime(wheels.opening.depth * vibratoCents, note.time);
+  for (const step of insideNote(note, wheels)) {
+    depth.linearRampToValueAtTime(step.depth * vibratoCents, step.when + glide);
   }
-  let best = pitches[0] ?? null;
-  let gap = Number.POSITIVE_INFINITY;
-  for (const candidate of pitches) {
-    const distance = Math.abs(candidate - pitch);
-    if (distance < gap) {
-      gap = distance;
-      best = candidate;
+}
+
+function* insideNote(
+  note: PlayedNote,
+  wheels: Wheels,
+): Generator<{ when: number; bend: number; depth: number }> {
+  const ends = note.time + note.duration;
+  for (const step of wheels.steps) {
+    const when = note.time + (step.at - note.from) / note.rate;
+    if (when > note.time && when < ends) {
+      yield { when, bend: step.bend, depth: step.depth };
     }
   }
-  return best;
+}
+
+/** Which recordings each instrument has to bring for this song: the pitches its
+ * tracks actually play, and nothing else. Hidden tracks are left out, since a
+ * part nobody hears still costs its whole instrument to load. */
+export function instrumentPitches(
+  song: Song,
+  voicing: SongVoicing,
+  hiddenTracks: ReadonlySet<number>,
+): Map<string, Set<number>> {
+  const playing = new Map<number, string>();
+  for (const track of song.tracks) {
+    if (!track.percussion && !hiddenTracks.has(track.index)) {
+      playing.set(
+        track.index,
+        soundfontFor(
+          programFor(voicing.get(track.index) ?? null, track.program),
+        ),
+      );
+    }
+  }
+  const wanted = new Map<string, Set<number>>();
+  for (const note of song.notes) {
+    const instrument = playing.get(note.track);
+    if (instrument === undefined) {
+      continue;
+    }
+    const pitches = wanted.get(instrument) ?? new Set<number>();
+    pitches.add(note.pitch);
+    wanted.set(instrument, pitches);
+  }
+  return wanted;
 }

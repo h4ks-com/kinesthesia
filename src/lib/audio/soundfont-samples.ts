@@ -159,11 +159,36 @@ function soundfontUrl(instrument: string): string {
   return `https://gleitz.github.io/midi-js-soundfonts/${defaultKit}/${instrument}-${defaultFormat}.js`;
 }
 
+/** The nearest recording to a pitch, since a soundfont covers the keyboard in
+ * steps and a note lands between them. */
+export function closest(
+  pitches: readonly number[],
+  pitch: number,
+): number | null {
+  if (pitches.length === 0) {
+    return null;
+  }
+  let best = pitches[0] ?? null;
+  let gap = Number.POSITIVE_INFINITY;
+  for (const candidate of pitches) {
+    const distance = Math.abs(candidate - pitch);
+    if (distance < gap) {
+      gap = distance;
+      best = candidate;
+    }
+  }
+  return best;
+}
+
 /** Null where the recordings could not be had, whatever the reason: the
- * caller answers by falling back to the sampler. */
+ * caller answers by falling back to the sampler. Only the recordings the song
+ * reaches for are decoded: a full instrument is eighty-eight stereo recordings,
+ * near a hundred megabytes once decoded, and a part rarely touches half of
+ * them. */
 export async function loadSoundfont(
   context: BaseAudioContext,
   instrument: string,
+  wanted: ReadonlySet<number>,
 ): Promise<Samples | null> {
   const response = await fetch(soundfontUrl(instrument), {
     // A hung connection would otherwise leave the song waiting on it forever.
@@ -173,11 +198,27 @@ export async function loadSoundfont(
     return null;
   }
   const byName = readSoundfontFile(await response.text());
+  const offered = new Map<number, string>();
+  for (const [name, uri] of Object.entries(byName)) {
+    const pitch = toMidi(name);
+    if (pitch !== null) {
+      offered.set(pitch, uri);
+    }
+  }
+  const available = [...offered.keys()];
+  const needed = new Set<number>();
+  for (const pitch of wanted) {
+    const near = closest(available, pitch);
+    if (near !== null) {
+      needed.add(near);
+    }
+  }
+
   const byPitch = new Map<number, Sample>();
   await Promise.all(
-    Object.entries(byName).map(async ([name, uri]) => {
-      const pitch = toMidi(name);
-      if (pitch === null) {
+    [...needed].map(async (pitch) => {
+      const uri = offered.get(pitch);
+      if (uri === undefined) {
         return;
       }
       try {

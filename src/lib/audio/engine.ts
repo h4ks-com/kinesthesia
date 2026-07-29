@@ -1,10 +1,11 @@
-import { InstrumentBank, type Voice } from "@/lib/audio/instruments";
-import { unmuteWebAudio } from "@/lib/audio/ios-unmute";
+import type { Voice } from "@/lib/audio/instruments";
+import { instrumentPitches, playedNote } from "@/lib/audio/sample-voices";
 import {
-  instrumentPitches,
-  playedNote,
-  SampleVoices,
-} from "@/lib/audio/sample-voices";
+  type AudioStage,
+  currentStage,
+  silenceStage,
+  wakeStage,
+} from "@/lib/audio/stage";
 import { Transport } from "@/lib/audio/transport";
 import {
   programFor,
@@ -63,11 +64,9 @@ export function adaptedVoiceLimit(
 }
 
 export class PlaybackEngine {
-  private context: AudioContext | null = null;
-  private bank: InstrumentBank | null = null;
-  /** Every melodic note is played here: the sampler cannot bend a sounding
-   * note, hold one past the end of its recording, or fade one in. */
-  private voices: SampleVoices | null = null;
+  /** Borrowed, never owned: the device and its recordings outlive any one
+   * player, and building a second would compete with this one. */
+  private stage: AudioStage | null = null;
   private transport: Transport | null = null;
   private song: Song | null = null;
   private autoNotes: ReadonlySet<number> = new Set();
@@ -112,12 +111,10 @@ export class PlaybackEngine {
     // otherwise drop back to the sampler until the next play.
     const song = this.song;
     if (song !== null) {
-      for (const [instrument, pitches] of instrumentPitches(
-        song,
-        voicing,
-        noTracks,
-      )) {
-        void this.voices?.load(instrument, pitches);
+      const wanted = instrumentPitches(song, voicing, noTracks);
+      this.stage?.voices.retain(new Set(wanted.keys()));
+      for (const [instrument, pitches] of wanted) {
+        void this.stage?.voices.load(instrument, pitches);
       }
     }
   }
@@ -145,26 +142,19 @@ export class PlaybackEngine {
     if (this.disposed) {
       throw new EngineReplaced();
     }
-    unmuteWebAudio();
-    if (this.context === null) {
-      this.context = new AudioContext({ latencyHint: 0 });
-      this.bank = new InstrumentBank(this.context);
-      this.voices = new SampleVoices(this.context);
-      this.transport = new Transport(this.context);
+    const stage = await wakeStage();
+    // Waking yields, and a player rebuild disposes this engine while it does.
+    // The one that took over owns the stage now, so this one stays quiet.
+    if (this.disposed) {
+      throw new EngineReplaced();
+    }
+    this.stage = stage;
+    if (this.transport === null) {
+      this.transport = new Transport(stage.context);
       this.transport.seek(this.pendingPosition);
       this.transport.setRate(this.pendingRate);
     }
-    if (this.context.state !== "running") {
-      await this.context.resume();
-    }
-    // Resuming yields, and a player rebuild disposes the engine mid-await. A
-    // disposed engine is nobody's: building it again would sound a song the
-    // page has moved on from, on a context nothing is left to close.
-    const transport = this.transport;
-    if (transport === null || this.disposed) {
-      throw new EngineReplaced();
-    }
-    return transport;
+    return this.transport;
   }
 
   async warmInstruments(song: Song): Promise<void> {
@@ -178,10 +168,12 @@ export class PlaybackEngine {
     // would fetch and decode a second copy of every instrument the voice player
     // is about to own, so those are left to its own lazy path, which only runs
     // if the recordings never arrive.
+    const melodic = instrumentPitches(song, this.voicing, noTracks);
+    this.stage?.voices.retain(new Set(melodic.keys()));
     await Promise.all([
-      this.bank?.warm(wanted.filter((entry) => entry.percussion)),
-      ...[...instrumentPitches(song, this.voicing, noTracks)].map(
-        ([instrument, pitches]) => this.voices?.load(instrument, pitches),
+      this.stage?.bank.warm(wanted.filter((entry) => entry.percussion)),
+      ...[...melodic].map(([instrument, pitches]) =>
+        this.stage?.voices.load(instrument, pitches),
       ),
     ]);
   }
@@ -220,7 +212,7 @@ export class PlaybackEngine {
       velocity: velocityFor(velocity, shaped),
       ...shapingFor(shaped),
     };
-    if (this.context === null || this.context.state !== "running") {
+    if (this.stage === null || this.stage.context.state !== "running") {
       void this.wake().then(() => this.voiceFor(track)?.start(options));
       return;
     }
@@ -236,13 +228,15 @@ export class PlaybackEngine {
   /** What the browser adds between a scheduled note and the speaker. Judging
    * subtracts it so a player who sounds on time also scores on time. */
   get outputLatency(): number {
-    const context = this.context;
+    const context = this.stage?.context ?? currentStage()?.context ?? null;
     if (context === null) {
       return 0;
     }
     return context.baseLatency + (context.outputLatency ?? 0);
   }
 
+  /** Ends this player: its notes stop and its clock is let go. The device and
+   * the recordings stay up for whoever comes next. */
   dispose(): void {
     this.disposed = true;
     if (this.timer !== null) {
@@ -250,16 +244,12 @@ export class PlaybackEngine {
       this.timer = null;
     }
     this.stopVoices();
-    void this.context?.close();
-    this.context = null;
-    this.bank = null;
-    this.voices = null;
+    this.stage = null;
     this.transport = null;
   }
 
   private stopVoices(): void {
-    this.bank?.stopAll();
-    this.voices?.stopAll();
+    silenceStage();
     this.voiceEnds.length = 0;
   }
 
@@ -279,10 +269,11 @@ export class PlaybackEngine {
 
   private voiceFor(track: number): Voice | null {
     const definition = this.song?.tracks.find((entry) => entry.index === track);
-    if (definition === undefined || this.bank === null) {
+    const stage = this.stage;
+    if (definition === undefined || stage === null) {
       return null;
     }
-    return this.bank.voiceFor({
+    return stage.bank.voiceFor({
       program: programFor(this.voicing.get(track) ?? null, definition.program),
       percussion: definition.percussion,
     });
@@ -308,8 +299,8 @@ export class PlaybackEngine {
     const position = transport.position;
     const horizon = position + lookAhead;
 
-    if (this.context !== null) {
-      const now = this.context.currentTime;
+    if (this.stage !== null) {
+      const now = this.stage.context.currentTime;
       this.voiceEnds = this.voiceEnds.filter((end) => end > now);
     }
     this.adaptVoiceLimit();
@@ -333,7 +324,7 @@ export class PlaybackEngine {
   }
 
   private schedule(note: SongNote, position: number): boolean {
-    const context = this.context;
+    const context = this.stage?.context ?? null;
     if (context === null) {
       return false;
     }
@@ -368,20 +359,19 @@ export class PlaybackEngine {
     startAt: number,
     rate: number,
   ): number | null {
-    const voices = this.voices;
+    const stage = this.stage;
     const song = this.song;
-    const context = this.context;
-    if (voices === null || song === null || context === null) {
+    if (stage === null || song === null) {
       return null;
     }
     const asked = playedNote(song, this.voicing, note, startAt, rate);
     return asked === null
       ? null
-      : voices.start(
+      : stage.voices.start(
           asked.instrument,
           asked.played,
           asked.trail,
-          context.destination,
+          stage.context.destination,
         );
   }
 }

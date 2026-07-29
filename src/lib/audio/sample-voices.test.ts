@@ -86,6 +86,22 @@ describe("loading an instrument's recordings", () => {
     expect(loadSoundfont).toHaveBeenCalledTimes(3);
   });
 
+  it("does not take back an instrument dropped while it was loading", async () => {
+    let arrive: (samples: Samples) => void = () => {};
+    loadSoundfont.mockReturnValueOnce(
+      new Promise<Samples>((resolve) => {
+        arrive = resolve;
+      }),
+    );
+    const voices = new SampleVoices({} as BaseAudioContext);
+
+    const loading = voices.load("piano", new Set([60]));
+    voices.retain(new Set(["flute"]));
+    arrive(samplesFor([60]));
+
+    expect(await loading).toBeNull();
+  });
+
   it("forgets a failure so a later song can try again", async () => {
     loadSoundfont
       .mockResolvedValueOnce(null)

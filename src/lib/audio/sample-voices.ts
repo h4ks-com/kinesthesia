@@ -165,6 +165,11 @@ export class SampleVoices {
    * is forgotten rather than kept, so a later song can try again over a network
    * that has come back. */
   private merge(instrument: string, arrived: Samples | null): Samples | null {
+    // Let go of while it was still arriving: the song that wanted it is gone,
+    // so holding it would put back exactly what was just dropped.
+    if (!this.asked.has(instrument)) {
+      return null;
+    }
     const held = this.ready.get(instrument) ?? null;
     if (arrived === null) {
       if (held === null) {
@@ -197,7 +202,9 @@ export class SampleVoices {
    * Buffers still feeding a sounding note are held by their source nodes, so
    * dropping them here never cuts anything off. */
   retain(instruments: ReadonlySet<string>): void {
-    for (const held of [...this.ready.keys()]) {
+    // Both maps, since one still arriving is held by `asked` and `loading`
+    // before it ever reaches `ready`.
+    for (const held of [...this.asked.keys(), ...this.ready.keys()]) {
       if (!instruments.has(held)) {
         this.ready.delete(held);
         this.loading.delete(held);

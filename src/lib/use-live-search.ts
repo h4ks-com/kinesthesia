@@ -10,7 +10,10 @@ export type SearchState =
   | { status: "failed"; message: string }
   | { status: "done"; results: readonly MidiSearchItem[] };
 
-const settleDelay = 250;
+/** How long typing has to stop before a search leaves the browser. The sources
+ * are small sites that answer a burst with errors, so this is set by what is
+ * polite to them rather than by what feels quickest here. */
+const settleDelay = 500;
 export const shortestQuery = 3;
 
 export function useLiveSearch(query: string): SearchState {

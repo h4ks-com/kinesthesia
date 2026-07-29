@@ -52,21 +52,55 @@ function interleave(
   return merged;
 }
 
-export async function searchMidi({
+/** Searches already asked for, so a player typing a title walks back over their
+ * own letters, a second player looking for the same song, and a retry after a
+ * blank result all answer from here rather than from the source. Sources are
+ * small hobby sites that fall over under a burst, so the cheapest thing we can
+ * do for them is ask less. */
+const answered = new Map<string, { at: number; results: MidiListing[] }>();
+const rememberFor = 5 * 60 * 1000;
+const remembered = 300;
+
+function ask({
   query,
   source,
   limit,
-}: SearchMidiParams): Promise<MidiSearchItem[]> {
+}: SearchMidiParams): Promise<MidiListing[]> {
   const targets = source === null ? midiSources : [findSource(source)];
-  const found = await Promise.all(
+  return Promise.all(
     targets
       .filter((entry) => entry !== null)
       .map((entry) =>
         entry.search(query, limit).catch((): MidiListing[] => []),
       ),
-  );
+  ).then((found) => interleave(found, limit));
+}
 
-  return interleave(found, limit).map((result) => {
+async function listingsFor(params: SearchMidiParams): Promise<MidiListing[]> {
+  const key = `${params.source ?? "*"}:${params.limit}:${params.query.trim().toLowerCase()}`;
+  const now = Date.now();
+  const known = answered.get(key);
+  if (known !== undefined && now - known.at < rememberFor) {
+    return known.results;
+  }
+  const results = await ask(params);
+  // A source that is down answers empty, and holding that for five minutes
+  // would keep the search blank long after it came back.
+  if (results.length > 0) {
+    if (answered.size >= remembered) {
+      answered.clear();
+    }
+    answered.set(key, { at: now, results });
+  }
+  return results;
+}
+
+export async function searchMidi(
+  params: SearchMidiParams,
+): Promise<MidiSearchItem[]> {
+  const found = await listingsFor(params);
+
+  return found.map((result) => {
     const downloadUrl = fileEndpoint(result.source, result.id);
     const link = (mode: PlayerMode) =>
       buildPlayerUrl(config.appBaseUrl, mode, {

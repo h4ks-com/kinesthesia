@@ -185,6 +185,22 @@ export function Walkthrough({ steps, onClose }: WalkthroughProps) {
     return () => node?.removeEventListener("pointerdown", swallow);
   }, []);
 
+  // The overlay takes no pointer events, so the click also reaches the control.
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && shell.current?.contains(target) === true) {
+        return;
+      }
+      // The popover a step opened stays open: the control being clicked lives
+      // inside it, and closing it between press and release loses the click.
+      held.current = null;
+      onClose();
+    };
+    window.addEventListener("pointerdown", onPointerDown, true);
+    return () => window.removeEventListener("pointerdown", onPointerDown, true);
+  }, [onClose]);
+
   const advance = useCallback(() => {
     if (index + 1 >= live.length) {
       onClose();
@@ -201,33 +217,31 @@ export function Walkthrough({ steps, onClose }: WalkthroughProps) {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      // The tour is modal, so keys are its own. Held in the capture phase and
-      // stopped there, the player's window shortcuts (space to play, arrows to
-      // shift the octave) stay quiet behind the overlay.
-      event.stopPropagation();
-      if (event.key === "Escape") {
+      // Space belongs to the transport.
+      if (event.code === "Space") {
         onClose();
-      } else if (event.key === "ArrowRight" || event.key === "Enter") {
+        return;
+      }
+      // Escape ends the tour from anywhere. The rest are the dialog's own keys,
+      // and a page this no longer covers keeps them when focus has moved on.
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onClose();
+        return;
+      }
+      const target = event.target;
+      if (
+        !(target instanceof Node) ||
+        dialog.current?.contains(target) !== true
+      ) {
+        return;
+      }
+      event.stopPropagation();
+      if (event.key === "ArrowRight" || event.key === "Enter") {
         event.preventDefault();
         advance();
       } else if (event.key === "ArrowLeft") {
         back();
-      } else if (event.key === "Tab") {
-        // aria-modal promises the app behind is inert, so Tab has to cycle
-        // inside the dialog rather than reach the darkened controls.
-        const focusable = dialog.current?.querySelectorAll("button");
-        const first = focusable?.[0];
-        const last = focusable?.[focusable.length - 1];
-        if (first === undefined || last === undefined) {
-          return;
-        }
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first.focus();
-        }
       }
     };
     window.addEventListener("keydown", onKey, true);
@@ -244,14 +258,7 @@ export function Walkthrough({ steps, onClose }: WalkthroughProps) {
   const last = index + 1 >= live.length;
 
   return (
-    <div ref={shell} className="fixed inset-0 z-[70]">
-      {/* Swallows clicks on the app: the tour is read by clicking through it. */}
-      <button
-        type="button"
-        aria-label="Skip the tutorial"
-        onClick={onClose}
-        className="absolute inset-0 cursor-default"
-      />
+    <div ref={shell} className="pointer-events-none fixed inset-0 z-[70]">
       <div
         aria-hidden="true"
         style={{
@@ -265,10 +272,9 @@ export function Walkthrough({ steps, onClose }: WalkthroughProps) {
       <div
         ref={dialog}
         role="dialog"
-        aria-modal="true"
         aria-labelledby="walkthrough-title"
         style={{ top: shown.top, left: shown.left, width: shown.width }}
-        className="rise absolute rounded-xl border border-line-strong bg-panel p-4 shadow-[0_20px_60px_-12px_rgba(0,0,0,0.9)]"
+        className="rise pointer-events-auto absolute rounded-xl border border-line-strong bg-panel p-4 shadow-[0_20px_60px_-12px_rgba(0,0,0,0.9)]"
       >
         <h2 id="walkthrough-title" className="label text-accent">
           {step.title}

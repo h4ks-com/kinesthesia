@@ -36,6 +36,9 @@ jobs:
           cache: true
       - run: bun install --frozen-lockfile
       - run: bunx playwright install --with-deps chromium firefox
+      # The song clock is the audio clock, so a runner with no sound device is a
+      # player that never starts. A dummy sink is enough for it to run.
+      - run: sudo apt-get install -y pulseaudio && pulseaudio --start --exit-idle-time=-1
       - run: bun run test:e2e
       - uses: actions/upload-artifact@v7
         if: failure()

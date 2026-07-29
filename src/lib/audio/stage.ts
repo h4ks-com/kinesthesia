@@ -1,5 +1,3 @@
-"use client";
-
 import { InstrumentBank } from "@/lib/audio/instruments";
 import { unmuteWebAudio } from "@/lib/audio/ios-unmute";
 import { SampleVoices } from "@/lib/audio/sample-voices";

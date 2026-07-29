@@ -86,7 +86,9 @@ src/lib/
   midi/palette.ts             per track and per pitch colours
   play/use-play-notes.ts      the notes play mode emits, rising from the keys
   audio/transport.ts          song position on the audio clock
-  audio/engine.ts             instruments and the look ahead scheduler
+  audio/stage.ts              the one audio device and its decoded recordings,
+                              held for the life of the page and lent to players
+  audio/engine.ts             the look ahead scheduler, on a borrowed stage
   audio/instruments.ts        one sampler voice per General MIDI program, for the
                               drums and for anything the recordings fail
   audio/sample-voices.ts      plays every melodic note on a voice it holds, so a

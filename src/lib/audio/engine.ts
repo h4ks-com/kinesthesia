@@ -1,4 +1,8 @@
-import type { Voice } from "@/lib/audio/instruments";
+import {
+  InstrumentBank,
+  type Voice,
+  type VoiceRequest,
+} from "@/lib/audio/instruments";
 import { instrumentPitches, playedNote } from "@/lib/audio/sample-voices";
 import {
   type AudioStage,
@@ -63,10 +67,34 @@ export function adaptedVoiceLimit(
   return current;
 }
 
+/** What this song and voicing may sound, so a cache knows what to keep.
+ *
+ * Every track counts toward the bank, not only the ones with notes written: it
+ * is what a live key press sounds through, and what a melodic note falls back
+ * to while its own recordings are still coming. Keeping only the drums there
+ * would cut a held chord and silence the next press. */
+export function workingSet(
+  song: Song,
+  voicing: SongVoicing,
+): {
+  bank: Set<string>;
+  voices: Set<string>;
+  percussion: VoiceRequest[];
+} {
+  const played = song.tracks.map((track) => ({
+    program: programFor(voicing.get(track.index) ?? null, track.program),
+    percussion: track.percussion,
+  }));
+  return {
+    bank: new Set(played.map(InstrumentBank.keyOf)),
+    voices: new Set(
+      played.filter((entry) => !entry.percussion).map(InstrumentBank.keyOf),
+    ),
+    percussion: played.filter((entry) => entry.percussion),
+  };
+}
+
 export class PlaybackEngine {
-  /** Borrowed, never owned: the device and its recordings outlive any one
-   * player, and building a second would compete with this one. */
-  private stage: AudioStage | null = null;
   private transport: Transport | null = null;
   private song: Song | null = null;
   private autoNotes: ReadonlySet<number> = new Set();
@@ -111,12 +139,25 @@ export class PlaybackEngine {
     // otherwise drop back to the sampler until the next play.
     const song = this.song;
     if (song !== null) {
-      const wanted = instrumentPitches(song, voicing, noTracks);
-      this.stage?.voices.retain(new Set(wanted.keys()));
-      for (const [instrument, pitches] of wanted) {
-        void this.stage?.voices.load(instrument, pitches);
-      }
+      void Promise.all(this.warmFor(song, voicing));
     }
+  }
+
+  /** Brings in what this song and voicing need, and lets go of what no longer
+   * belongs to it. One place decides the working set, so the two callers cannot
+   * drift on what counts as still wanted. */
+  private warmFor(song: Song, voicing: SongVoicing): Promise<unknown>[] {
+    const stage = this.stage;
+    const wanted = workingSet(song, voicing);
+    stage?.bank.retain(wanted.bank);
+    stage?.voices.retain(wanted.voices);
+    return [
+      stage?.bank.warm(wanted.percussion) ?? Promise.resolve(),
+      ...[...instrumentPitches(song, voicing, noTracks)].map(
+        ([instrument, pitches]) =>
+          stage?.voices.load(instrument, pitches) ?? Promise.resolve(),
+      ),
+    ];
   }
 
   /** A player who owes only the melody still hears the rest of their part. */
@@ -138,17 +179,22 @@ export class PlaybackEngine {
 
   // Browsers only allow an AudioContext to make sound if it was created or
   // resumed inside a user gesture, so every entry point routes through here.
+  /** Borrowed, never owned: the device and its recordings outlive any one
+   * player, and building a second would compete with this one. */
+  private get stage(): AudioStage | null {
+    return currentStage();
+  }
+
   private async wake(): Promise<Transport> {
     if (this.disposed) {
       throw new EngineReplaced();
     }
     const stage = await wakeStage();
     // Waking yields, and a player rebuild disposes this engine while it does.
-    // The one that took over owns the stage now, so this one stays quiet.
+    // The one that took over is playing now, so this one stays quiet.
     if (this.disposed) {
       throw new EngineReplaced();
     }
-    this.stage = stage;
     if (this.transport === null) {
       this.transport = new Transport(stage.context);
       this.transport.seek(this.pendingPosition);
@@ -157,25 +203,13 @@ export class PlaybackEngine {
     return this.transport;
   }
 
+  // The sampler owns the drums. Warming it for the melodic tracks as well would
+  // fetch and decode a second copy of every instrument the voice player is about
+  // to own, so those are left to its own lazy path, which only runs if the
+  // recordings never arrive.
   async warmInstruments(song: Song): Promise<void> {
     await this.wake();
-    const wanted = song.tracks.map((track) => ({
-      track: track.index,
-      program: programFor(this.voicing.get(track.index) ?? null, track.program),
-      percussion: track.percussion,
-    }));
-    // The sampler owns the drums. Warming it for the melodic tracks as well
-    // would fetch and decode a second copy of every instrument the voice player
-    // is about to own, so those are left to its own lazy path, which only runs
-    // if the recordings never arrive.
-    const melodic = instrumentPitches(song, this.voicing, noTracks);
-    this.stage?.voices.retain(new Set(melodic.keys()));
-    await Promise.all([
-      this.stage?.bank.warm(wanted.filter((entry) => entry.percussion)),
-      ...[...melodic].map(([instrument, pitches]) =>
-        this.stage?.voices.load(instrument, pitches),
-      ),
-    ]);
+    await Promise.all(this.warmFor(song, this.voicing));
   }
 
   async play(): Promise<void> {
@@ -206,14 +240,28 @@ export class PlaybackEngine {
   }
 
   strike(pitch: number, velocity: number, track: number): void {
+    // The stage outlives this player, so a replaced one has to check rather
+    // than rely on having had its own device taken away.
+    if (this.disposed) {
+      return;
+    }
     const shaped = this.voicing.get(track) ?? null;
     const options = {
       note: pitch,
       velocity: velocityFor(velocity, shaped),
       ...shapingFor(shaped),
     };
-    if (this.stage === null || this.stage.context.state !== "running") {
-      void this.wake().then(() => this.voiceFor(track)?.start(options));
+    const stage = this.stage;
+    if (stage === null || stage.context.state !== "running") {
+      // A player replaced while the device was waking has nothing to say, and
+      // that is the one thing wake reports by throwing.
+      void this.wake()
+        .then(() => this.voiceFor(track)?.start(options))
+        .catch((error: unknown) => {
+          if (!(error instanceof EngineReplaced)) {
+            throw error;
+          }
+        });
       return;
     }
     this.voiceFor(track)?.start(options);
@@ -228,7 +276,7 @@ export class PlaybackEngine {
   /** What the browser adds between a scheduled note and the speaker. Judging
    * subtracts it so a player who sounds on time also scores on time. */
   get outputLatency(): number {
-    const context = this.stage?.context ?? currentStage()?.context ?? null;
+    const context = this.stage?.context ?? null;
     if (context === null) {
       return 0;
     }
@@ -244,7 +292,6 @@ export class PlaybackEngine {
       this.timer = null;
     }
     this.stopVoices();
-    this.stage = null;
     this.transport = null;
   }
 
@@ -270,7 +317,7 @@ export class PlaybackEngine {
   private voiceFor(track: number): Voice | null {
     const definition = this.song?.tracks.find((entry) => entry.index === track);
     const stage = this.stage;
-    if (definition === undefined || stage === null) {
+    if (definition === undefined || stage === null || this.disposed) {
       return null;
     }
     return stage.bank.voiceFor({

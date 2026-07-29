@@ -102,6 +102,24 @@ describe("loading an instrument's recordings", () => {
     expect(await loading).toBeNull();
   });
 
+  // One dropped request must not leave those pitches answered by a neighbouring
+  // recording for the rest of the session.
+  it("asks again for pitches a failed top-up never delivered", async () => {
+    loadSoundfont
+      .mockResolvedValueOnce(samplesFor([60]))
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(samplesFor([84]));
+    const voices = new SampleVoices({} as BaseAudioContext);
+
+    await voices.load("piano", new Set([60]));
+    await voices.load("piano", new Set([60, 84]));
+    const after = await voices.load("piano", new Set([60, 84]));
+
+    expect(loadSoundfont).toHaveBeenCalledTimes(3);
+    expect(askedFor(2)).toEqual([84]);
+    expect(after?.pitches).toEqual([60, 84]);
+  });
+
   it("forgets a failure so a later song can try again", async () => {
     loadSoundfont
       .mockResolvedValueOnce(null)

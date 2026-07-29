@@ -11,10 +11,21 @@ const watchPath = `/watch?url=${encodeURIComponent(songUrl)}&name=Fixture`;
 
 type Page = import("@playwright/test").Page;
 
+/** Every background here is a shader, so a browser without WebGL2 offers none
+ * of them on purpose. That is the app behaving correctly, not a failure, so the
+ * suite says so rather than reading a disabled control as a broken one. */
+async function needsWebgl(page: Page): Promise<void> {
+  const has = await page.evaluate(
+    () => document.createElement("canvas").getContext("webgl2") !== null,
+  );
+  test.skip(!has, "this browser has no WebGL2");
+}
+
 async function openPlay(page: Page): Promise<void> {
   await seenTour(page);
   await page.goto("/play");
   await expect(page.locator("canvas")).toBeVisible();
+  await needsWebgl(page);
 }
 
 /** The settings button toggles, so opening it blind closes it when it is
@@ -84,6 +95,7 @@ test.describe("in watch", () => {
     await serveFixture(page);
     await page.goto(watchPath);
     await expect(page.locator("canvas")).toBeVisible();
+    await needsWebgl(page);
   }
 
   test("picking one puts it behind the roll and names it in the menu", async ({

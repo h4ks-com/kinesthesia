@@ -9,7 +9,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: isCi,
   retries: isCi ? 1 : 0,
-  reporter: isCi ? "github" : "list",
+  // The github reporter annotates the run but writes nothing to disk, so a
+  // failure there left no trace to read afterwards.
+  reporter: isCi ? [["github"], ["html", { open: "never" }]] : "list",
   use: { baseURL, trace: "on-first-retry" },
   // Firefox carries a different Web Audio and WebCodecs surface from Chrome's,
   // and a browser nothing runs against is a browser nothing catches.
@@ -17,7 +19,24 @@ export default defineConfig({
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     {
       name: "firefox",
-      use: { ...devices["Desktop Firefox"] },
+      use: {
+        ...devices["Desktop Firefox"],
+        // A runner has no GPU, and Firefox refuses WebGL there unless told the
+        // software path is acceptable. Without it every shader background is
+        // correctly reported unsupported and none of them can be exercised.
+        launchOptions: {
+          firefoxUserPrefs: {
+            "webgl.force-enabled": true,
+            "webgl.disable-fail-if-major-performance-caveat": true,
+            "gfx.webrender.software": true,
+            // The song clock is the audio clock, so a context that never
+            // starts is a player that never moves. The gesture policy is the
+            // browser's to enforce, not ours to test.
+            "media.autoplay.default": 0,
+            "media.autoplay.blocking_policy": 0,
+          },
+        },
+      },
       // Firefox is here for what differs between engines: Web Audio, WebCodecs,
       // pointer capture, storage. Reading lit pixels back off a canvas that is
       // still animating measures the rasteriser and the frame clock, which are

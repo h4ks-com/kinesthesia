@@ -66,11 +66,9 @@ test("pasting a link opens it", async ({ page }) => {
   await box.evaluate((element, url) => {
     const data = new DataTransfer();
     data.setData("text", url);
-    // Firefox drops clipboardData handed to the constructor, so it is attached
-    // to the event instead, which every engine reads back.
-    const event = new ClipboardEvent("paste", { bubbles: true });
-    Object.defineProperty(event, "clipboardData", { value: data });
-    element.dispatchEvent(event);
+    element.dispatchEvent(
+      new ClipboardEvent("paste", { clipboardData: data, bubbles: true }),
+    );
   }, remoteUrl);
   await page.waitForURL(/\/watch\?/);
   await expect(page.locator("canvas")).toBeVisible();

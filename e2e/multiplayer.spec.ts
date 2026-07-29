@@ -38,11 +38,7 @@ test("the room stores the difficulty and the link stays short", async ({
   page,
   context,
 }) => {
-  // Only Chromium names the clipboard permissions; elsewhere the read below
-  // works without them.
-  await context
-    .grantPermissions(["clipboard-read", "clipboard-write"])
-    .catch(() => {});
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await serveFixture(page);
   let posted: { simplified?: boolean } = {};
   await page.route("**/api/multiplayer/rooms", async (route) => {

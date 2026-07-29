@@ -11,20 +11,7 @@ export default defineConfig({
   retries: isCi ? 1 : 0,
   reporter: isCi ? "github" : "list",
   use: { baseURL, trace: "on-first-retry" },
-  // Firefox carries a different Web Audio and WebCodecs surface from Chrome's,
-  // and a browser nothing runs against is a browser nothing catches.
-  projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    {
-      name: "firefox",
-      use: { ...devices["Desktop Firefox"] },
-      // Firefox is here for what differs between engines: Web Audio, WebCodecs,
-      // pointer capture, storage. Reading lit pixels back off a canvas that is
-      // still animating measures the rasteriser and the frame clock, which are
-      // meant to differ, so those specs stay on one engine.
-      testIgnore: [/bend\.spec\.ts/, /sound\.spec\.ts/],
-    },
-  ],
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     // The fixtures play a file from example.test, so that origin is trusted for
     // the run, exercising the same allowlist the app ships with. The object

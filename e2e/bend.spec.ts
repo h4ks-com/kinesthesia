@@ -4,8 +4,6 @@ import { seenTour } from "./fixture";
 declare global {
   interface Window {
     sendMidi: (bytes: number[]) => void;
-    /** True once the app has subscribed to the stand-in device. */
-    midiListening: boolean;
   }
 }
 
@@ -17,18 +15,9 @@ type Page = import("@playwright/test").Page;
 async function fakeDevice(page: Page): Promise<void> {
   await seenTour(page);
   await page.addInitScript(() => {
-    // A note sent before the app subscribes goes nowhere, so the handler is
-    // watched rather than assumed: the test waits for it.
-    let handler: ((event: unknown) => void) | null = null;
-    const input = {};
-    Object.defineProperty(input, "onmidimessage", {
-      get: () => handler,
-      set: (next: ((event: unknown) => void) | null) => {
-        handler = next;
-        window.midiListening = next !== null;
-      },
-    });
-    window.midiListening = false;
+    const input: { onmidimessage: ((event: unknown) => void) | null } = {
+      onmidimessage: null,
+    };
     const access = {
       inputs: new Map([["fake", input]]),
       onstatechange: null,
@@ -38,7 +27,7 @@ async function fakeDevice(page: Page): Promise<void> {
       value: () => Promise.resolve(access),
     });
     window.sendMidi = (bytes: number[]) => {
-      handler?.({
+      input.onmidimessage?.({
         data: new Uint8Array(bytes),
         timeStamp: performance.now(),
       });
@@ -129,9 +118,6 @@ async function open(page: Page): Promise<number> {
   await expect
     .poll(async () => keyboardTop(page), { timeout: 10000 })
     .toBeGreaterThan(0);
-  await expect
-    .poll(() => page.evaluate(() => window.midiListening), { timeout: 10000 })
-    .toBe(true);
   return keyboardTop(page);
 }
 

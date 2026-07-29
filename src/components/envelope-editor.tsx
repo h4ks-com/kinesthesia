@@ -50,7 +50,9 @@ export function EnvelopeEditor({ voicing, onChange }: EnvelopeEditorProps) {
   const ringsOn = voicing.release === releaseRange.min;
 
   const grab = (event: ReactPointerEvent<SVGCircleElement>, handle: Handle) => {
-    event.currentTarget.setPointerCapture(event.pointerId);
+    // Captured on the surface that carries the move and release handlers, so a
+    // drag that leaves the handle keeps arriving where it is read.
+    frame.current?.setPointerCapture(event.pointerId);
     held.current = handle;
   };
 

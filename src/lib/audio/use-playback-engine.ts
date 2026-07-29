@@ -1,7 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { PlaybackEngine } from "@/lib/audio/engine";
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { EngineReplaced, PlaybackEngine } from "@/lib/audio/engine";
 import type { SongVoicing } from "@/lib/audio/voicing";
 import type { Song } from "@/lib/midi/song";
 
@@ -33,6 +39,28 @@ type Options = {
   speed: number;
   onRestart: () => void;
 };
+
+/** Starts the engine, following the handover when the player replaces it
+ * mid-press. Null once there is nothing left to start. */
+async function play(
+  engine: PlaybackEngine,
+  held: RefObject<PlaybackEngine | null>,
+): Promise<PlaybackEngine | null> {
+  try {
+    await engine.play();
+    return engine;
+  } catch (error) {
+    if (!(error instanceof EngineReplaced)) {
+      throw error;
+    }
+    const current = held.current;
+    if (current === null || current === engine) {
+      return null;
+    }
+    await current.play();
+    return current;
+  }
+}
 
 export function usePlaybackEngine({
   song,
@@ -124,10 +152,15 @@ export function usePlaybackEngine({
       setElapsed(0);
       restartRef.current();
     }
-    await engine.play();
+    // Waking yields, and the player may rebuild its engine while it does. The
+    // press belongs to whichever engine the page holds now.
+    const started = await play(engine, engineRef);
+    if (started === null) {
+      return;
+    }
     setSoundReady(true);
     setPlaying(true);
-    void engine.warmInstruments(song);
+    void started.warmInstruments(song);
   }, [song]);
 
   const strike = useCallback(

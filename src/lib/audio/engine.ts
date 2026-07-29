@@ -1,4 +1,3 @@
-import { soundfontFor } from "@/lib/audio/general-midi";
 import { InstrumentBank, type Voice } from "@/lib/audio/instruments";
 import { unmuteWebAudio } from "@/lib/audio/ios-unmute";
 import {
@@ -15,6 +14,15 @@ import {
   velocityFor,
 } from "@/lib/audio/voicing";
 import type { Song, SongNote } from "@/lib/midi/song";
+
+/** Thrown when a press lands on an engine the player has already replaced, so
+ * the owner can carry it to the one that took over. */
+export class EngineReplaced extends Error {
+  constructor() {
+    super("The engine was replaced");
+    this.name = "EngineReplaced";
+  }
+}
 
 /** Every track counts: the engine plays the whole song, hidden or not. */
 const noTracks: ReadonlySet<number> = new Set();
@@ -76,6 +84,9 @@ export class PlaybackEngine {
   /** Wall-clock time of the last pump, to measure how late the next one runs.
    * Zero between runs, so a pause does not read as the machine falling behind. */
   private lastPumpAt = 0;
+  /** Set once and never cleared: an engine the player has replaced must never
+   * come back, whatever was still awaiting inside it. */
+  private disposed = false;
 
   setSong(song: Song, autoNotes: ReadonlySet<number>): void {
     this.song = song;
@@ -131,6 +142,9 @@ export class PlaybackEngine {
   // Browsers only allow an AudioContext to make sound if it was created or
   // resumed inside a user gesture, so every entry point routes through here.
   private async wake(): Promise<Transport> {
+    if (this.disposed) {
+      throw new EngineReplaced();
+    }
     unmuteWebAudio();
     if (this.context === null) {
       this.context = new AudioContext({ latencyHint: 0 });
@@ -143,9 +157,12 @@ export class PlaybackEngine {
     if (this.context.state !== "running") {
       await this.context.resume();
     }
+    // Resuming yields, and a player rebuild disposes the engine mid-await. A
+    // disposed engine is nobody's: building it again would sound a song the
+    // page has moved on from, on a context nothing is left to close.
     const transport = this.transport;
-    if (transport === null) {
-      throw new Error("The transport was not created");
+    if (transport === null || this.disposed) {
+      throw new EngineReplaced();
     }
     return transport;
   }
@@ -227,6 +244,7 @@ export class PlaybackEngine {
   }
 
   dispose(): void {
+    this.disposed = true;
     if (this.timer !== null) {
       clearInterval(this.timer);
       this.timer = null;

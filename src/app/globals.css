@@ -180,6 +180,13 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+  /* A spinner or a marching bar is feedback, not decoration. Frozen on its last
+     frame it reads as a hang, so these keep turning, slower. */
+  .animate-spin,
+  .marching {
+    animation-duration: 2s !important;
+    animation-iteration-count: infinite !important;
+  }
   /* biome-ignore-end lint/complexity/noImportantStyles: end of the reduced motion override */
 }
 

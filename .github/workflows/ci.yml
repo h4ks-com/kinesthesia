@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # So a branch can be put through the full matrix before it is proposed.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -34,10 +36,15 @@ jobs:
           cache: true
       - run: bun install --frozen-lockfile
       - run: bunx playwright install --with-deps chromium firefox
+      # The song clock is the audio clock, so a runner with no sound device is a
+      # player that never starts. A dummy sink is enough for it to run.
+      - run: sudo apt-get install -y pulseaudio && pulseaudio --start --exit-idle-time=-1
       - run: bun run test:e2e
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
-          path: playwright-report
+          path: |
+            playwright-report
+            test-results
           retention-days: 7

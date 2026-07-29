@@ -191,7 +191,7 @@ export function ShareUpload({
                     setFailed(
                       error instanceof Error
                         ? error.message
-                        : "That did not go through",
+                        : "The upload failed.",
                     ),
                   )
                   .finally(() => setWorking(false));

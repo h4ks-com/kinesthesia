@@ -231,11 +231,7 @@ export function SkinPicker({
             <Choice
               key={skin.id}
               title={skin.name}
-              blurb={
-                unsupported.has(skin.id)
-                  ? "This browser cannot run it."
-                  : skin.blurb
-              }
+              blurb={unsupported.has(skin.id) ? "Needs WebGL2." : skin.blurb}
               selected={chosen === skin.id}
               disabled={unsupported.has(skin.id)}
               onSelect={() => onChoose(skin.id)}

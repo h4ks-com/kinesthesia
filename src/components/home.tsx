@@ -139,14 +139,15 @@ export function Home({
       setUploadError(null);
       const stored: { url: string; name: string }[] = [];
       let kept = true;
-      try {
-        for (const file of midis) {
+      for (const file of midis) {
+        try {
           const url = await storeUpload(file.name, await file.arrayBuffer());
           stored.push({ url, name: file.name });
+        } catch {
+          setUploadError(`${file.name} would not fit in this browser's files.`);
+          kept = false;
+          break;
         }
-      } catch {
-        setUploadError("Could not save that file on this device.");
-        kept = false;
       }
       refreshLibrary();
       // Handing over one file means play it. Several is a library import, so
@@ -172,7 +173,7 @@ export function Home({
         const reason =
           typeof body === "object" && body !== null && "error" in body
             ? String(body.error)
-            : "That did not go through. Try again.";
+            : `The upload failed with status ${response.status}.`;
         throw new Error(reason);
       }
       const { url }: { url: string } = await response.json();

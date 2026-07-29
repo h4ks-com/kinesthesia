@@ -15,7 +15,15 @@ export default defineConfig({
   // and a browser nothing runs against is a browser nothing catches.
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "firefox", use: { ...devices["Desktop Firefox"] } },
+    {
+      name: "firefox",
+      use: { ...devices["Desktop Firefox"] },
+      // Firefox is here for what differs between engines: Web Audio, WebCodecs,
+      // pointer capture, storage. Reading lit pixels back off a canvas that is
+      // still animating measures the rasteriser and the frame clock, which are
+      // meant to differ, so those specs stay on one engine.
+      testIgnore: [/bend\.spec\.ts/, /sound\.spec\.ts/],
+    },
   ],
   webServer: {
     // The fixtures play a file from example.test, so that origin is trusted for

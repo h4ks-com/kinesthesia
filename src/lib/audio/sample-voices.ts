@@ -121,6 +121,11 @@ export class SampleVoices {
   private readonly context: BaseAudioContext;
   private readonly loading = new Map<string, Promise<Samples | null>>();
   private readonly ready = new Map<string, Samples>();
+  /** Which pitches each instrument has been asked for. The recordings outlive
+   * the song that first wanted them, and the next song reaches further up or
+   * down the keyboard, so what is already here has to be topped up rather than
+   * quietly answered with the nearest neighbour. */
+  private readonly asked = new Map<string, Set<number>>();
   private readonly live = new Set<Live>();
 
   constructor(context: BaseAudioContext) {
@@ -134,22 +139,71 @@ export class SampleVoices {
     instrument: string,
     pitches: ReadonlySet<number>,
   ): Promise<Samples | null> {
+    const seen = this.asked.get(instrument);
+    const missing = new Set(
+      [...pitches].filter((pitch) => seen?.has(pitch) !== true),
+    );
     const known = this.loading.get(instrument);
-    if (known !== undefined) {
+    if (known !== undefined && missing.size === 0) {
       return known;
     }
-    const started = loadSoundfont(this.context, instrument, pitches)
+    for (const pitch of missing) {
+      seen?.add(pitch);
+    }
+    if (seen === undefined) {
+      this.asked.set(instrument, new Set(pitches));
+    }
+    const started = (known ?? Promise.resolve(null))
+      .then(() => loadSoundfont(this.context, instrument, missing))
       .catch(() => null)
-      .then((samples) => {
-        if (samples === null) {
-          this.loading.delete(instrument);
-        } else {
-          this.ready.set(instrument, samples);
-        }
-        return samples;
-      });
+      .then((arrived) => this.merge(instrument, arrived));
     this.loading.set(instrument, started);
     return started;
+  }
+
+  /** Folds newly decoded recordings in beside the ones already here. A failure
+   * is forgotten rather than kept, so a later song can try again over a network
+   * that has come back. */
+  private merge(instrument: string, arrived: Samples | null): Samples | null {
+    const held = this.ready.get(instrument) ?? null;
+    if (arrived === null) {
+      if (held === null) {
+        this.loading.delete(instrument);
+        this.asked.delete(instrument);
+      }
+      return held;
+    }
+    if (held === null) {
+      this.ready.set(instrument, arrived);
+      return arrived;
+    }
+    for (const [pitch, sample] of arrived.byPitch) {
+      held.byPitch.set(pitch, sample);
+    }
+    const merged: Samples = {
+      byPitch: held.byPitch,
+      pitches: [...held.byPitch.keys()].sort((first, next) => first - next),
+    };
+    this.ready.set(instrument, merged);
+    return merged;
+  }
+
+  /** Lets go of every instrument outside this set. The recordings outlive the
+   * song that wanted them, which is what makes a second song cheap, but a
+   * session that wanders through a dozen files would otherwise hold every
+   * instrument it ever touched: near forty megabytes decoded each. What is
+   * shared with the next song survives; what it never asks for does not.
+   *
+   * Buffers still feeding a sounding note are held by their source nodes, so
+   * dropping them here never cuts anything off. */
+  retain(instruments: ReadonlySet<string>): void {
+    for (const held of [...this.ready.keys()]) {
+      if (!instruments.has(held)) {
+        this.ready.delete(held);
+        this.loading.delete(held);
+        this.asked.delete(held);
+      }
+    }
   }
 
   /** Plays one note. Returns the time it falls silent, or null where the

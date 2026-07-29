@@ -9,7 +9,7 @@ import {
   Film,
   Loader2,
 } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useReducer, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Popover } from "@/components/ui/popover";
 import type { SongVoicing } from "@/lib/audio/voicing";
@@ -19,13 +19,14 @@ import {
   downloadBlob,
   exportFilename,
   type RenderConfig,
+  renderDuration,
 } from "@/lib/render/export";
 import {
   canRenderVideo,
   isFastVideo,
   renderSongVideo,
 } from "@/lib/render/video";
-import type { NoteDirection } from "@/lib/skins/types";
+import type { NoteDirection, Skin } from "@/lib/skins/types";
 
 type RenderMenuProps = {
   song: Song;
@@ -34,13 +35,28 @@ type RenderMenuProps = {
   plain: boolean;
   speed: number;
   direction: NoteDirection;
+  /** The background on screen, so the file carries it too. */
+  skin: Skin | null;
   title: string;
 };
 
 type JobKind = "video" | "audio";
 
 type Job =
-  | { kind: JobKind; phase: "working"; stage: string; progress: number | null }
+  | {
+      kind: JobKind;
+      phase: "working";
+      stage: string;
+      progress: number | null;
+      /** When this stage started, so what is left is measured against the part
+       * of it that has actually run. */
+      since: number;
+      /** How long the finished file runs, which is what the speed is against. */
+      seconds: number;
+      /** True while the stage is laying down output at song speed, so a rate
+       * against the song means something. */
+      paced: boolean;
+    }
   | {
       kind: JobKind;
       phase: "done";
@@ -57,6 +73,7 @@ export function RenderMenu({
   plain,
   speed,
   direction,
+  skin,
   title,
 }: RenderMenuProps) {
   const [job, setJob] = useState<Job | null>(null);
@@ -75,24 +92,41 @@ export function RenderMenu({
       plain,
       rate: speed,
       direction,
+      skin,
     };
     const controller = new AbortController();
     abort.current = controller;
     lastShown.current = 0;
-    setJob({
-      kind,
-      phase: "working",
-      stage: "Loading instruments",
-      progress: null,
-    });
-    const setStage = (stage: string): void =>
-      setJob((current) =>
-        current?.phase === "working"
-          ? { ...current, stage, progress: null }
-          : current,
-      );
+    const seconds = renderDuration(config);
+    const begin = (stage: string, paced: boolean, progress: number | null) =>
+      setJob({
+        kind,
+        phase: "working",
+        stage,
+        progress,
+        since: performance.now(),
+        seconds,
+        paced,
+      });
+    begin("Loading instruments", false, null);
+    const onStep = (stage: string, progress: number | null): void =>
+      setJob((current) => {
+        if (current?.phase !== "working") {
+          return current;
+        }
+        if (current.stage !== stage) {
+          return {
+            ...current,
+            stage,
+            progress,
+            since: performance.now(),
+            paced: stage === "Rendering sound",
+          };
+        }
+        return { ...current, progress };
+      });
     try {
-      const audio = await renderSongAudio(config, setStage);
+      const audio = await renderSongAudio(config, onStep);
       if (controller.signal.aborted) {
         return;
       }
@@ -100,12 +134,12 @@ export function RenderMenu({
         finish(kind, audioToWav(audio), exportFilename(title, "wav"), false);
         return;
       }
-      setJob({ kind, phase: "working", stage: "Encoding video", progress: 0 });
+      begin("Encoding video", true, 0);
       const video = await renderSongVideo(
         config,
         audio,
         (fraction) => {
-          if (fraction < 1 && fraction - lastShown.current < 0.01) {
+          if (fraction < 1 && fraction - lastShown.current < 0.005) {
             return;
           }
           lastShown.current = fraction;
@@ -178,7 +212,11 @@ export function RenderMenu({
           <Choice
             icon={<Film className="size-4" aria-hidden="true" />}
             title="Video"
-            note="mp4, keyboard and notes"
+            note={
+              isFastVideo()
+                ? "mp4, keyboard and notes"
+                : "mp4, recorded in real time"
+            }
             disabled={!canRenderVideo()}
             onClick={() => void run("video")}
           />
@@ -301,10 +339,7 @@ function Working({
   onCancel: () => void;
 }) {
   const percent = job.progress === null ? null : Math.round(job.progress * 100);
-  const hint =
-    job.kind === "video" && job.stage === "Encoding video" && !isFastVideo()
-      ? "Recording in real time, about the length of the song."
-      : "Faster than real time.";
+  const pace = usePace(job);
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3" role="status" aria-live="polite">
@@ -317,7 +352,7 @@ function Working({
             id="render-dialog-title"
             className="font-semibold text-sm text-text"
           >
-            Rendering {job.kind} — {job.stage}
+            Rendering {job.kind}
           </h2>
           <p className="truncate text-faint text-xs">{title}</p>
         </div>
@@ -349,7 +384,9 @@ function Working({
             />
           )}
         </div>
-        <p className="text-faint text-xs">{hint}</p>
+        {pace === null ? null : (
+          <p className="text-faint text-xs tabular-nums">{pace}</p>
+        )}
       </div>
 
       <button
@@ -476,6 +513,41 @@ function Choice({
       </span>
     </button>
   );
+}
+
+/** How fast the render is running and how much of it is left, counted down
+ * between progress reports rather than only when one lands. Null until there is
+ * enough of a stage behind it to divide by. */
+function usePace(job: Extract<Job, { phase: "working" }>): string | null {
+  const [, retime] = useReducer((count: number) => count + 1, 0);
+  const measurable = job.progress !== null;
+  useEffect(() => {
+    if (!measurable) {
+      return;
+    }
+    const timer = setInterval(retime, 500);
+    return () => clearInterval(timer);
+  }, [measurable]);
+
+  const done = job.progress ?? 0;
+  const elapsed = (performance.now() - job.since) / 1000;
+  if (done <= 0 || elapsed < 1) {
+    return null;
+  }
+  const left = formatSpan(elapsed / done - elapsed);
+  if (!job.paced) {
+    return `${left} left`;
+  }
+  const rate = (done * job.seconds) / elapsed;
+  return `${rate >= 10 ? Math.round(rate) : rate.toFixed(1)}× real time · ${left} left`;
+}
+
+function formatSpan(seconds: number): string {
+  const whole = Math.max(1, Math.round(seconds));
+  if (whole < 60) {
+    return `${whole}s`;
+  }
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
 }
 
 function formatBytes(bytes: number): string {

@@ -7,7 +7,7 @@ import {
   watchFrame,
 } from "@/lib/render/export";
 import { keyWidthRange } from "@/lib/render/keyboard";
-import { PianoRollRenderer } from "@/lib/render/piano-roll";
+import { PianoRollRenderer, type SkinReport } from "@/lib/render/piano-roll";
 
 export type VideoProgress = (fraction: number) => void;
 
@@ -89,7 +89,7 @@ async function withWebCodecs(
     1,
     Math.ceil(renderDuration(config) * renderFps),
   );
-  const { renderer, canvas } = offlineRenderer();
+  const scene = renderScene(config);
 
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
@@ -131,8 +131,8 @@ async function withWebCodecs(
       if (failure !== null) {
         throw failure;
       }
-      renderer.draw(watchFrame(config, (index / renderFps) * config.rate));
-      const frame = new VideoFrame(canvas, {
+      scene.draw((index / renderFps) * config.rate, index / renderFps);
+      const frame = new VideoFrame(scene.canvas, {
         timestamp: Math.round((index / renderFps) * 1_000_000),
         duration: Math.round(1_000_000 / renderFps),
       });
@@ -166,6 +166,7 @@ async function withWebCodecs(
       realtime: false,
     };
   } finally {
+    scene.dispose();
     if (videoEncoder.state !== "closed") {
       videoEncoder.close();
     }
@@ -182,7 +183,7 @@ async function withMediaRecorder(
   onProgress: VideoProgress,
   signal: AbortSignal,
 ): Promise<RenderedVideo> {
-  const { renderer, canvas } = offlineRenderer();
+  const scene = renderScene(config);
   const audioContext = new AudioContext({ sampleRate: audio.sampleRate });
   const destination = audioContext.createMediaStreamDestination();
   const source = audioContext.createBufferSource();
@@ -194,11 +195,12 @@ async function withMediaRecorder(
       recorder.stop();
     }
     source.stop();
+    scene.dispose();
     void audioContext.close();
   };
 
   const stream = new MediaStream([
-    ...canvas.captureStream(renderFps).getVideoTracks(),
+    ...scene.canvas.captureStream(renderFps).getVideoTracks(),
     ...destination.stream.getAudioTracks(),
   ]);
   const recorder = new MediaRecorder(stream, { mimeType: mime.type });
@@ -235,9 +237,7 @@ async function withMediaRecorder(
         reject(new DOMException("Render cancelled", "AbortError"));
         return;
       }
-      renderer.draw(
-        watchFrame(config, Math.min(real * config.rate, config.song.duration)),
-      );
+      scene.draw(Math.min(real * config.rate, config.song.duration), real);
       onProgress(Math.min(1, real / outDuration));
       if (real >= outDuration) {
         stop();
@@ -252,20 +252,79 @@ async function withMediaRecorder(
   return { blob: await recorded, extension: mime.extension, realtime: true };
 }
 
-function offlineRenderer(): {
-  renderer: PianoRollRenderer;
-  canvas: HTMLCanvasElement;
-} {
-  const { width, height } = renderSize;
+/** The whole picture for one moment of the song, on the canvas the encoder
+ * reads. A background is layered underneath exactly as the page stacks it. */
+type Scene = {
+  readonly canvas: HTMLCanvasElement;
+  draw(position: number, elapsed: number): void;
+  dispose(): void;
+};
+
+/** What the page shows behind a background that does not fill every pixel. */
+const ground = "#060709";
+
+function surface(): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const renderer = new PianoRollRenderer(canvas, keyWidthRange.min, {
+  canvas.width = renderSize.width;
+  canvas.height = renderSize.height;
+  return canvas;
+}
+
+function renderScene(config: RenderConfig): Scene {
+  const { width, height } = renderSize;
+  const roll = surface();
+  const renderer = new PianoRollRenderer(roll, keyWidthRange.min, {
     width,
     height,
     ratio: 1,
   });
-  return { renderer, canvas };
+
+  const base = surface();
+  const overlay = surface();
+  const skin = config.skin?.create({ base, overlay }) ?? null;
+  if (skin === null) {
+    return {
+      canvas: roll,
+      draw: (position) => renderer.draw(watchFrame(config, position)),
+      dispose: () => {},
+    };
+  }
+  skin.resize(width, height, 1);
+
+  const output = surface();
+  const ctx = output.getContext("2d");
+  if (ctx === null) {
+    skin.dispose();
+    return {
+      canvas: roll,
+      draw: (position) => renderer.draw(watchFrame(config, position)),
+      dispose: () => {},
+    };
+  }
+
+  const report: SkinReport = { keyboardTop: 0, travellers: [], strikes: [] };
+  return {
+    canvas: output,
+    draw(position, elapsed) {
+      report.travellers.length = 0;
+      report.strikes.length = 0;
+      // The roll fills the report as it draws, so the background answers to
+      // where the notes are this frame rather than the one before.
+      renderer.draw(watchFrame(config, position, report));
+      skin.draw({
+        keyboardTop: report.keyboardTop,
+        elapsed,
+        travellers: report.travellers,
+        strikes: report.strikes,
+      });
+      ctx.fillStyle = ground;
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(base, 0, 0, width, height);
+      ctx.drawImage(overlay, 0, 0, width, height);
+      ctx.drawImage(roll, 0, 0, width, height);
+    },
+    dispose: () => skin.dispose(),
+  };
 }
 
 async function encodeAudio(

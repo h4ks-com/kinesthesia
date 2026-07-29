@@ -566,6 +566,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                     plain={plainStyle}
                     speed={speed}
                     direction={background.direction}
+                    skin={background.skin}
                     title={songTitle}
                   />
                 ) : null

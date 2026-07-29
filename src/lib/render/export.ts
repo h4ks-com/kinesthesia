@@ -1,7 +1,7 @@
 import type { SongVoicing } from "@/lib/audio/voicing";
 import type { Song } from "@/lib/midi/song";
-import type { Frame } from "@/lib/render/piano-roll";
-import type { NoteDirection } from "@/lib/skins/types";
+import type { Frame, SkinReport } from "@/lib/render/piano-roll";
+import type { NoteDirection, Skin } from "@/lib/skins/types";
 
 /** The watch view exactly as it stands, handed to an offline render. Nothing
  * here is interactive, so a frame is a pure function of position. */
@@ -15,6 +15,9 @@ export type RenderConfig = {
   /** Which way the notes were travelling on screen, so the file matches what
    * was being watched. */
   readonly direction: NoteDirection;
+  /** The background behind the roll, drawn into the video the same way it is
+   * drawn on screen. Null leaves the roll on its own dark backdrop. */
+  readonly skin: Skin | null;
 };
 
 export const renderSize = { width: 1280, height: 720 } as const;
@@ -22,7 +25,11 @@ export const renderFps = 60;
 
 const noPitches: ReadonlySet<number> = new Set();
 
-export function watchFrame(config: RenderConfig, position: number): Frame {
+export function watchFrame(
+  config: RenderConfig,
+  position: number,
+  report: SkinReport | null = null,
+): Frame {
   return {
     song: config.song,
     position,
@@ -30,7 +37,7 @@ export function watchFrame(config: RenderConfig, position: number): Frame {
     sustain: false,
     expression: null,
     direction: config.direction,
-    report: null,
+    report,
     rate: config.rate,
     playTrack: 0,
     hiddenTracks: config.hiddenTracks,

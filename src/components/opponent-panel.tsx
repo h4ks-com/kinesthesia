@@ -158,6 +158,7 @@ export function OpponentPanel({
           hiddenTracks={hidden}
           keyWidth={defaultKeyWidth}
           focusPitch={roll.focusPitch}
+          follow={false}
           getPosition={getPosition}
           getPressed={roll.getPressed}
           getOwed={roll.getOwed}

@@ -46,6 +46,7 @@ export function watchFrame(
     yours: null,
     reach: null,
     keyLabels: null,
+    follow: false,
     plain: config.plain,
   };
 }

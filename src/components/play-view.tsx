@@ -444,6 +444,7 @@ export function PlayView({
           hiddenTracks={noAutoNotes}
           keyWidth={keyWidth}
           focusPitch={null}
+          follow={false}
           getPosition={getPosition}
           getPressed={getPressed}
           getOwed={noPitches}

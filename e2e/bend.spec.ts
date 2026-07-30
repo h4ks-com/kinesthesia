@@ -81,46 +81,37 @@ async function keyboardTop(page: Page): Promise<number> {
   });
 }
 
-/** Horizontal centre of the note's body at a height above the keys. Each height
- * is an age, so this reads where the note was drawn for that moment. */
-async function centreAbove(
-  page: Page,
-  top: number,
-  above: number,
-): Promise<number | null> {
-  return page.evaluate(
-    ([keys, rise]) => {
-      const canvas = document.querySelector("canvas");
-      if (canvas === null) {
-        return null;
+/** How wide the lit part of the roll is, above the keys. A bar the wheels sat
+ * still through is one note wide; one thrown by a wheel covers more ground.
+ * Read across the whole picture rather than at a chosen row, so it does not
+ * depend on how far the bar has climbed by the time it is measured. */
+async function litWidth(page: Page, top: number): Promise<number> {
+  return page.evaluate((keys) => {
+    const canvas = document.querySelector("canvas");
+    const ctx = canvas?.getContext("2d") ?? null;
+    if (canvas === null || ctx === null) {
+      return 0;
+    }
+    const ratio = canvas.width / canvas.clientWidth;
+    // Clear of the reach bar, which sits a few pixels above the keys and runs
+    // the width of what the computer keyboard can play.
+    const height = Math.max(1, Math.round(((keys ?? 0) - 14) * ratio));
+    const { data } = ctx.getImageData(0, 0, canvas.width, height);
+    let left = canvas.width;
+    let right = -1;
+    for (let pixel = 0; pixel < canvas.width * height; pixel += 1) {
+      const index = pixel * 4;
+      const lit =
+        (data[index] ?? 0) + (data[index + 1] ?? 0) + (data[index + 2] ?? 0);
+      if (lit > 150) {
+        const x = pixel % canvas.width;
+        left = Math.min(left, x);
+        right = Math.max(right, x);
       }
-      const ctx = canvas.getContext("2d");
-      if (ctx === null) {
-        return null;
-      }
-      const ratio = canvas.width / canvas.clientWidth;
-      const y = Math.round(((keys ?? 0) - (rise ?? 0)) * ratio);
-      const { data } = ctx.getImageData(0, y, canvas.width, 1);
-      let sum = 0;
-      let weight = 0;
-      for (let pixel = 0; pixel < canvas.width; pixel += 1) {
-        const index = pixel * 4;
-        const lit =
-          (data[index] ?? 0) + (data[index + 1] ?? 0) + (data[index + 2] ?? 0);
-        if (lit > 150) {
-          sum += pixel * lit;
-          weight += lit;
-        }
-      }
-      return weight === 0 ? null : sum / weight / ratio;
-    },
-    [top, above],
-  );
+    }
+    return right < 0 ? 0 : (right - left) / ratio;
+  }, top);
 }
-
-/** The roll scrolls `lookAhead` seconds over the height above the keys, so a
- * height is an age and both can be derived rather than guessed at. */
-const lookAhead = 3.5;
 
 async function open(page: Page): Promise<number> {
   await fakeDevice(page);
@@ -135,53 +126,34 @@ async function open(page: Page): Promise<number> {
   return keyboardTop(page);
 }
 
-function rowFor(top: number, secondsAgo: number): number {
-  return (top / lookAhead) * secondsAgo;
-}
-
-/** Holds a key long enough for its bar to climb, then moves a wheel, so the
- * bar carries both an unbent stretch and a bent one. */
-async function strikeThenBend(page: Page, bend: number[]): Promise<void> {
+/** Which way a wheel throws a note, and how far, is arithmetic and is asserted
+ * exactly in src/lib/render/bend-shape.test.ts. What is left for a browser is
+ * whether the bytes a device sends reach the drawing at all. */
+test("a wheel the device sends reaches the roll", async ({ page }) => {
+  const top = await open(page);
   await page.evaluate(() => window.sendMidi([0x90, 60, 100]));
   await page.waitForTimeout(1400);
-  await page.evaluate((bytes) => window.sendMidi(bytes), bend);
-  await page.waitForTimeout(500);
-}
+  const straight = await litWidth(page, top);
 
-test("the bend wheel lays the note along the pitch it was played at", async ({
-  page,
-}) => {
-  const top = await open(page);
-  await strikeThenBend(page, [0xe0, 0x7f, 0x7f]);
+  await page.evaluate(() => window.sendMidi([0xe0, 0x7f, 0x7f]));
+  await page.waitForTimeout(600);
 
-  // The bend landed 0.5s ago over a note held 1.9s, so these rows sit either
-  // side of it with room to spare at any viewport.
-  const recent = await centreAbove(page, top, rowFor(top, 0.25));
-  const older = await centreAbove(page, top, rowFor(top, 1.2));
-  expect(recent).not.toBeNull();
-  expect(older).not.toBeNull();
-  expect(recent ?? 0).toBeGreaterThan((older ?? 0) + 15);
-});
-
-test("a bend down lays the note the other way", async ({ page }) => {
-  const top = await open(page);
-  await strikeThenBend(page, [0xe0, 0x00, 0x00]);
-
-  const recent = await centreAbove(page, top, rowFor(top, 0.25));
-  const older = await centreAbove(page, top, rowFor(top, 1.2));
-  expect(recent).not.toBeNull();
-  expect(older).not.toBeNull();
-  expect(recent ?? 0).toBeLessThan((older ?? 0) - 15);
+  expect(await litWidth(page, top)).toBeGreaterThan(straight + 10);
 });
 
 test("a wheel on another channel leaves the note alone", async ({ page }) => {
   const top = await open(page);
+  await page.evaluate(() => window.sendMidi([0x90, 60, 100]));
+  await page.waitForTimeout(1400);
+  const straight = await litWidth(page, top);
+
+  // Nothing lit would satisfy the comparison below on its own.
+  expect(straight).toBeGreaterThan(0);
+
   // The wheels are channel wide, so a bend on channel 2 must not touch a note
   // played on channel 1.
-  await strikeThenBend(page, [0xe1, 0x7f, 0x7f]);
+  await page.evaluate(() => window.sendMidi([0xe1, 0x7f, 0x7f]));
+  await page.waitForTimeout(600);
 
-  const recent = await centreAbove(page, top, rowFor(top, 0.25));
-  const older = await centreAbove(page, top, rowFor(top, 1.2));
-  expect(recent).not.toBeNull();
-  expect(Math.abs((recent ?? 0) - (older ?? 0))).toBeLessThan(10);
+  expect(await litWidth(page, top)).toBeLessThan(straight + 10);
 });

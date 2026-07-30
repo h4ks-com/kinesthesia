@@ -196,7 +196,7 @@ export class PlaybackEngine {
       throw new EngineReplaced();
     }
     if (this.transport === null) {
-      this.transport = new Transport(stage.context);
+      this.transport = new Transport(() => stage.context.currentTime);
       this.transport.seek(this.pendingPosition);
       this.transport.setRate(this.pendingRate);
     }

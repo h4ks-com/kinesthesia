@@ -79,3 +79,53 @@ describe("a trail that keeps everything", () => {
     expect(trail.at(0, 4.1).bend).toBe(0);
   });
 });
+
+describe("reading a span", () => {
+  it("reports a wheel still off centre from before the note began", () => {
+    const trail = new ExpressionTrail({ keepAll: true });
+    trail.setBend(0, 1, 0.5);
+    expect(trail.moves(0, 4, 5)).toBe(true);
+  });
+
+  it("reports movement inside the span", () => {
+    const trail = new ExpressionTrail({ keepAll: true });
+    trail.setBend(0, 4.5, 0.5);
+    expect(trail.moves(0, 4, 5)).toBe(true);
+  });
+
+  it("stays quiet for a span the wheels sat still through", () => {
+    const trail = new ExpressionTrail({ keepAll: true });
+    trail.setBend(0, 1, 0.5);
+    trail.setBend(0, 2, 0);
+    trail.setBend(0, 9, 1);
+    expect(trail.moves(0, 4, 5)).toBe(false);
+  });
+
+  it("ignores movement that lands after the span", () => {
+    const trail = new ExpressionTrail({ keepAll: true });
+    trail.setBend(0, 5.5, 1);
+    expect(trail.moves(0, 4, 5)).toBe(false);
+  });
+
+  it("counts the far edge of the span but not the near one", () => {
+    const opening = new ExpressionTrail({ keepAll: true });
+    opening.setBend(0, 4, 1);
+    // A movement exactly at the start is what the note opens on, so it is the
+    // held value rather than something that happens during the note.
+    expect(opening.between(0, 4, 5)).toEqual([]);
+
+    const closing = new ExpressionTrail({ keepAll: true });
+    closing.setBend(0, 5, 1);
+    expect(closing.between(0, 4, 5)).toHaveLength(1);
+  });
+
+  it("hands back only the span, in order", () => {
+    const trail = new ExpressionTrail({ keepAll: true });
+    for (const at of [1, 4.2, 4.6, 4.9, 7]) {
+      trail.setBend(0, at, 0.5);
+    }
+    expect(trail.between(0, 4, 5).map((sample) => sample.at)).toEqual([
+      4.2, 4.6, 4.9,
+    ]);
+  });
+});

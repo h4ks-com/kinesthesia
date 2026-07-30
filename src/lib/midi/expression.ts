@@ -81,16 +81,13 @@ export class ExpressionTrail {
     return last === undefined ? flat : { bend: last.bend, depth: last.depth };
   }
 
-  /** A wheel holds its value until it is moved again, so a time between
-   * samples reads the one before it. */
-  at(track: number, at: number): Expression {
-    const samples = this.tracks.get(track);
-    if (samples === undefined || samples.length === 0) {
-      return flat;
-    }
+  /** Index of the last sample at or before `at`, or -1 when the wheels had not
+   * moved yet. Samples are held in time order, so this bisects rather than
+   * walking: the roll asks about every note it draws, on every frame. */
+  private indexAt(samples: readonly Sample[], at: number): number {
     const first = samples[0];
     if (first === undefined || at < first.at) {
-      return flat;
+      return -1;
     }
     let low = 0;
     let high = samples.length - 1;
@@ -102,7 +99,17 @@ export class ExpressionTrail {
         high = mid - 1;
       }
     }
-    const found = samples[low];
+    return low;
+  }
+
+  /** A wheel holds its value until it is moved again, so a time between
+   * samples reads the one before it. */
+  at(track: number, at: number): Expression {
+    const samples = this.tracks.get(track);
+    if (samples === undefined) {
+      return flat;
+    }
+    const found = samples[this.indexAt(samples, at)];
     return found === undefined
       ? flat
       : { bend: found.bend, depth: found.depth };
@@ -111,9 +118,19 @@ export class ExpressionTrail {
   /** Every wheel movement inside a span, in order, so a note can be played with
    * its own shape written onto the voice rather than sampled once. */
   between(track: number, from: number, to: number): readonly Sample[] {
-    return (this.tracks.get(track) ?? []).filter(
-      (sample) => sample.at > from && sample.at <= to,
-    );
+    const samples = this.tracks.get(track);
+    if (samples === undefined) {
+      return [];
+    }
+    const span: Sample[] = [];
+    for (let i = this.indexAt(samples, from) + 1; i < samples.length; i += 1) {
+      const sample = samples[i];
+      if (sample === undefined || sample.at > to) {
+        break;
+      }
+      span.push(sample);
+    }
+    return span;
   }
 
   touched(track: number): boolean {
@@ -127,14 +144,20 @@ export class ExpressionTrail {
     if (samples === undefined) {
       return false;
     }
-    if (this.at(track, from).bend !== 0 || this.at(track, from).depth !== 0) {
+    const start = this.indexAt(samples, from);
+    const held = samples[start];
+    if (held !== undefined && (held.bend !== 0 || held.depth !== 0)) {
       return true;
     }
-    return samples.some(
-      (sample) =>
-        sample.at > from &&
-        sample.at <= to &&
-        (sample.bend !== 0 || sample.depth !== 0),
-    );
+    for (let i = start + 1; i < samples.length; i += 1) {
+      const sample = samples[i];
+      if (sample === undefined || sample.at > to) {
+        break;
+      }
+      if (sample.bend !== 0 || sample.depth !== 0) {
+        return true;
+      }
+    }
+    return false;
   }
 }

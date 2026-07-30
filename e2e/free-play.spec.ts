@@ -28,8 +28,12 @@ test("a plain gesture starts the device, since a midi key never can", async ({
   await page.goto("/play");
   await expect(page.locator("canvas")).toBeVisible();
 
-  // Nothing has been touched yet, so the browser has no reason to allow sound.
-  expect(await page.evaluate(() => window.__audioState())).toBe("suspended");
+  // Nothing has been touched yet, so a browser that gates audio behind a
+  // gesture is holding the device shut. One that does not gate it has already
+  // opened it, and then there is nothing here for a gesture to prove.
+  const before = await page.evaluate(() => window.__audioState());
+  test.skip(before === "running", "this browser starts audio unasked");
+  expect(before).toBe("suspended");
 
   await page
     .locator("canvas")

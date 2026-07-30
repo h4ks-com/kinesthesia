@@ -648,7 +648,6 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             octave={interactive ? input.octave : null}
             latencyOffset={latencyOffset}
             onLatencyOffset={(next) => changeLatency(next)}
-            measuredLatency={playback.latency()}
             showLatency={interactive}
             keyLabels={interactive && hasKeyboard ? showKeyLabels : null}
             onKeyLabels={changeKeyLabels}

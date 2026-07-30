@@ -479,7 +479,6 @@ export function PlayView({
             inputStatus={input.status}
             latencyOffset={0}
             onLatencyOffset={() => {}}
-            measuredLatency={0}
             showLatency={false}
             keyLabels={hasKeyboard ? showKeyLabels : null}
             onKeyLabels={onKeyLabels}

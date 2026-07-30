@@ -6,6 +6,7 @@ import {
 import { instrumentPitches, playedNote } from "@/lib/audio/sample-voices";
 import {
   type AudioStage,
+  buildStage,
   currentStage,
   silenceStage,
   wakeStage,
@@ -177,8 +178,6 @@ export class PlaybackEngine {
     return this.transport?.playing ?? false;
   }
 
-  // Browsers only allow an AudioContext to make sound if it was created or
-  // resumed inside a user gesture, so every entry point routes through here.
   /** Borrowed, never owned: the device and its recordings outlive any one
    * player, and building a second would compete with this one. */
   private get stage(): AudioStage | null {
@@ -207,9 +206,20 @@ export class PlaybackEngine {
   // fetch and decode a second copy of every instrument the voice player is about
   // to own, so those are left to its own lazy path, which only runs if the
   // recordings never arrive.
+  /** Builds the device without starting it: recordings decode into a suspended
+   * context, and there may be no gesture to start one with. */
   async warmInstruments(song: Song): Promise<void> {
-    await this.wake();
+    if (this.disposed) {
+      return;
+    }
+    buildStage();
     await Promise.all(this.warmFor(song, this.voicing));
+  }
+
+  /** Starts the device inside the gesture that asked for it, so a countdown can
+   * sound later without a click of its own. */
+  async unlock(): Promise<void> {
+    await this.wake();
   }
 
   async play(): Promise<void> {
@@ -273,14 +283,14 @@ export class PlaybackEngine {
     this.voiceFor(track)?.stop(pitch);
   }
 
-  /** What the browser adds between a scheduled note and the speaker. Judging
-   * subtracts it so a player who sounds on time also scores on time. */
+  /** What the graph adds between a scheduled note and the speaker. Judging
+   * subtracts it so a player who sounds on time also scores on time.
+   *
+   * The device buffer belongs to the timing offset a player sets by hand:
+   * Firefox answers `outputLatency` out of the audio backend and hangs the tab
+   * for good, so that property is never read. */
   get outputLatency(): number {
-    const context = this.stage?.context ?? null;
-    if (context === null) {
-      return 0;
-    }
-    return context.baseLatency + (context.outputLatency ?? 0);
+    return this.stage?.context.baseLatency ?? 0;
   }
 
   /** Ends this player: its notes stop and its clock is let go. The device and

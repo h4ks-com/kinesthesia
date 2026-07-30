@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/ui/popover";
 import { SliderRow } from "@/components/ui/slider-row";
 import { Toggle } from "@/components/ui/toggle";
-import { latencyAdvice, latencyRange } from "@/lib/audio/latency";
+import { latencyRange } from "@/lib/audio/latency";
 import type { InputStatus } from "@/lib/input/use-note-input";
 import { keyWidthRange } from "@/lib/render/keyboard";
 
@@ -20,7 +20,6 @@ type SettingsMenuProps = {
   inputStatus: InputStatus;
   latencyOffset: number;
   onLatencyOffset: (value: number) => void;
-  measuredLatency: number;
   showLatency: boolean;
   /** Null on a device with no pointer fine enough to imply a keyboard, where
    * lettering the keys would only be clutter. */
@@ -48,7 +47,6 @@ export function SettingsMenu({
   inputStatus,
   latencyOffset,
   onLatencyOffset,
-  measuredLatency,
   showLatency,
   keyLabels,
   onKeyLabels,
@@ -60,8 +58,6 @@ export function SettingsMenu({
   risingHeldBy,
   onPlainStyle,
 }: SettingsMenuProps) {
-  const advice = latencyAdvice(measuredLatency);
-
   return (
     <Popover
       label="Settings"
@@ -171,18 +167,7 @@ export function SettingsMenu({
           )}
 
           {showLatency ? (
-            <Section
-              title="Timing"
-              badge={
-                <span
-                  className={`ml-auto font-mono text-[0.7rem] ${
-                    advice === null ? "text-faint" : "text-danger"
-                  }`}
-                >
-                  output {Math.round(measuredLatency * 1000)}ms
-                </span>
-              }
-            >
+            <Section title="Timing">
               <SliderRow
                 ariaLabel="Timing offset in milliseconds"
                 min={latencyRange.min}
@@ -192,7 +177,10 @@ export function SettingsMenu({
                 valueText={`${latencyOffset > 0 ? "+" : ""}${latencyOffset}ms`}
                 onChange={onLatencyOffset}
               />
-              <Note>{advice ?? "Raise it if your playing scores late."}</Note>
+              <Note>
+                Your device's own delay is not measured. Raise this if your
+                playing scores late.
+              </Note>
             </Section>
           ) : null}
 

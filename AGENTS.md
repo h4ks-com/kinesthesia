@@ -51,6 +51,10 @@ a module.
   `requestAnimationFrame`.
 - Anything touching `window`, `AudioContext` or Web MIDI is client only and must
   not run during render.
+- Never read `AudioContext.outputLatency`. Firefox answers it out of the audio
+  backend and blocks the main thread there, which hangs the whole tab within a
+  few page loads. `baseLatency` is safe. Sample any device property once when
+  the device starts rather than during render.
 
 ## Design rules
 

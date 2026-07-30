@@ -31,7 +31,6 @@ type PlayerTransportProps = {
   inputStatus: InputStatus;
   latencyOffset: number;
   onLatencyOffset: (value: number) => void;
-  measuredLatency: number;
   showLatency: boolean;
   keyLabels: boolean | null;
   onKeyLabels: (show: boolean) => void;
@@ -62,7 +61,6 @@ export function PlayerTransport({
   inputStatus,
   latencyOffset,
   onLatencyOffset,
-  measuredLatency,
   showLatency,
   keyLabels,
   onKeyLabels,
@@ -232,7 +230,6 @@ export function PlayerTransport({
           inputStatus={inputStatus}
           latencyOffset={latencyOffset}
           onLatencyOffset={onLatencyOffset}
-          measuredLatency={measuredLatency}
           showLatency={showLatency}
           keyLabels={keyLabels}
           onKeyLabels={onKeyLabels}

@@ -139,6 +139,22 @@ export function PlayView({
     [],
   );
 
+  // Free roam sounds from a MIDI key, which is not a user gesture and so can
+  // never start the audio device itself. Firefox parks the promise of a resume
+  // it did not allow and never settles it, so the device is started from the
+  // first real gesture instead, whatever that turns out to be.
+  useEffect(() => {
+    const unlock = (): void => {
+      void engineRef.current?.unlock().catch(() => {});
+    };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
   const ensureRunning = useCallback(() => {
     if (startedRef.current) {
       return;

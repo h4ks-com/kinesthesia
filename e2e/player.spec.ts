@@ -210,7 +210,12 @@ test("space plays even when a control was just clicked", async ({ page }) => {
   await expect(simplify).toBeFocused();
 
   await page.keyboard.press("Space");
-  await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
+  // Where the press lands is what this asserts. Starting the audio device is
+  // what it then waits on, and a first play competes with the song being read
+  // and the roll drawing, which on a loaded machine takes a while.
+  await expect(page.getByRole("button", { name: "Pause" })).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(page).toHaveURL(/simple=1/);
 });
 

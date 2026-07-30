@@ -26,6 +26,9 @@ type PianoRollViewProps = {
   hiddenTracks: ReadonlySet<number>;
   keyWidth: number;
   focusPitch: number | null;
+  /** Brings the note the player is next asked for into view, where the keyboard
+   * is wider than the screen. */
+  follow: boolean;
   getPosition: () => number;
   getPressed: () => ReadonlySet<number>;
   getOwed: () => ReadonlySet<number>;
@@ -61,6 +64,7 @@ export function PianoRollView({
   hiddenTracks,
   keyWidth,
   focusPitch,
+  follow,
   getPosition,
   getPressed,
   getOwed,
@@ -119,6 +123,8 @@ export function PianoRollView({
   // as well as on a move: the pitch itself often has not changed.
   const focusRef = useRef(focusPitch);
   focusRef.current = focusPitch;
+  const followRef = useRef(follow);
+  followRef.current = follow;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -150,6 +156,7 @@ export function PianoRollView({
         pressed: getPressed(),
         owed: getOwed(),
         yours: getYours(),
+        follow: followRef.current,
         reach: reachRef.current,
         keyLabels: labelsRef.current,
         plain: plainRef.current,
@@ -272,6 +279,7 @@ export function PianoRollView({
       return;
     }
     if (gesture.kind === "pan") {
+      renderer.holdPan();
       renderer.setPan(gesture.pan - (event.clientX - gesture.x));
       return;
     }

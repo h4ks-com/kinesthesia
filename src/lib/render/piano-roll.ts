@@ -11,6 +11,7 @@ import {
   type SongNote,
 } from "@/lib/midi/song";
 import { bentRows, momentAt, type TimeAtHeight } from "@/lib/render/bend-shape";
+import { nextToPlay } from "@/lib/render/follow";
 import {
   blackKeyLeft,
   blackKeyWidth,
@@ -45,6 +46,10 @@ const roundNoteSize = 10;
 /** Past this a playhead jump is a seek, and the notes passed over never
  * landed, so they spark nothing. */
 const maxOnsetAdvance = 0.5;
+/** How quickly the view travels to the note it should be sitting on, and how
+ * long a finger's own panning wins. */
+const followEase = 0.14;
+const panHoldMs = 4000;
 /** Shading that gives the keys a body. Flat fills, since every one of these is
  * laid for every key of every frame. */
 const keybedFloor = "#0a0d14";
@@ -88,6 +93,9 @@ export type Frame = {
   /** Fills flat and drops the glow, the sparks and the ramps, for anyone who
    * would rather read the notes than watch them. */
   readonly plain: boolean;
+  /** Brings the note the player is next asked for into view, for a keyboard
+   * wider than the screen. */
+  readonly follow: boolean;
   /** Filled as the notes are drawn when a skin is behind the roll, so it can
    * answer to where they are without walking the song again. Null leaves the
    * roll opaque and costs nothing. */
@@ -157,6 +165,9 @@ export class PianoRollRenderer {
   private blackFace: CanvasGradient | null = null;
   private facesAt = -1;
   private pan = 0;
+  /** While a finger is panning, and for a while after, it decides where the
+   * view sits rather than the song. */
+  private panHeldUntil = 0;
   private keyWidth: number;
 
   constructor(
@@ -197,6 +208,12 @@ export class PianoRollRenderer {
     return this.pan;
   }
 
+  /** A finger has taken the view, so following stands off until they are done
+   * looking. */
+  holdPan(): void {
+    this.panHeldUntil = performance.now() + panHoldMs;
+  }
+
   setPan(value: number): void {
     this.pan = Math.min(this.metrics.maxPan, Math.max(0, value));
   }
@@ -216,6 +233,29 @@ export class PianoRollRenderer {
   centreOn(pitch: number): void {
     const { whiteWidth } = this.metrics;
     this.setPan(keyCenter(pitch, whiteWidth) - this.viewWidth / 2);
+  }
+
+  /** Eases the view toward the note the player is next asked for. Only ever
+   * moves where the keyboard is wider than the screen, which is a phone. */
+  private followNote(frame: Frame, whiteWidth: number, maxPan: number): void {
+    if (!frame.follow || maxPan <= 0 || performance.now() < this.panHeldUntil) {
+      return;
+    }
+    const pitch = nextToPlay(
+      frame.song,
+      frame.position,
+      frame.hiddenTracks,
+      frame.yours,
+      firstFrom(frame.song.notes, frame.position - this.maxNoteDuration),
+    );
+    if (pitch === null) {
+      return;
+    }
+    const want = Math.min(
+      maxPan,
+      Math.max(0, keyCenter(pitch, whiteWidth) - this.viewWidth / 2),
+    );
+    this.pan += (want - this.pan) * followEase;
   }
 
   pitchAt(x: number, y: number): number | null {
@@ -253,6 +293,7 @@ export class PianoRollRenderer {
     const keyboardTop = band.top;
     const { whiteWidth, total, maxPan } = this.metrics;
     this.pan = Math.min(maxPan, this.pan);
+    this.followNote(frame, whiteWidth, maxPan);
 
     if (frame.report === null) {
       ctx.fillStyle = "#060709";

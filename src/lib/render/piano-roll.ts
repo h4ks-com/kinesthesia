@@ -45,6 +45,12 @@ const roundNoteSize = 10;
 /** Past this a playhead jump is a seek, and the notes passed over never
  * landed, so they spark nothing. */
 const maxOnsetAdvance = 0.5;
+/** Shading that gives the keys a body. Flat fills, since every one of these is
+ * laid for every key of every frame. */
+const keybedFloor = "#0a0d14";
+const keyEdgeLight = "rgba(255,255,255,0.5)";
+const keyEdgeShade = "rgba(8,11,17,0.18)";
+const blackKeyLip = "rgba(146,158,180,0.42)";
 
 export type Frame = {
   readonly song: Song;
@@ -851,6 +857,21 @@ export class PianoRollRenderer {
         keyboardHeight - sink,
       );
       ctx.shadowBlur = 0;
+      // The bed a sunk key drops into, or the recess reads as a hole cut
+      // through to the roll behind.
+      if (sink > 0) {
+        ctx.fillStyle = keybedFloor;
+        ctx.fillRect(x + 0.5, keyboardTop, whiteWidth - 1, sink);
+      }
+      ctx.fillStyle = keyEdgeLight;
+      ctx.fillRect(x + 0.5, keyboardTop + sink, 1, keyboardHeight - sink);
+      ctx.fillStyle = keyEdgeShade;
+      ctx.fillRect(
+        x + whiteWidth - 1.5,
+        keyboardTop + sink,
+        1,
+        keyboardHeight - sink,
+      );
       // Washed before the black keys are laid over it, so the wash never spills
       // onto a black key sitting on top and the layering reads true.
       if (!frame.plain) {
@@ -858,9 +879,9 @@ export class PianoRollRenderer {
           pitch,
           active,
           x + 0.5,
-          keyboardTop,
+          keyboardTop + sink,
           whiteWidth - 1,
-          keyboardHeight,
+          keyboardHeight - sink,
         );
       }
     }
@@ -871,21 +892,39 @@ export class PianoRollRenderer {
       }
       const blackWidth = blackKeyWidth(whiteWidth);
       const x = blackKeyLeft(pitch, whiteWidth);
-      // The shadow a raised black key casts on the whites just past its tip.
-      ctx.fillStyle = "rgba(0,0,0,0.28)";
-      ctx.fillRect(x - 1, keyboardTop + blackHeight, blackWidth + 2, 4);
       const sink = active.has(pitch) || held.has(pitch) ? 2 : 0;
+      // The shadow a black key casts on the whites just past its tip. A key
+      // that has gone down sits nearer the bed, and its shadow shrinking is
+      // most of what reads as pressed.
+      ctx.fillStyle = sink > 0 ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.28)";
+      ctx.fillRect(
+        x - 1,
+        keyboardTop + blackHeight,
+        blackWidth + 2,
+        sink > 0 ? 1 : 4,
+      );
       this.setKeyPaint(frame, active, pitch, this.blackFace ?? "#0b0e15", 16);
       ctx.fillRect(x, keyboardTop + sink, blackWidth, blackHeight - sink);
       ctx.shadowBlur = 0;
+      if (sink > 0) {
+        ctx.fillStyle = keybedFloor;
+        ctx.fillRect(x, keyboardTop, blackWidth, sink);
+      } else {
+        // The front face of a key standing proud, where it turns toward the
+        // player.
+        ctx.fillStyle = blackKeyLip;
+        ctx.fillRect(x, keyboardTop + blackHeight - 2, blackWidth, 2);
+        ctx.fillStyle = keyEdgeLight;
+        ctx.fillRect(x, keyboardTop, 1, blackHeight - 2);
+      }
       if (!frame.plain) {
         this.washForeshadow(
           pitch,
           active,
           x,
-          keyboardTop,
+          keyboardTop + sink,
           blackWidth,
-          blackHeight,
+          blackHeight - sink,
         );
       }
     }

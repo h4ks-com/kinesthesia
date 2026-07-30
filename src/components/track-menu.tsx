@@ -156,7 +156,7 @@ export function TrackMenu({
             getPosition={getPosition}
             dots={liveDots.current}
             hidden={hidden}
-            getSounding={getSounding}
+            getSounding={getSounding ?? null}
           />
           {tracks.map((track) => {
             const visible = !hidden.has(track.index);
@@ -359,7 +359,7 @@ function DotPulse({
   getPosition: () => number;
   dots: Map<number, HTMLSpanElement>;
   hidden: ReadonlySet<number>;
-  getSounding?: () => Iterable<number>;
+  getSounding: (() => Iterable<number>) | null;
 }): null {
   useEffect(() => {
     // A short note only sounds for a frame or two, so each channel is held lit
@@ -375,7 +375,9 @@ function DotPulse({
       }
       last = now;
       const sounding =
-        getSounding?.() ?? soundingTracks(notes, getPosition(), hidden);
+        getSounding !== null
+          ? getSounding()
+          : soundingTracks(notes, getPosition(), hidden);
       for (const index of sounding) {
         litUntil.set(index, now + holdMs);
       }

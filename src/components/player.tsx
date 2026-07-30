@@ -655,14 +655,12 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             plainStyle={plainStyle}
             onPlainStyle={changePlainStyle}
             onPickSkin={
-              background.offered.length > 0
-                ? () => setPickingSkin(true)
-                : undefined
+              background.offered.length > 0 ? () => setPickingSkin(true) : null
             }
             skinName={background.skin?.name.toLowerCase() ?? "plain"}
-            onRising={background.canTurn ? background.turn : undefined}
+            onRising={background.canTurn ? background.turn : null}
             rising={background.direction === "up"}
-            risingHeldBy={background.heldBy?.name.toLowerCase()}
+            risingHeldBy={background.heldBy?.name.toLowerCase() ?? null}
             inputStatus={input.status}
             // A running match owns the clock, so nobody plays or seeks by hand.
             onToggle={matchActive ? null : () => void playback.toggle()}

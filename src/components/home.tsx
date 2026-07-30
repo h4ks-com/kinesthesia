@@ -45,8 +45,8 @@ type HomeProps = {
   /** Off where no object store is configured, so the offer is not made on a
    * server that cannot keep the file. */
   shareEnabled: boolean;
-  homeLink: string | null;
-  chatLink: string | null;
+  homeLink: string;
+  chatLink: string;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -527,26 +527,22 @@ export function Home({
         </Link>
 
         <span className="ml-auto flex items-center gap-4">
-          {homeLink === null ? null : (
-            <a
-              href={homeLink}
-              target="_blank"
-              rel="noreferrer"
-              className="transition-colors hover:text-accent"
-            >
-              h4ks
-            </a>
-          )}
-          {chatLink === null ? null : (
-            <a
-              href={chatLink}
-              target="_blank"
-              rel="noreferrer"
-              className="transition-colors hover:text-accent"
-            >
-              chat
-            </a>
-          )}
+          <a
+            href={homeLink}
+            target="_blank"
+            rel="noreferrer"
+            className="transition-colors hover:text-accent"
+          >
+            h4ks
+          </a>
+          <a
+            href={chatLink}
+            target="_blank"
+            rel="noreferrer"
+            className="transition-colors hover:text-accent"
+          >
+            chat
+          </a>
         </span>
       </footer>
     </>

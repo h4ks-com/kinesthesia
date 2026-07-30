@@ -660,11 +660,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             skinName={background.skin?.name.toLowerCase() ?? "plain"}
             onRising={background.canTurn ? background.turn : null}
             rising={background.direction === "up"}
-            risingHeldBy={
-              background.heldBy !== null
-                ? background.heldBy.name.toLowerCase()
-                : null
-            }
+            risingHeldBy={background.heldBy?.name.toLowerCase() ?? null}
             inputStatus={input.status}
             // A running match owns the clock, so nobody plays or seeks by hand.
             onToggle={matchActive ? null : () => void playback.toggle()}

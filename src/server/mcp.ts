@@ -901,12 +901,7 @@ function createMcpServer(): McpServer {
         addNotes(await loadProject(id), {
           ...(track !== undefined && { track }),
           ...(channel !== undefined && { channel }),
-          notes: notes.map((note) => ({
-            note: note.note,
-            at: note.at,
-            dur: note.dur,
-            ...(note.velocity !== undefined && { velocity: note.velocity }),
-          })),
+          notes,
         }),
       ),
   );
@@ -1004,7 +999,7 @@ export async function mcpHandler(c: Context): Promise<Response | undefined> {
       "www-authenticate": "Bearer",
     });
   }
-  // Stateless mode: no sessionIdGenerator, so the SDK skips session handling.
+  // Each request builds its own server, so there is no session to resume.
   const transport = new StreamableHTTPTransport();
   await createMcpServer().connect(transport);
   return transport.handleRequest(c);

@@ -1,34 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-const allKeys = [
-  "APP_BASE_URL",
-  "LOGTO_ENDPOINT",
-  "LOGTO_APP_ID",
-  "LOGTO_APP_SECRET",
-  "LOGTO_COOKIE_SECRET",
-  "MINIO_ENDPOINT",
-  "MINIO_ACCESS_KEY",
-  "MINIO_SECRET_KEY",
-  "MINIO_BUCKET",
-  "MINIO_PUBLIC_BASE",
-  "MINIO_USE_SSL",
-  "MINIO_REGION",
-  "MIDI_TRUSTED_ORIGINS",
-  "MCP_TOKEN_HASH",
-  "MIDI_MAX_BYTES",
-  "MIDI_SOURCE_PROXY_URL",
-  "DATABASE_URL",
-  "DATABASE_AUTH_TOKEN",
-  "NEXT_PUBLIC_TURN_URL",
-  "NEXT_PUBLIC_TURN_USERNAME",
-  "NEXT_PUBLIC_TURN_CREDENTIAL",
-  "NEXT_PUBLIC_HOME_LINK",
-  "NEXT_PUBLIC_CHAT_LINK",
-];
+import { envKeys } from "@/server/config";
 
 async function loadConfig(env: Record<string, string> = {}) {
-  for (const key of allKeys) {
-    vi.stubEnv(key, env[key] ?? "");
+  for (const key of envKeys) {
+    vi.stubEnv(key, env[key]);
   }
   vi.resetModules();
   return import("@/server/config");
@@ -96,14 +71,22 @@ describe("server config", () => {
     expect(config.trustedMidiOrigins).toContain("https://s3.example.com");
   });
 
-  it("falls back to the default byte limit for a non-numeric MIDI_MAX_BYTES", async () => {
-    const { config } = await loadConfig({ MIDI_MAX_BYTES: "not-a-number" });
-    expect(config.maxMidiBytes).toBe(5 * 1024 * 1024);
+  it("fails loudly on a non-numeric MIDI_MAX_BYTES", async () => {
+    await expect(
+      loadConfig({ MIDI_MAX_BYTES: "not-a-number" }),
+    ).rejects.toThrow(/MIDI_MAX_BYTES/);
   });
 
   it("fails loudly on a malformed APP_BASE_URL", async () => {
     await expect(loadConfig({ APP_BASE_URL: "not a url" })).rejects.toThrow(
       /APP_BASE_URL/,
     );
+  });
+
+  it("leaves the bucket null for a malformed MINIO_PUBLIC_BASE alone", async () => {
+    const { bucketConfig } = await loadConfig({
+      MINIO_PUBLIC_BASE: "not a url",
+    });
+    expect(bucketConfig).toBeNull();
   });
 });

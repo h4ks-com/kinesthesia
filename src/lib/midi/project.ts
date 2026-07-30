@@ -373,7 +373,7 @@ export function addNotes(
       note: string;
       at: string | number;
       dur: string | number;
-      velocity?: number;
+      velocity?: number | undefined;
     }[];
   },
 ): Project {

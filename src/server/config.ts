@@ -8,7 +8,6 @@ function blankToUndefined(value: unknown): unknown {
 }
 
 const optionalString = z.preprocess(blankToUndefined, z.string().optional());
-const optionalUrl = z.preprocess(blankToUndefined, z.url().optional());
 const urlOr = (fallback: string) =>
   z.preprocess(blankToUndefined, z.url().default(fallback));
 const stringOr = (fallback: string) =>
@@ -24,12 +23,18 @@ const envSchema = z.object({
   MINIO_ACCESS_KEY: optionalString,
   MINIO_SECRET_KEY: optionalString,
   MINIO_BUCKET: optionalString,
-  MINIO_PUBLIC_BASE: optionalUrl,
-  MINIO_USE_SSL: z.string().optional(),
+  MINIO_PUBLIC_BASE: optionalString,
+  MINIO_USE_SSL: z.preprocess(
+    blankToUndefined,
+    z.enum(["true", "false"]).default("true"),
+  ),
   MINIO_REGION: stringOr("us-east-1"),
   MIDI_TRUSTED_ORIGINS: z.string().optional(),
   MCP_TOKEN_HASH: optionalString,
-  MIDI_MAX_BYTES: z.string().optional(),
+  MIDI_MAX_BYTES: z.preprocess(
+    blankToUndefined,
+    z.coerce.number().int().positive().optional(),
+  ),
   MIDI_SOURCE_PROXY_URL: optionalString,
   DATABASE_URL: stringOr("file:./data/kinesthesia.db"),
   DATABASE_AUTH_TOKEN: optionalString,
@@ -39,6 +44,8 @@ const envSchema = z.object({
   NEXT_PUBLIC_HOME_LINK: stringOr("https://h4ks.com"),
   NEXT_PUBLIC_CHAT_LINK: stringOr("https://chat.h4ks.com"),
 });
+
+export const envKeys = Object.keys(envSchema.shape);
 
 const parsedEnv = envSchema.safeParse(process.env);
 if (!parsedEnv.success) {
@@ -93,7 +100,7 @@ export const bucketConfig: BucketConfig | null =
   env.MINIO_PUBLIC_BASE !== undefined
     ? {
         endpoint: env.MINIO_ENDPOINT,
-        useSsl: env.MINIO_USE_SSL !== "false",
+        useSsl: env.MINIO_USE_SSL === "true",
         region: env.MINIO_REGION,
         accessKey: env.MINIO_ACCESS_KEY,
         secretKey: env.MINIO_SECRET_KEY,
@@ -123,10 +130,7 @@ export const config = {
   /** sha256 of the API key the MCP endpoint requires as a bearer token. Null
    * leaves the endpoint open, which is only ever the case in a dev checkout. */
   mcpTokenHash: env.MCP_TOKEN_HASH ?? null,
-  maxMidiBytes:
-    Number(env.MIDI_MAX_BYTES) > 0
-      ? Number(env.MIDI_MAX_BYTES)
-      : defaultMaxMidiBytes,
+  maxMidiBytes: env.MIDI_MAX_BYTES ?? defaultMaxMidiBytes,
   // Some sources block datacenter IPs. Self-hosters on a blocked host set this;
   // everyone else goes direct.
   proxyUrl: env.MIDI_SOURCE_PROXY_URL ?? null,

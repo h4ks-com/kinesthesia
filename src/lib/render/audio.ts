@@ -136,7 +136,6 @@ export async function renderSongAudio(
  * A stop that cannot be booked falls back to placing the rest at once, which is
  * slow but complete; a stop that failed to resume would hang the render, so
  * resuming is the last thing each one does. */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: the loop is flat; the guard clauses read better inline
 function feedWhilePlaying(
   context: OfflineAudioContext,
   duration: number,

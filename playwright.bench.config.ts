@@ -11,5 +11,13 @@ export default defineConfig({
   reporter: "list",
   retries: 0,
   workers: 1,
-  projects: [{ name: "bench", use: { ...base.projects?.[0]?.use } }],
+  projects: [
+    {
+      name: "bench",
+      use: {
+        ...base.projects?.[0]?.use,
+        viewport: { width: 1280, height: 720 },
+      },
+    },
+  ],
 });

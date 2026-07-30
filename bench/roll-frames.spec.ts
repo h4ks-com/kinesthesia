@@ -2,7 +2,14 @@ import { expect, test } from "@playwright/test";
 import { Midi } from "@tonejs/midi";
 import { seenTour, serveMidi } from "../e2e/fixture";
 
+declare global {
+  interface Window {
+    __gaps: number[];
+  }
+}
+
 const denseUrl = "https://example.test/dense.mid";
+const sampled = 240;
 
 /** A dense passage with bends, which is the roll at its most expensive. */
 function denseMidi(): Uint8Array {
@@ -24,30 +31,23 @@ function denseMidi(): Uint8Array {
   return new Uint8Array(midi.toArray());
 }
 
-const sampleFrames = () => {
+const sampleFrames = (frames: number): void => {
   const gaps: number[] = [];
   let last = performance.now();
-  let count = 0;
   const tick = (): void => {
     const now = performance.now();
     gaps.push(now - last);
     last = now;
-    count += 1;
-    if (count < 240) {
+    if (gaps.length < frames) {
       requestAnimationFrame(tick);
     } else {
-      (window as unknown as { __gaps: number[] }).__gaps = gaps;
+      window.__gaps = gaps;
     }
   };
   requestAnimationFrame(tick);
 };
 
-test("roll frame cost on a dense, bent song", async ({ browser }) => {
-  const context = await browser.newContext({
-    baseURL: "http://localhost:3210",
-    viewport: { width: 1280, height: 720 },
-  });
-  const page = await context.newPage();
+test("roll frame cost on a dense, bent song", async ({ page }) => {
   await seenTour(page);
   await serveMidi(page, denseUrl, denseMidi());
   await page.goto(
@@ -61,22 +61,21 @@ test("roll frame cost on a dense, bent song", async ({ browser }) => {
     .waitFor({ state: "visible", timeout: 20_000 });
   await page.waitForTimeout(1500);
 
-  await page.evaluate(sampleFrames);
-  await page.waitForFunction(
-    () => (window as unknown as { __gaps?: number[] }).__gaps !== undefined,
-    undefined,
-    { timeout: 30_000 },
-  );
-  const gaps = await page.evaluate(
-    () => (window as unknown as { __gaps: number[] }).__gaps,
-  );
+  await page.evaluate(sampleFrames, sampled);
+  await page.waitForFunction(() => window.__gaps !== undefined, undefined, {
+    timeout: 30_000,
+  });
+  const gaps = await page.evaluate(() => window.__gaps);
+
   const sorted = [...gaps].sort((a, b) => a - b);
-  const at = (q: number) => sorted[Math.floor(sorted.length * q)] ?? 0;
-  const mean = gaps.reduce((s, g) => s + g, 0) / gaps.length;
+  const at = (quantile: number): number =>
+    sorted[Math.floor(sorted.length * quantile)] ?? 0;
+  const mean = gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length;
   console.log(
     `### frames=${gaps.length} mean=${mean.toFixed(2)}ms ` +
       `p50=${at(0.5).toFixed(2)}ms p95=${at(0.95).toFixed(2)}ms`,
   );
-  await context.close();
-  expect(gaps.length).toBeGreaterThan(0);
+  // A short sample is a misleading one, so a reading only counts if every frame
+  // asked for turned up.
+  expect(gaps).toHaveLength(sampled);
 });

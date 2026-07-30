@@ -141,9 +141,10 @@ for (const width of [390, 1280]) {
     await page.mouse.up();
 
     // The curve is stretched to fit its box, so the reading must not depend on
-    // how wide that box is.
+    // how wide that box is. Both readings allow a unit either way: a box that
+    // lands on a half pixel rounds differently between engines.
     await expect(page.getByText(/51\d ms in/)).toBeVisible();
-    await expect(page.getByText("75%")).toBeVisible();
+    await expect(page.getByText(/7[456]%/)).toBeVisible();
   });
 }
 

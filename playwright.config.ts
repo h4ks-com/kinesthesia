@@ -36,7 +36,7 @@ export default defineConfig({
       // pointer capture, storage. Reading lit pixels back off a canvas that is
       // still animating measures the rasteriser and the frame clock, which are
       // meant to differ, so those specs stay on one engine.
-      testIgnore: [/bend\.spec\.ts/, /sound\.spec\.ts/],
+      testIgnore: [/bend\.spec\.ts/],
     },
   ],
   webServer: {

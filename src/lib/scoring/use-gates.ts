@@ -22,6 +22,8 @@ export type Gates = {
   lastHit: Hit | null;
   owed: () => ReadonlySet<number>;
   judgeStrike: (pitch: number, position: number) => void;
+  /** How far each recent hit landed from the note it answered, in seconds. */
+  timing: () => readonly number[];
   moveTo: (position: number) => void;
   reset: () => void;
 };
@@ -35,6 +37,10 @@ type Options = {
   pause: () => void;
   resume: () => void;
 };
+
+/** Enough hits to read a habit from, and few enough that a player who fixes
+ * their offset stops being told about the old one. */
+const timedHitsKept = 24;
 
 export function useGates({
   owed,
@@ -51,6 +57,8 @@ export function useGates({
   const gatesRef = useRef<Gate[]>([]);
   const indexRef = useRef(0);
   const pendingRef = useRef<Set<number>>(new Set());
+  /** How far each recent hit landed from the note it answered. */
+  const timingRef = useRef<number[]>([]);
   const seqRef = useRef(0);
 
   const flag = useCallback((judgement: Judgement) => {
@@ -123,7 +131,14 @@ export function useGates({
         return;
       }
       pendingRef.current.delete(pitch);
-      const judgement = judge(position - gate.start);
+      const delta = position - gate.start;
+      // Kept so a player who is consistently behind can be told what their
+      // offset should be. The device's own delay cannot be asked for.
+      timingRef.current.push(delta);
+      if (timingRef.current.length > timedHitsKept) {
+        timingRef.current.shift();
+      }
+      const judgement = judge(delta);
       setScore((current) => applyJudgement(current, judgement));
       flag(judgement);
       if (pendingRef.current.size === 0) {
@@ -143,6 +158,7 @@ export function useGates({
     lastHit,
     owed: useCallback(() => pendingRef.current as ReadonlySet<number>, []),
     judgeStrike,
+    timing: useCallback(() => timingRef.current as readonly number[], []),
     moveTo: useCallback(
       (position: number) => openAt(gateIndexAt(gatesRef.current, position)),
       [openAt],
@@ -151,6 +167,7 @@ export function useGates({
       openAt(0);
       setScore(emptyScore);
       setLastHit(null);
+      timingRef.current.length = 0;
     }, [openAt]),
   };
 }

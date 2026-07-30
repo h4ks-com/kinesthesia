@@ -18,7 +18,7 @@ import { PlayerTransport, TransportBar } from "@/components/player-transport";
 import { RenderMenu } from "@/components/render-menu";
 import { SkinPicker } from "@/components/skin-picker";
 import { Walkthrough } from "@/components/walkthrough";
-import { judgedPosition } from "@/lib/audio/latency";
+import { judgedPosition, suggestedOffset } from "@/lib/audio/latency";
 import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
 import { useSongVoicing } from "@/lib/audio/use-song-voicing";
 import { keyLabelsFor, reachFor } from "@/lib/input/keyboard-map";
@@ -647,6 +647,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             onKeyWidth={(next) => changeKeyWidth(next)}
             octave={interactive ? input.octave : null}
             latencyOffset={latencyOffset}
+            suggestedLatency={suggestedOffset(gates.timing(), latencyOffset)}
             onLatencyOffset={(next) => changeLatency(next)}
             showLatency={interactive}
             keyLabels={interactive && hasKeyboard ? showKeyLabels : null}

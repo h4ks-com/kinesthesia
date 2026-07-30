@@ -40,13 +40,14 @@ async function keyboardPattern(page: Page): Promise<string> {
 
 async function walkTheSong(
   page: Page,
+  mode: "watch" | "learn",
   simple: boolean,
 ): Promise<{ opening: string; later: string }> {
   await page.setViewportSize({ width: 390, height: 780 });
   await seenTour(page);
   await serveMidi(page, wideUrl, wideMidi());
   await page.goto(
-    `/watch?url=${encodeURIComponent(wideUrl)}&name=Wide&source=url${
+    `/${mode}?url=${encodeURIComponent(wideUrl)}&name=Wide&source=url${
       simple ? "&simple=1" : ""
     }`,
   );
@@ -58,7 +59,7 @@ async function walkTheSong(
 }
 
 test("one note at a time brings the keyboard to the note", async ({ page }) => {
-  const { opening, later } = await walkTheSong(page, true);
+  const { opening, later } = await walkTheSong(page, "learn", true);
   expect(opening.length).toBeGreaterThan(10);
   expect(later).not.toBe(opening);
 });
@@ -66,7 +67,17 @@ test("one note at a time brings the keyboard to the note", async ({ page }) => {
 test("the whole part leaves the keyboard where the player put it", async ({
   page,
 }) => {
-  const { opening, later } = await walkTheSong(page, false);
+  const { opening, later } = await walkTheSong(page, "learn", false);
+  expect(opening.length).toBeGreaterThan(10);
+  expect(later).toBe(opening);
+});
+
+test("watching never moves the keyboard, since nothing is owed", async ({
+  page,
+}) => {
+  // Simplify reduces the part a player owes, and watching owes none, so the
+  // view has no single note to come to and must sit still.
+  const { opening, later } = await walkTheSong(page, "watch", true);
   expect(opening.length).toBeGreaterThan(10);
   expect(later).toBe(opening);
 });

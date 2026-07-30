@@ -599,9 +599,10 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
               hiddenTracks={hiddenTracks}
               keyWidth={keyWidth}
               focusPitch={focusPitch}
-              // One note at a time is the mode a phone can actually play, and
-              // only then is there a single note worth bringing into view.
-              follow={simplified}
+              // Only where there is a part to play: watching reduces nothing,
+              // so there would be no single note to come to, and the view
+              // would wander the song.
+              follow={simplified && interactive}
               getPosition={playback.getPosition}
               getPressed={input.pressed}
               getOwed={gates.owed}

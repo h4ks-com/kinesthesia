@@ -133,6 +133,8 @@ src/lib/
   render/export.ts            the watch view as a render job: size, frame, files
   render/audio.ts             offline audio render to a WAV, at the live voicing
   render/video.ts             offline video render, WebCodecs with a recorder fallback
+  render/video-support.ts     what this browser can encode, without loading an
+                              encoder to find out
   input/keyboard-map.ts       computer keyboard to pitch
   input/web-midi.ts           MIDI devices, including hot plug
   scoring/judge.ts            hit windows, combo and accuracy

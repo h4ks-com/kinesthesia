@@ -211,10 +211,13 @@ export function RenderMenu({
           <Choice
             icon={<Film className="size-4" aria-hidden="true" />}
             title="Video"
+            // Which container it lands in depends on what the browser can
+            // encode, and the saved file carries its own name, so the offer
+            // promises the picture rather than the format.
             note={
               isFastVideo()
-                ? "mp4, keyboard and notes"
-                : "mp4, recorded in real time"
+                ? "the keyboard and the notes"
+                : "recorded in real time"
             }
             disabled={!canRenderVideo()}
             onClick={() => void run("video")}

@@ -12,6 +12,7 @@ import {
 } from "@/lib/render/export";
 import { keyWidthRange } from "@/lib/render/keyboard";
 import { PianoRollRenderer, type SkinReport } from "@/lib/render/piano-roll";
+import { hasWebCodecs } from "@/lib/render/video-support";
 
 export type VideoProgress = (fraction: number) => void;
 
@@ -54,20 +55,6 @@ const recorderMimes = [
   { type: "video/webm;codecs=vp9,opus", extension: "webm" },
   { type: "video/webm", extension: "webm" },
 ] as const;
-
-const hasWebCodecs = (): boolean =>
-  typeof VideoEncoder !== "undefined" && typeof AudioEncoder !== "undefined";
-
-/** Whether this browser can produce a video at all, by either path. */
-export function canRenderVideo(): boolean {
-  return hasWebCodecs() || typeof MediaRecorder !== "undefined";
-}
-
-/** True when the render will run faster than real time, so the caller can
- * promise a quick job rather than one the length of the song. */
-export function isFastVideo(): boolean {
-  return hasWebCodecs();
-}
 
 export async function renderSongVideo(
   config: RenderConfig,

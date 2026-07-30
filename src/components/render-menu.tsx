@@ -14,18 +14,13 @@ import { createPortal } from "react-dom";
 import { Popover } from "@/components/ui/popover";
 import type { SongVoicing } from "@/lib/audio/voicing";
 import type { Song } from "@/lib/midi/song";
-import { audioToWav, renderSongAudio } from "@/lib/render/audio";
 import {
   downloadBlob,
   exportFilename,
   type RenderConfig,
   renderDuration,
 } from "@/lib/render/export";
-import {
-  canRenderVideo,
-  isFastVideo,
-  renderSongVideo,
-} from "@/lib/render/video";
+import { canRenderVideo, isFastVideo } from "@/lib/render/video-support";
 import type { NoteDirection, Skin } from "@/lib/skins/types";
 
 type RenderMenuProps = {
@@ -126,6 +121,9 @@ export function RenderMenu({
         return { ...current, progress };
       });
     try {
+      const { renderSongAudio, audioToWav } = await import(
+        "@/lib/render/audio"
+      );
       const audio = await renderSongAudio(config, onStep);
       if (controller.signal.aborted) {
         return;
@@ -135,6 +133,7 @@ export function RenderMenu({
         return;
       }
       begin("Encoding video", true, 0);
+      const { renderSongVideo } = await import("@/lib/render/video");
       const video = await renderSongVideo(
         config,
         audio,

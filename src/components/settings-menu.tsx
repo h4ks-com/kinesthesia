@@ -27,16 +27,16 @@ type SettingsMenuProps = {
   keyLabels: boolean | null;
   onKeyLabels: (show: boolean) => void;
   plainStyle: boolean;
-  /** Absent where a mode has no skin to offer. */
-  onPickSkin?: () => void;
-  skinName?: string;
-  /** Absent where the notes have to be read coming and cannot be turned
+  /** Null where a mode has no skin to offer. */
+  onPickSkin: (() => void) | null;
+  skinName: string | null;
+  /** Null where the notes have to be read coming and cannot be turned
    * around. */
-  onRising?: (rising: boolean) => void;
-  rising?: boolean;
+  onRising: ((rising: boolean) => void) | null;
+  rising: boolean;
   /** The background that decides the direction on its own, where one does.
    * Named so the row can say why it will not move. */
-  risingHeldBy?: string;
+  risingHeldBy: string | null;
   onPlainStyle: (plain: boolean) => void;
 };
 
@@ -54,9 +54,9 @@ export function SettingsMenu({
   onKeyLabels,
   plainStyle,
   onPickSkin,
-  skinName = "plain",
+  skinName,
   onRising,
-  rising = false,
+  rising,
   risingHeldBy,
   onPlainStyle,
 }: SettingsMenuProps) {
@@ -104,20 +104,20 @@ export function SettingsMenu({
               onChange={onPlainStyle}
               tip="Flat colour, no glow, no sparks and no background. Calmer to read, and lighter on a slow device."
             />
-            {onRising === undefined ? null : (
+            {onRising === null ? null : (
               <Toggle
                 label="notes rise"
                 checked={rising}
                 onChange={onRising}
-                disabled={plainStyle || risingHeldBy !== undefined}
+                disabled={plainStyle || risingHeldBy !== null}
                 tip={
-                  risingHeldBy === undefined
+                  risingHeldBy === null
                     ? "Sends the notes out of the keys as they sound instead of onto them. A look, not a way to read ahead."
                     : `${risingHeldBy} only reads with the notes going this way. Pick another background to turn them around.`
                 }
               />
             )}
-            {onPickSkin === undefined ? null : (
+            {onPickSkin === null ? null : (
               <button
                 type="button"
                 disabled={plainStyle}

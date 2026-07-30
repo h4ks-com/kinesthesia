@@ -36,11 +36,11 @@ type PlayerTransportProps = {
   keyLabels: boolean | null;
   onKeyLabels: (show: boolean) => void;
   plainStyle: boolean;
-  onPickSkin?: () => void;
-  skinName?: string;
-  onRising?: (rising: boolean) => void;
-  rising?: boolean;
-  risingHeldBy?: string;
+  onPickSkin: (() => void) | null;
+  skinName: string | null;
+  onRising: ((rising: boolean) => void) | null;
+  rising: boolean;
+  risingHeldBy: string | null;
   onPlainStyle: (plain: boolean) => void;
   /** Null once a round owns the clock, leaving the bar to report it. */
   onToggle: (() => void) | null;

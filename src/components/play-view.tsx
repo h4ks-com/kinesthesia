@@ -487,6 +487,9 @@ export function PlayView({
             onPlainStyle={onPlainStyle}
             onPickSkin={() => setPickingSkin(true)}
             skinName={background.skin?.name.toLowerCase() ?? "plain"}
+            onRising={null}
+            rising={true}
+            risingHeldBy={null}
           />
         </footer>
       )}

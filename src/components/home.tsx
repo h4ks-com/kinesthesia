@@ -457,13 +457,11 @@ export function Home({
                 favorite={favoriteKeys.has(entry.key)}
                 onToggleFavorite={() => void onToggleFavorite(entry)}
                 signedIn={authEnabled && viewer !== null}
-                onShare={
-                  !shareEnabled
-                    ? undefined
-                    : isLocalUrl(entry.url)
-                      ? () => shareUpload(entry)
-                      : null
-                }
+                {...(shareEnabled && {
+                  onShare: isLocalUrl(entry.url)
+                    ? () => shareUpload(entry)
+                    : null,
+                })}
                 onRemove={() =>
                   void deleteUpload(entry.url).then(refreshLibrary)
                 }

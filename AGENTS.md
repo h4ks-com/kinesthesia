@@ -15,13 +15,12 @@ bun run dev        # dev server on :3000
 bun run ci         # lint, typecheck, test, build. This is what CI runs
 bun run test       # unit and component tests
 bun run test:e2e   # Playwright
-bun run bench      # roll frame timings, headless Chromium, not part of CI
+bun run bench      # roll frame timings, before and after a draw loop change
 bun run lint:fix   # Biome autofix
 ```
 
-`bench` measures a machine rather than asserting behaviour, so it stays out of
-CI. Read it before and after a change to the draw loop, and compare only
-readings taken on the same machine.
+`bench` times a machine rather than asserting behaviour, so it stays out of CI
+and only readings from the same machine compare.
 
 Git hooks and GitHub Actions both call these same scripts, so every check has
 exactly one definition. Change a check in `package.json` and both follow.
@@ -57,9 +56,9 @@ a module.
 - Anything touching `window`, `AudioContext` or Web MIDI is client only and must
   not run during render.
 - Never read `AudioContext.outputLatency`. Firefox answers it out of the audio
-  backend and blocks the main thread there, which hangs the whole tab within a
-  few page loads. `baseLatency` is safe. Sample any device property once when
-  the device starts rather than during render.
+  backend and blocks the main thread there, hanging the whole tab within a few
+  page loads. `baseLatency` is safe. Sample a device property once when the
+  device starts, not during render.
 
 ## Design rules
 

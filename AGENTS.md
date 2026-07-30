@@ -15,8 +15,13 @@ bun run dev        # dev server on :3000
 bun run ci         # lint, typecheck, test, build. This is what CI runs
 bun run test       # unit and component tests
 bun run test:e2e   # Playwright
+bun run bench      # roll frame timings, headless Chromium, not part of CI
 bun run lint:fix   # Biome autofix
 ```
+
+`bench` measures a machine rather than asserting behaviour, so it stays out of
+CI. Read it before and after a change to the draw loop, and compare only
+readings taken on the same machine.
 
 Git hooks and GitHub Actions both call these same scripts, so every check has
 exactly one definition. Change a check in `package.json` and both follow.

@@ -29,11 +29,6 @@ export default defineConfig({
             "webgl.force-enabled": true,
             "webgl.disable-fail-if-major-performance-caveat": true,
             "gfx.webrender.software": true,
-            // The song clock is the audio clock, so a context that never
-            // starts is a player that never moves. The gesture policy is the
-            // browser's to enforce, not ours to test.
-            "media.autoplay.default": 0,
-            "media.autoplay.blocking_policy": 0,
           },
         },
       },

@@ -490,6 +490,7 @@ export function PlayView({
             onOctave={input.setOctave}
             inputStatus={input.status}
             latencyOffset={0}
+            suggestedLatency={null}
             onLatencyOffset={() => {}}
             showLatency={false}
             keyLabels={hasKeyboard ? showKeyLabels : null}

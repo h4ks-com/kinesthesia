@@ -23,3 +23,28 @@ export function judgedPosition(
     position - sincePress - outputLatency - offsetMilliseconds / 1000,
   );
 }
+
+/** Hits to see before the drift in them means anything, and the drift worth
+ * mentioning. Below this a player is just human. */
+const timedHits = 12;
+const noticeableDriftMs = 30;
+
+/** Where the offset should sit, read from how late or early a player's own hits
+ * keep landing. The device's delay cannot be asked for, so the playing is the
+ * only evidence there is. Null while the hits say nothing. */
+export function suggestedOffset(
+  deltas: readonly number[],
+  current: number,
+): number | null {
+  if (deltas.length < timedHits) {
+    return null;
+  }
+  const sorted = [...deltas].sort((left, right) => left - right);
+  const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
+  const drift = Math.round(median * 1000);
+  if (Math.abs(drift) < noticeableDriftMs) {
+    return null;
+  }
+  const next = clampLatency(current + drift);
+  return next === current ? null : next;
+}

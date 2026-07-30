@@ -30,6 +30,7 @@ type PlayerTransportProps = {
   octave: number | null;
   inputStatus: InputStatus;
   latencyOffset: number;
+  suggestedLatency: number | null;
   onLatencyOffset: (value: number) => void;
   showLatency: boolean;
   keyLabels: boolean | null;
@@ -60,6 +61,7 @@ export function PlayerTransport({
   octave,
   inputStatus,
   latencyOffset,
+  suggestedLatency,
   onLatencyOffset,
   showLatency,
   keyLabels,
@@ -229,6 +231,7 @@ export function PlayerTransport({
           onOctave={onOctave}
           inputStatus={inputStatus}
           latencyOffset={latencyOffset}
+          suggestedLatency={suggestedLatency}
           onLatencyOffset={onLatencyOffset}
           showLatency={showLatency}
           keyLabels={keyLabels}

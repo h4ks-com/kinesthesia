@@ -1,5 +1,6 @@
 import { MissingSong } from "@/components/missing-song";
 import { Multiplayer } from "@/components/multiplayer";
+import { brokerFrom } from "@/lib/multiplayer/broker";
 import { iceServers } from "@/lib/multiplayer/ice";
 import { parsePlayerParams } from "@/lib/player-url";
 import { type RouteSearchParams, toSearchParams } from "@/lib/search-params";
@@ -25,6 +26,7 @@ export default async function MultiplayerPage({
       playerName={query.get("player") ?? "Player"}
       joinCode={joinCode}
       trustedOrigins={config.trustedMidiOrigins}
+      broker={brokerFrom(config.peerServer)}
       ice={iceServers(
         config.turnUrl,
         config.turnUsername,

@@ -20,6 +20,9 @@ type SettingsMenuProps = {
   inputStatus: InputStatus;
   latencyOffset: number;
   onLatencyOffset: (value: number) => void;
+  /** Where the player's own hits say the offset should sit, once enough of them
+   * have been timed. Null while they say nothing. */
+  suggestedLatency: number | null;
   showLatency: boolean;
   /** Null on a device with no pointer fine enough to imply a keyboard, where
    * lettering the keys would only be clutter. */
@@ -47,6 +50,7 @@ export function SettingsMenu({
   inputStatus,
   latencyOffset,
   onLatencyOffset,
+  suggestedLatency,
   showLatency,
   keyLabels,
   onKeyLabels,
@@ -177,10 +181,25 @@ export function SettingsMenu({
                 valueText={`${latencyOffset > 0 ? "+" : ""}${latencyOffset}ms`}
                 onChange={onLatencyOffset}
               />
-              <Note>
-                Your device's own delay is not measured. Raise this if your
-                playing scores late.
-              </Note>
+              {suggestedLatency === null ? (
+                <Note>
+                  Your device's own delay is not measured. Raise this if your
+                  playing scores late.
+                </Note>
+              ) : (
+                <Note>
+                  Your hits are landing{" "}
+                  {Math.abs(suggestedLatency - latencyOffset)}ms{" "}
+                  {suggestedLatency > latencyOffset ? "late" : "early"}.{" "}
+                  <button
+                    type="button"
+                    className="underline underline-offset-2 hover:text-bright"
+                    onClick={() => onLatencyOffset(suggestedLatency)}
+                  >
+                    Set the offset to {suggestedLatency}ms
+                  </button>
+                </Note>
+              )}
             </Section>
           ) : null}
 

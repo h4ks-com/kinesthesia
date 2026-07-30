@@ -104,6 +104,8 @@ src/lib/
   tour/steps.ts               what the walkthrough points at, per mode
   tour/use-walkthrough.ts     first-run auto play and the replay it hands back
   render/keyboard.ts          key geometry, sizing and the pitch under a point
+  render/bend-shape.ts        where a bar sits row by row once the wheels have
+                              moved under it, as arithmetic with no canvas
   render/piano-roll.ts        draws notes, keyboard, glow and the bend trace,
                               and play mode's live notes rising from the keys
   render/sparks.ts            the swarm thrown up from the keys, and its ceiling

@@ -38,6 +38,7 @@ const envSchema = z.object({
   MIDI_SOURCE_PROXY_URL: optionalString,
   DATABASE_URL: stringOr("file:./data/kinesthesia.db"),
   DATABASE_AUTH_TOKEN: optionalString,
+  NEXT_PUBLIC_PEER_SERVER: optionalString,
   NEXT_PUBLIC_TURN_URL: optionalString,
   NEXT_PUBLIC_TURN_USERNAME: optionalString,
   NEXT_PUBLIC_TURN_CREDENTIAL: optionalString,
@@ -136,6 +137,9 @@ export const config = {
   proxyUrl: env.MIDI_SOURCE_PROXY_URL ?? null,
   databaseUrl: env.DATABASE_URL,
   databaseAuthToken: env.DATABASE_AUTH_TOKEN ?? null,
+  /** Where players find each other. Unset leaves PeerJS on its public broker,
+   * which is a free service outside this deployment's control. */
+  peerServer: env.NEXT_PUBLIC_PEER_SERVER ?? null,
   turnUrl: env.NEXT_PUBLIC_TURN_URL ?? null,
   turnUsername: env.NEXT_PUBLIC_TURN_USERNAME ?? null,
   turnCredential: env.NEXT_PUBLIC_TURN_CREDENTIAL ?? null,

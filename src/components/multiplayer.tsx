@@ -14,6 +14,7 @@ import {
   transposeSong,
 } from "@/lib/midi/song";
 import { useSong } from "@/lib/midi/use-song";
+import type { Broker } from "@/lib/multiplayer/broker";
 import type { IceServer } from "@/lib/multiplayer/ice";
 import {
   battleOutcome,
@@ -54,6 +55,8 @@ type MultiplayerProps = {
   params: PlayerParams | null;
   playerName: string;
   ice: readonly IceServer[];
+  /** Null leaves PeerJS on its own public broker. */
+  broker: Broker | null;
   joinCode: string | null;
   /** Origins a raw song url may come from, resolved server side so it holds at
    * runtime rather than being baked into the bundle. */
@@ -105,6 +108,7 @@ export function Multiplayer({
   params,
   playerName,
   ice,
+  broker,
   joinCode,
   trustedOrigins,
   viewerId = null,
@@ -447,14 +451,17 @@ export function Multiplayer({
       });
       const { Peer } = await import("peerjs");
       peerRef.current?.destroy();
-      const peer = new Peer({ config: { iceServers: [...ice] } });
+      const peer = new Peer({
+        ...(broker ?? {}),
+        config: { iceServers: [...ice] },
+      });
       peerRef.current = peer;
       peer.on("error", (error) =>
         setConnection({ status: "failed", message: error.message }),
       );
       peer.on("open", () => attach(peer.connect(room.peerId)));
     },
-    [attach, ice],
+    [attach, ice, broker],
   );
 
   async function invite(): Promise<void> {
@@ -465,7 +472,10 @@ export function Multiplayer({
     setConnection({ status: "opening" });
     const { Peer } = await import("peerjs");
     peerRef.current?.destroy();
-    const peer = new Peer({ config: { iceServers: [...ice] } });
+    const peer = new Peer({
+      ...(broker ?? {}),
+      config: { iceServers: [...ice] },
+    });
     peerRef.current = peer;
     peer.on("error", (error) =>
       setConnection({ status: "failed", message: error.message }),

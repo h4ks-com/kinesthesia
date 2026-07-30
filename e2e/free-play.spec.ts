@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 declare global {
   interface Window {
-    __audioState: () => string;
+    __audioState: () => AudioContextState | "none";
   }
 }
 
@@ -17,7 +17,7 @@ const watchAudio = () => {
       made = this;
     }
   }
-  window.AudioContext = Watched as unknown as typeof AudioContext;
+  window.AudioContext = Watched;
   window.__audioState = () => made?.state ?? "none";
 };
 
@@ -29,9 +29,8 @@ test("a plain gesture starts the device, since a midi key never can", async ({
   await expect(page.locator("canvas")).toBeVisible();
 
   // Nothing has been touched yet, so the browser has no reason to allow sound.
-  expect(await page.evaluate(() => window.__audioState())).not.toBe("running");
+  expect(await page.evaluate(() => window.__audioState())).toBe("suspended");
 
-  // A click on the surface, not on any transport control.
   await page
     .locator("canvas")
     .first()
@@ -42,4 +41,10 @@ test("a plain gesture starts the device, since a midi key never can", async ({
       timeout: 15_000,
     })
     .toBe("running");
+
+  // Still inviting a first note, so the device was started by the gesture
+  // rather than by anything the click played.
+  await expect(
+    page.getByText("press a key or tap to start the sound"),
+  ).toBeVisible();
 });

@@ -129,22 +129,31 @@ for (const width of [390, 1280]) {
     expect(handle?.x ?? 0).toBeGreaterThanOrEqual(frame?.x ?? 0);
 
     await page.mouse.move(
-      (handle?.x ?? 0) + (handle?.width ?? 0) / 2,
-      (handle?.y ?? 0) + (handle?.height ?? 0) / 2,
+      Math.round((handle?.x ?? 0) + (handle?.width ?? 0) / 2),
+      Math.round((handle?.y ?? 0) + (handle?.height ?? 0) / 2),
     );
     await page.mouse.down();
+    // Whole pixels: engines disagree on where a fractional pointer lands, and
+    // the readings move about 12ms and 2% for every pixel of it.
     await page.mouse.move(
-      (frame?.x ?? 0) + (frame?.width ?? 0) * 0.2,
-      (frame?.y ?? 0) + (frame?.height ?? 0) * 0.5,
+      Math.round((frame?.x ?? 0) + (frame?.width ?? 0) * 0.2),
+      Math.round((frame?.y ?? 0) + (frame?.height ?? 0) * 0.5),
       { steps: 8 },
     );
     await page.mouse.up();
 
+    const readout = await page
+      .locator("svg.touch-none")
+      .evaluate((element) => element.parentElement?.textContent ?? "");
+    const attack = Number(/(\d+) ms in/.exec(readout)?.[1] ?? Number.NaN);
+    const volume = Number(/(\d+)%/.exec(readout)?.[1] ?? Number.NaN);
     // The curve is stretched to fit its box, so the reading must not depend on
-    // how wide that box is. Both readings allow a unit either way: a box that
-    // lands on a half pixel rounds differently between engines.
-    await expect(page.getByText(/51\d ms in/)).toBeVisible();
-    await expect(page.getByText(/7[456]%/)).toBeVisible();
+    // how wide that box is. A pixel of pointer rounding is worth about 12ms and
+    // 2% here, so both allow a pixel either way rather than pinning a number.
+    expect(attack).toBeGreaterThanOrEqual(504);
+    expect(attack).toBeLessThanOrEqual(534);
+    expect(volume).toBeGreaterThanOrEqual(72);
+    expect(volume).toBeLessThanOrEqual(77);
   });
 }
 

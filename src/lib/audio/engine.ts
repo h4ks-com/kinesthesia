@@ -115,6 +115,23 @@ export class PlaybackEngine {
   /** Set once and never cleared: an engine the player has replaced must never
    * come back, whatever was still awaiting inside it. */
   private disposed = false;
+  private readonly releaseGesture: () => void;
+
+  // A note can arrive from a MIDI key or a countdown, neither of which is a
+  // user gesture, and Firefox parks the promise of a resume it did not allow
+  // and never settles it. The first real gesture on the page starts the device
+  // so those paths find it already running.
+  constructor() {
+    const unlock = (): void => {
+      void this.wake().catch(() => {});
+    };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    this.releaseGesture = () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }
 
   setSong(song: Song, autoNotes: ReadonlySet<number>): void {
     this.song = song;
@@ -297,6 +314,7 @@ export class PlaybackEngine {
    * the recordings stay up for whoever comes next. */
   dispose(): void {
     this.disposed = true;
+    this.releaseGesture();
     if (this.timer !== null) {
       clearInterval(this.timer);
       this.timer = null;

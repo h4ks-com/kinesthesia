@@ -11,7 +11,7 @@ import {
   useState,
 } from "react";
 import { LibrarySection } from "@/components/library-section";
-import { noShare, SongRow } from "@/components/song-row";
+import { SongRow } from "@/components/song-row";
 import { TopBar } from "@/components/top-bar";
 import { ConfirmButton } from "@/components/ui/confirm-button";
 import { defaultMelodyRate } from "@/lib/midi/melody";
@@ -392,7 +392,7 @@ export function Home({
                     source: result.source,
                   })
                 }
-                share={noShare}
+                share={null}
               />
             ))}
           </Section>
@@ -425,7 +425,7 @@ export function Home({
                 plays={null}
                 favorite
                 onToggleFavorite={() => void onToggleFavorite(entry)}
-                share={noShare}
+                share={null}
               />
             ))}
           </LibrarySection>
@@ -459,13 +459,7 @@ export function Home({
                 favorite={favoriteKeys.has(entry.key)}
                 onToggleFavorite={() => void onToggleFavorite(entry)}
                 signedIn={authEnabled && viewer !== null}
-                share={
-                  shareEnabled
-                    ? isLocalUrl(entry.url)
-                      ? { kind: "ready", publish: () => shareUpload(entry) }
-                      : { kind: "published" }
-                    : noShare
-                }
+                share={shareEnabled ? () => shareUpload(entry) : null}
                 onRemove={() =>
                   void deleteUpload(entry.url).then(refreshLibrary)
                 }
@@ -501,7 +495,7 @@ export function Home({
                 plays={null}
                 favorite={favoriteKeys.has(entry.key)}
                 onToggleFavorite={() => void onToggleFavorite(entry)}
-                share={noShare}
+                share={null}
               />
             ))}
           </LibrarySection>

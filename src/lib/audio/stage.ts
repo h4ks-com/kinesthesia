@@ -26,10 +26,11 @@ export function currentStage(): AudioStage | null {
   return stage;
 }
 
-/** The stage, running. Browsers only allow a context to sound if it was created
- * or resumed inside a user gesture, so every entry point routes through here. */
-export async function wakeStage(): Promise<AudioStage> {
-  unmuteWebAudio();
+/** The stage, built but not started. Opening the audio device costs the better
+ * part of a second, and it may be done at any time, so anything that only needs
+ * somewhere to decode into asks for this and leaves the first play that much
+ * shorter. */
+export function buildStage(): AudioStage {
   if (stage === null) {
     const context = new AudioContext({ latencyHint: 0 });
     stage = {
@@ -38,10 +39,19 @@ export async function wakeStage(): Promise<AudioStage> {
       voices: new SampleVoices(context),
     };
   }
-  if (stage.context.state !== "running") {
-    await stage.context.resume();
-  }
   return stage;
+}
+
+/** The stage, running. Starting it is the part a gesture is required for:
+ * Firefox parks the promise of a resume it did not allow and never settles it,
+ * so calling this outside a gesture hangs whatever awaits it, for good. */
+export async function wakeStage(): Promise<AudioStage> {
+  unmuteWebAudio();
+  const built = buildStage();
+  if (built.context.state !== "running") {
+    await built.context.resume();
+  }
+  return built;
 }
 
 /** Silences everything the stage is sounding, without taking the device down.

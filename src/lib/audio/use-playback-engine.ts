@@ -181,6 +181,7 @@ export function usePlaybackEngine({
     if (engine === null || song === null) {
       return;
     }
+    await engine.unlock();
     await engine.warmInstruments(song);
     setSoundReady(true);
   }, [song]);

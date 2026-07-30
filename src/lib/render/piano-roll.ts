@@ -1,9 +1,5 @@
 import type { Reach } from "@/lib/input/keyboard-map";
-import {
-  bendSemitones,
-  type ExpressionTrail,
-  vibratoHz,
-} from "@/lib/midi/expression";
+import type { ExpressionTrail } from "@/lib/midi/expression";
 import { type NoteColor, pitchColor, trackColor } from "@/lib/midi/palette";
 import {
   highestPitch,
@@ -14,6 +10,7 @@ import {
   type Song,
   type SongNote,
 } from "@/lib/midi/song";
+import { bentRows, momentAt, type TimeAtHeight } from "@/lib/render/bend-shape";
 import {
   blackKeyLeft,
   blackKeyWidth,
@@ -48,15 +45,6 @@ const roundNoteSize = 10;
 /** Past this a playhead jump is a seek, and the notes passed over never
  * landed, so they spark nothing. */
 const maxOnsetAdvance = 0.5;
-/** How far a wheel at full travel throws a note, in white keys. Wider than the
- * two semitones it sounds, so the interval reads at a glance without the note
- * wandering into its neighbour's lane. */
-const bendSpanKeys = bendSemitones * 0.675;
-const vibratoWidth = 0.16;
-/** Seconds between samples along a bent bar. A wheel is read at these moments
- * whatever the bar is doing, which is what keeps the trace rigid. */
-const bendGrain = 1 / 30;
-const maxBendSteps = 140;
 
 export type Frame = {
   readonly song: Song;
@@ -463,12 +451,7 @@ export class PianoRollRenderer {
     const since = this.onsetSince;
     const rising = frame.direction === "up";
     const riseScale = keyboardTop / lookAhead;
-    // Every row of a bar is a moment, and which moment depends on which way the
-    // bar travels: a falling note carries its future below the line, a rising
-    // one carries its past above it. Reading the wheels off the wrong one pins
-    // the bend to the screen instead of to the note.
-    const bendTime = (at: number): number =>
-      position + ((keyboardTop - at) / riseScale) * (rising ? -1 : 1);
+    const bendTime = momentAt(position, keyboardTop, riseScale, rising);
     for (let index = first; index < notes.length; index += 1) {
       const note = notes[index];
       if (note === undefined || note.start > horizon) {
@@ -725,7 +708,7 @@ export class PianoRollRenderer {
         this.traceBentNote(
           trail,
           note.track,
-          (at) => position - (keyboardTop - at) / scale,
+          momentAt(position, keyboardTop, scale, true),
           { x, y, width: noteWidth, height: noteHeight },
           whiteWidth,
         );
@@ -741,65 +724,27 @@ export class PianoRollRenderer {
     }
   }
 
-  /** Every height on the bar is an age, so each row reads the wheels as they
-   * stood then. Returns false when the wheels never left centre over the note. */
+  /** Lays the note along what the wheels were doing under it, and says whether
+   * it did: a bar the wheels sat still through keeps its plain corners. */
   private traceBentNote(
     trail: ExpressionTrail,
     track: number,
-    timeAt: (y: number) => number,
+    timeAt: TimeAtHeight,
     box: { x: number; y: number; width: number; height: number },
     whiteWidth: number,
   ): boolean {
-    const ctx = this.context;
-    const span = whiteWidth * bendSpanKeys;
-    const wobble = whiteWidth * vibratoWidth;
-    const centre = box.x + box.width / 2;
-    const from = timeAt(box.y);
-    const to = timeAt(box.y + box.height);
-    const reach = to - from;
-
-    // Sampled at fixed moments rather than at a share of the bar. A held note
-    // grows every frame, so spacing the samples along its height would move
-    // every one of them to a new moment and recut the whole shape each frame.
-    // On the clock they stay put, and the trace rides with the note.
-    const moments: number[] = [from];
-    if (reach !== 0) {
-      const early = Math.min(from, to);
-      const late = Math.max(from, to);
-      for (
-        let at = Math.ceil(early / bendGrain) * bendGrain;
-        at < late && moments.length < maxBendSteps;
-        at += bendGrain
-      ) {
-        moments.push(at);
-      }
-      if (reach < 0) {
-        moments.sort((first, second) => second - first);
-      }
-      moments.push(to);
-    }
-
-    const rows: { y: number; offset: number }[] = [];
-    let moved = false;
-    for (const when of moments) {
-      const { bend, depth } = trail.at(track, when);
-      const shimmer =
-        depth === 0
-          ? 0
-          : Math.sin(when * vibratoHz * Math.PI * 2) * depth * wobble;
-      const offset = bend * span + shimmer;
-      if (offset !== 0) {
-        moved = true;
-      }
-      const along = reach === 0 ? 0 : (when - from) / reach;
-      rows.push({ y: box.y + box.height * along, offset });
-    }
-
-    // A track that has moved a wheel keeps its plain corners while the wheels
-    // sit at rest, so the trace is claimed by the offsets and not by a latch.
-    if (!moved) {
+    const rows = bentRows(
+      trail,
+      track,
+      timeAt,
+      { top: box.y, height: box.height },
+      whiteWidth,
+    );
+    if (rows === null) {
       return false;
     }
+    const ctx = this.context;
+    const centre = box.x + box.width / 2;
     ctx.beginPath();
     for (const row of rows) {
       ctx.lineTo(centre + row.offset - box.width / 2, row.y);

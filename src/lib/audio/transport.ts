@@ -1,23 +1,27 @@
-/** Song position driven by the audio hardware clock, which never runs backwards
- * and never drifts against the notes we scheduled against it. */
+/** Seconds on a clock that only ever moves forward. In the player it is the
+ * audio device's, so the picture and the notes are measured against the same
+ * thing they were scheduled against and cannot drift apart. */
+export type Clock = () => number;
+
+/** Where the song has got to. Everything here is arithmetic over one reading of
+ * the clock, so a test can drive the position by hand and assert it without a
+ * sound device. */
 export class Transport {
-  private readonly context: AudioContext;
+  private readonly now: Clock;
   private offset = 0;
   private startedAt = 0;
   private running = false;
   private speed = 1;
 
-  constructor(context: AudioContext) {
-    this.context = context;
+  constructor(now: Clock) {
+    this.now = now;
   }
 
   get position(): number {
     if (!this.running) {
       return this.offset;
     }
-    return (
-      this.offset + (this.context.currentTime - this.startedAt) * this.speed
-    );
+    return this.offset + (this.now() - this.startedAt) * this.speed;
   }
 
   get playing(): boolean {
@@ -30,7 +34,7 @@ export class Transport {
 
   setRate(rate: number): void {
     this.offset = this.position;
-    this.startedAt = this.context.currentTime;
+    this.startedAt = this.now();
     this.speed = rate;
   }
 
@@ -38,7 +42,7 @@ export class Transport {
     if (this.running) {
       return;
     }
-    this.startedAt = this.context.currentTime;
+    this.startedAt = this.now();
     this.running = true;
   }
 
@@ -52,6 +56,6 @@ export class Transport {
 
   seek(position: number): void {
     this.offset = Math.max(0, position);
-    this.startedAt = this.context.currentTime;
+    this.startedAt = this.now();
   }
 }

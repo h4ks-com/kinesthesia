@@ -84,6 +84,34 @@ export class InstrumentBank {
     }
   }
 
+  /** Lets go of every instrument outside this set. A voice here holds the whole
+   * instrument decoded, every note of it, and the bank outlives the song that
+   * asked for it, so a session across a dozen files would keep them all.
+   *
+   * Stopped on the way out: `stopAll` only reaches what the map still holds, so
+   * an entry dropped while sounding would ring on past the next pause. */
+  retain(instruments: ReadonlySet<string>): void {
+    for (const [key, voice] of [...this.voices]) {
+      if (!instruments.has(key)) {
+        voice.stop();
+        this.voices.delete(key);
+      }
+    }
+    // Dropping the pending entry is also how a load in flight is told it is no
+    // longer wanted, so it does not put itself back on arrival.
+    for (const key of [...this.loading.keys()]) {
+      if (!instruments.has(key)) {
+        this.loading.delete(key);
+      }
+    }
+  }
+
+  /** What a request is filed under, so a caller can name the set it wants kept
+   * without knowing how the bank keys them. */
+  static keyOf(request: VoiceRequest): string {
+    return keyFor(request);
+  }
+
   private scheduled(): { scheduler?: Scheduler } {
     return this.scheduler === null ? {} : { scheduler: this.scheduler };
   }
@@ -98,6 +126,11 @@ export class InstrumentBank {
         : new Soundfont(this.context, { instrument: key, ...this.scheduled() });
       try {
         await voice.load;
+        // Let go of while it was still arriving: putting it back would undo
+        // exactly the eviction that dropped it.
+        if (!this.loading.has(key)) {
+          return null;
+        }
         const ready = percussion ? asDrumKit(voice) : voice;
         this.voices.set(key, ready);
         return ready;
@@ -117,6 +150,9 @@ export class InstrumentBank {
         ...this.scheduled(),
       });
       await piano.load;
+      if (!this.loading.has(key)) {
+        return null;
+      }
       this.voices.set(key, piano);
       return piano;
     } catch {

@@ -2,6 +2,7 @@ import { soundfontFor } from "@/lib/audio/general-midi";
 import {
   closest,
   loadSoundfont,
+  type Sample,
   type Samples,
 } from "@/lib/audio/soundfont-samples";
 import {
@@ -63,6 +64,14 @@ export type PlayedNote = {
   readonly rate: number;
 };
 
+/** Everything known about one instrument: what has been sent for, the fetch
+ * carrying it, and what has arrived so far. */
+type Held = {
+  readonly asked: Set<number>;
+  readonly loading: Promise<Samples | null>;
+  ready: Samples | null;
+};
+
 /** A voice sounding or about to, kept so it can be silenced. */
 type Live = {
   readonly source: AudioBufferSourceNode;
@@ -119,8 +128,11 @@ export function playedNote(
 
 export class SampleVoices {
   private readonly context: BaseAudioContext;
-  private readonly loading = new Map<string, Promise<Samples | null>>();
-  private readonly ready = new Map<string, Samples>();
+  /** One record per instrument, so dropping one is a single delete and the
+   * three facts about it can never disagree. `asked` is what has been sent for,
+   * which outruns `ready` while a fetch is in flight and is what a top-up is
+   * measured against. */
+  private readonly held = new Map<string, Held>();
   private readonly live = new Set<Live>();
 
   constructor(context: BaseAudioContext) {
@@ -134,22 +146,79 @@ export class SampleVoices {
     instrument: string,
     pitches: ReadonlySet<number>,
   ): Promise<Samples | null> {
-    const known = this.loading.get(instrument);
-    if (known !== undefined) {
-      return known;
+    const record = this.held.get(instrument) ?? null;
+    const missing = new Set(
+      [...pitches].filter((pitch) => record?.asked.has(pitch) !== true),
+    );
+    if (record !== null && missing.size === 0) {
+      return record.loading;
     }
-    const started = loadSoundfont(this.context, instrument, pitches)
+    const asked = record?.asked ?? new Set<number>();
+    for (const pitch of missing) {
+      asked.add(pitch);
+    }
+    // Chained behind whatever is already in flight, so two songs asking at once
+    // cannot both decide the same recordings are missing.
+    const loading = (record?.loading ?? Promise.resolve(null))
+      .then(() => loadSoundfont(this.context, instrument, missing))
       .catch(() => null)
-      .then((samples) => {
-        if (samples === null) {
-          this.loading.delete(instrument);
-        } else {
-          this.ready.set(instrument, samples);
-        }
-        return samples;
-      });
-    this.loading.set(instrument, started);
-    return started;
+      .then((arrived) => this.merge(instrument, arrived, missing));
+    this.held.set(instrument, { asked, loading, ready: record?.ready ?? null });
+    return loading;
+  }
+
+  /** Folds newly decoded recordings in beside the ones already here. A failure
+   * is forgotten rather than kept, so a later song can try again over a network
+   * that has come back. */
+  private merge(
+    instrument: string,
+    arrived: Samples | null,
+    wanted: ReadonlySet<number>,
+  ): Samples | null {
+    // Let go of while it was still arriving: the song that wanted it is gone,
+    // so holding it would put back exactly what was just dropped.
+    const record = this.held.get(instrument);
+    if (record === undefined) {
+      return null;
+    }
+    if (arrived === null) {
+      // A failure is forgotten rather than kept, so a later song can try again
+      // over a network that has come back. The pitches this attempt claimed go
+      // back too, or a single dropped request would leave them answered by a
+      // neighbouring recording for the rest of the session.
+      for (const pitch of wanted) {
+        record.asked.delete(pitch);
+      }
+      if (record.ready === null) {
+        this.held.delete(instrument);
+      }
+      return record.ready;
+    }
+    const byPitch = record.ready?.byPitch ?? new Map<number, Sample>();
+    for (const [pitch, sample] of arrived.byPitch) {
+      byPitch.set(pitch, sample);
+    }
+    record.ready = {
+      byPitch,
+      pitches: [...byPitch.keys()].sort((first, next) => first - next),
+    };
+    return record.ready;
+  }
+
+  /** Lets go of every instrument outside this set. The recordings outlive the
+   * song that wanted them, which is what makes a second song cheap, but a
+   * session that wanders through a dozen files would otherwise hold every
+   * instrument it ever touched: near forty megabytes decoded each. What is
+   * shared with the next song survives; what it never asks for does not.
+   *
+   * Buffers still feeding a sounding note are held by their source nodes, so
+   * dropping them here never cuts anything off. */
+  retain(instruments: ReadonlySet<string>): void {
+    for (const instrument of [...this.held.keys()]) {
+      if (!instruments.has(instrument)) {
+        this.held.delete(instrument);
+      }
+    }
   }
 
   /** Plays one note. Returns the time it falls silent, or null where the
@@ -160,8 +229,8 @@ export class SampleVoices {
     trail: ExpressionTrail | null,
     destination: AudioNode,
   ): number | null {
-    const samples = this.ready.get(instrument);
-    if (samples === undefined) {
+    const samples = this.held.get(instrument)?.ready ?? null;
+    if (samples === null) {
       return null;
     }
     const nearest = closest(samples.pitches, note.pitch);

@@ -130,20 +130,20 @@ const playerLinkShape = {
 };
 
 type PlayerLinkInput = {
-  readonly source?: (typeof midiSourceIds)[number];
-  readonly id?: string;
-  readonly url?: string;
+  readonly source: (typeof midiSourceIds)[number] | undefined;
+  readonly id: string | undefined;
+  readonly url: string | undefined;
   readonly name: string;
   readonly mode: PlayerMode;
-  readonly speed?: number;
-  readonly transpose?: number;
-  readonly tracks?: readonly number[];
-  readonly simplified?: boolean;
-  readonly melodyRate?: number;
-  readonly focus?: boolean;
-  readonly skin?: string;
-  readonly rise?: boolean;
-  readonly start?: number;
+  readonly speed: number | undefined;
+  readonly transpose: number | undefined;
+  readonly tracks: readonly number[] | undefined;
+  readonly simplified: boolean | undefined;
+  readonly melodyRate: number | undefined;
+  readonly focus: boolean | undefined;
+  readonly skin: string | undefined;
+  readonly rise: boolean | undefined;
+  readonly start: number | undefined;
 };
 
 type PlayerLink = { ok: true; url: string } | { ok: false; why: string };
@@ -260,9 +260,9 @@ function mcpAuthorized(header: string | undefined): boolean {
 /** The real .mid url behind a source+id, or a trusted direct url, held to the
  * same origin allowlist as a pasted link. */
 function midiFetchUrl(input: {
-  source?: string;
-  id?: string;
-  url?: string;
+  source: string | undefined;
+  id: string | undefined;
+  url: string | undefined;
 }): { url: string } | { error: string } {
   if (input.url !== undefined) {
     if (!isPlayableUrl(input.url, config.trustedMidiOrigins)) {
@@ -859,12 +859,12 @@ function createMcpServer(): McpServer {
     }): Promise<ToolResult> =>
       commit(async () =>
         addChords(await loadProject(id), {
-          track,
-          channel,
+          ...(track !== undefined && { track }),
+          ...(channel !== undefined && { channel }),
           chords,
           style,
           octave,
-          atBar,
+          ...(atBar !== undefined && { atBar }),
         }),
       ),
   );
@@ -880,10 +880,10 @@ function createMcpServer(): McpServer {
     ({ id, track, channel, text, atBar }): Promise<ToolResult> =>
       commit(async () =>
         addText(await loadProject(id), {
-          track,
-          channel,
+          ...(track !== undefined && { track }),
+          ...(channel !== undefined && { channel }),
           text,
-          atBar,
+          ...(atBar !== undefined && { atBar }),
         }),
       ),
   );
@@ -898,7 +898,16 @@ function createMcpServer(): McpServer {
     },
     ({ id, track, channel, notes }): Promise<ToolResult> =>
       commit(async () =>
-        addNotes(await loadProject(id), { track, channel, notes }),
+        addNotes(await loadProject(id), {
+          ...(track !== undefined && { track }),
+          ...(channel !== undefined && { channel }),
+          notes: notes.map((note) => ({
+            note: note.note,
+            at: note.at,
+            dur: note.dur,
+            ...(note.velocity !== undefined && { velocity: note.velocity }),
+          })),
+        }),
       ),
   );
 
@@ -913,7 +922,7 @@ function createMcpServer(): McpServer {
     ({ id, track, fromBar, toBar, atBar, times }): Promise<ToolResult> =>
       commit(async () =>
         duplicate(await loadProject(id), {
-          track,
+          ...(track !== undefined && { track }),
           fromBar,
           toBar,
           atBar,
@@ -932,7 +941,11 @@ function createMcpServer(): McpServer {
     },
     ({ id, atBar, bars, track }): Promise<ToolResult> =>
       commit(async () =>
-        insertBars(await loadProject(id), { atBar, bars, track }),
+        insertBars(await loadProject(id), {
+          atBar,
+          bars,
+          ...(track !== undefined && { track }),
+        }),
       ),
   );
 
@@ -945,7 +958,12 @@ function createMcpServer(): McpServer {
       inputSchema: transposeShape,
     },
     ({ id, track, by }): Promise<ToolResult> =>
-      commit(async () => transpose(await loadProject(id), { track, by })),
+      commit(async () =>
+        transpose(await loadProject(id), {
+          ...(track !== undefined && { track }),
+          by,
+        }),
+      ),
   );
 
   mcp.registerTool(
@@ -986,9 +1004,8 @@ export async function mcpHandler(c: Context): Promise<Response | undefined> {
       "www-authenticate": "Bearer",
     });
   }
-  const transport = new StreamableHTTPTransport({
-    sessionIdGenerator: undefined,
-  });
+  // Stateless mode: no sessionIdGenerator, so the SDK skips session handling.
+  const transport = new StreamableHTTPTransport();
   await createMcpServer().connect(transport);
   return transport.handleRequest(c);
 }

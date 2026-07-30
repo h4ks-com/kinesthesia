@@ -229,7 +229,7 @@ export function usePlayerSettings({
           simplified: next.simplified,
           melodyRate: next.melodyRate,
           transpose: next.transpose,
-          tracks: next.tracks ?? undefined,
+          ...(next.tracks !== null && { tracks: next.tracks }),
         });
       })
       .finally(() => setHydrated(true));

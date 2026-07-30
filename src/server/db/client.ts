@@ -25,7 +25,9 @@ export function db(): Database {
   }
   const client = createClient({
     url: config.databaseUrl,
-    authToken: config.databaseAuthToken ?? undefined,
+    ...(config.databaseAuthToken !== null && {
+      authToken: config.databaseAuthToken,
+    }),
   });
   instance = drizzle(client, { schema });
   return instance;

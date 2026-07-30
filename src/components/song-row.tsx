@@ -51,10 +51,19 @@ type SongRowProps = {
   onToggleFavorite: () => void;
   /** When set, a remove control drops this one entry, used for uploads. */
   onRemove?: () => void;
-  /** Set on an upload that has not been published yet, so it can be. */
-  onShare?: (() => Promise<void>) | null;
+  share: ShareOffer;
   signedIn?: boolean;
 };
+
+/** What this row may do about publishing. Sharing is only offered where an
+ * object store is configured, and a file already published has its link rather
+ * than an action. */
+export type ShareOffer =
+  | { readonly kind: "unavailable" }
+  | { readonly kind: "published" }
+  | { readonly kind: "ready"; readonly publish: () => Promise<void> };
+
+export const noShare: ShareOffer = { kind: "unavailable" };
 
 export function SongRow({
   name,
@@ -65,7 +74,7 @@ export function SongRow({
   favorite,
   onToggleFavorite,
   onRemove,
-  onShare,
+  share,
   signedIn = false,
 }: SongRowProps) {
   const local = isLocalUrl(url);
@@ -121,10 +130,10 @@ export function SongRow({
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
-        {onShare === undefined ? null : (
+        {share.kind === "unavailable" ? null : (
           <ShareUpload
             name={name}
-            onShare={onShare}
+            onShare={share.kind === "ready" ? share.publish : null}
             sharedHref={local ? null : watchHref}
             signedIn={signedIn}
           />

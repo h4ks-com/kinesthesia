@@ -113,7 +113,7 @@ const playerLinkShape = {
     .string()
     .optional()
     .describe(
-      "Background drawn behind the notes, purely cosmetic. Either the name of one this build ships, or a picture written the way a CSS background is: url(https://host/a.jpg) followed by scroll or fixed and brightness(60%). fixed lays one copy over the roll and holds it still; scroll tiles the picture and travels it with the notes. The picture must be on an origin the deployment trusts, the same allowlist a .mid url is held to. Some shipped backgrounds send the notes out of the keys instead of onto them, and those are watch only. Left out for the plain roll. Naming one shows it, whatever the listener picked before; leaving it out leaves their own choice alone. A device asking for less movement holds a picture still",
+      "Background drawn behind the notes, purely cosmetic. Either the name of one this build ships, or a picture written the way a CSS background is: url(https://host/a.jpg) followed by scroll or fixed and brightness(60%). fixed lays one copy over the roll and holds it still; scroll tiles the picture and travels it with the notes, moved by the playhead, so it holds still until the song plays and stops when it does. The picture must be on an origin the deployment trusts, the same allowlist a .mid url is held to. Some shipped backgrounds send the notes out of the keys instead of onto them, and those are watch only. Left out for the plain roll. Naming one shows it, whatever the listener picked before; leaving it out leaves their own choice alone. A device asking for less movement holds a picture still",
     ),
   rise: z
     .boolean()
@@ -551,7 +551,9 @@ A background may also be a picture rather than one this build ships. Write it th
 way a CSS background is written, url(https://host/a.jpg) followed by scroll or
 fixed and brightness(60%); the defaults are fixed and brightness(100%). A picture
 either sits still and covers the roll, or travels with the notes, and travelling
-means tiled because one copy would run out. The picture has to sit on an origin
+means tiled because one copy would run out. A travelling picture is moved by the
+playhead, so it holds still until the song is playing and stops with it: a
+paused player showing a still picture is scroll working, not scroll broken. The picture has to sit on an origin
 the deployment trusts, the same allowlist a .mid url is held to, and a picture
 somebody saved on their own device cannot be linked to at all.
 

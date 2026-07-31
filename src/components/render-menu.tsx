@@ -109,7 +109,7 @@ export function RenderMenu({
     // is otherwise enough to set a stranger's browser encoding for nobody.
     void isExpected(asked).then((expected) => {
       if (expected) {
-        void runNow.current("video");
+        void runNow.current(asked.kind);
       }
     });
   }, []);

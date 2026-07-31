@@ -5,9 +5,12 @@
  * The key is the whole credential. It opens one job's artifact and nothing
  * else, and it dies with the job, which is what makes it safe to carry in a url
  * a shared browser can read. */
+export type RenderKind = "video" | "audio";
+
 export type Handback = {
   readonly job: string;
   readonly key: string;
+  readonly kind: RenderKind;
 };
 
 /** Null for an ordinary visit, which is every visit but a driven one. */
@@ -18,9 +21,11 @@ export function handbackFromUrl(): Handback | null {
   const asked = new URLSearchParams(window.location.search);
   const job = asked.get("job");
   const key = asked.get("key");
-  return asked.get("render") === "video" && job !== null && key !== null
-    ? { job, key }
-    : null;
+  const kind = asked.get("render");
+  if (job === null || key === null) {
+    return null;
+  }
+  return kind === "video" || kind === "audio" ? { job, key, kind } : null;
 }
 
 function extensionOf(filename: string): string {

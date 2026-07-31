@@ -615,7 +615,19 @@ phrase of a few bars, then duplicate it to repeat, and vary the last repeat. Use
 analyze_midi or get_project to hear back the key and chords and check they line
 up. Prefer add_chords with style up for a flowing part and block for a pad; keep
 octaves apart so parts do not collide. Append to extend, insert_bars to put
-something in front or in the middle.`;
+something in front or in the middle.
+
+A link is something to open; a render is a file to post. Where somebody wants to
+watch or hear a song without opening anything, render_video makes an mp4 or webm
+of the keyboard and the falling notes with the sound on it, and render_audio
+makes a wav of the sound alone. Both take the same arguments as player_link, so
+settle on a link first and render exactly that: the background, speed, key,
+tracks and simplification all carry over, and the picture the skin argument names
+is drawn into the video. Neither returns a file. They return a job id, because a
+render takes a while: poll render_status with that id until the state is no
+longer running, then post the url a finished one carries. A failed one says why.
+Prefer render_audio when nobody needs to see the notes, and prefer a plain link
+over either when somebody can just as well open it.`;
 
 function createMcpServer(): McpServer {
   const mcp = new McpServer(
@@ -623,52 +635,71 @@ function createMcpServer(): McpServer {
     { instructions: mcpInstructions },
   );
 
+  /** Both renders are the same job with a different word in the address: the
+   * page decides what it makes from that, so nothing here is duplicated but the
+   * word and what it is called. */
+  const startRender = (
+    kind: "video" | "audio",
+    input: PlayerLinkInput,
+  ): ToolResult => {
+    if (!renderEnabled()) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Rendering is turned off here. It needs both a render browser and an object store configured.",
+          },
+        ],
+        isError: true,
+      };
+    }
+    // Built through the same validator a link is, so a render can never ask for
+    // a view the player would refuse.
+    const link = playerLink({ ...input, mode: "watch" });
+    if (!link.ok) {
+      return { content: [{ type: "text", text: link.why }], isError: true };
+    }
+    const refusal = renderRefusal();
+    if (refusal !== null) {
+      return { content: [{ type: "text", text: refusal }], isError: true };
+    }
+    const job = startJob();
+    const target = new URL(link.url);
+    target.searchParams.set("render", kind);
+    target.searchParams.set("job", job.id);
+    target.searchParams.set("key", job.secret);
+    // Nothing awaits this: the render outlives the request that asked for it.
+    void driveRender(job, target);
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ job: job.id, state: "running" }, null, 2),
+        },
+      ],
+    };
+  };
+
   mcp.registerTool(
     "render_video",
     {
       title: "Render a song to a video file",
       description:
-        "Start rendering a song to a video with its sound, drawn the same way the player draws it. Takes the same arguments as player_link, so a link you are happy with renders as it looks. Rendering runs in a browser and takes minutes, so this returns a job id straight away: poll render_status with it until the state stops being running, then post the url it gives you. The file is public and permanent.",
+        "Start rendering a song to a video with its sound: the keyboard and the falling notes, drawn the way the player draws them, background and all. Takes the same arguments as player_link, so a link you are happy with renders as it looks. Rendering runs in a browser and takes a while, so this returns a job id straight away: poll render_status with it until the state stops being running, then post the url it gives you. The file is public and permanent. Use render_audio instead when only the sound is wanted.",
       inputSchema: playerLinkShape,
     },
-    async (input) => {
-      if (!renderEnabled()) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: "Rendering is turned off here. It needs both a render browser and an object store configured.",
-            },
-          ],
-          isError: true,
-        };
-      }
-      // Built through the same validator a link is, so a render can never ask
-      // for a view the player would refuse.
-      const link = playerLink({ ...input, mode: "watch" });
-      if (!link.ok) {
-        return { content: [{ type: "text", text: link.why }], isError: true };
-      }
-      const refusal = renderRefusal();
-      if (refusal !== null) {
-        return { content: [{ type: "text", text: refusal }], isError: true };
-      }
-      const job = startJob();
-      const target = new URL(link.url);
-      target.searchParams.set("render", "video");
-      target.searchParams.set("job", job.id);
-      target.searchParams.set("key", job.secret);
-      // Nothing awaits this: the render outlives the request that asked for it.
-      void driveRender(job, target);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ job: job.id, state: "running" }, null, 2),
-          },
-        ],
-      };
+    async (input) => startRender("video", input),
+  );
+
+  mcp.registerTool(
+    "render_audio",
+    {
+      title: "Render a song to an audio file",
+      description:
+        "Start rendering just the sound of a song to a wav, at the same instruments and speed the player would use and with none of the picture. Faster and much smaller than render_video, so prefer it whenever nobody needs to see the notes. Takes the same arguments as player_link, ignoring the ones that only change how it looks. Returns a job id: poll render_status exactly as for a video.",
+      inputSchema: playerLinkShape,
     },
+    async (input) => startRender("audio", input),
   );
 
   mcp.registerTool(
@@ -676,9 +707,9 @@ function createMcpServer(): McpServer {
     {
       title: "Check a render",
       description:
-        "Where a render_video job has got to. State is running, done or failed; a done job carries the url of the finished file.",
+        "Where a render_video or render_audio job has got to. State is running, done or failed; a done job carries the url of the finished file, and a failed one says why.",
       inputSchema: {
-        job: z.string().min(1).describe("The job id render_video returned"),
+        job: z.string().min(1).describe("The job id the render tool returned"),
       },
     },
     async ({ job }) => {

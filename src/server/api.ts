@@ -809,8 +809,12 @@ const mostRenderBytes = 512 * 1024 * 1024;
 /** The containers a render can come out in, which is what the encoder picks
  * between. Held to a list because the value names the stored file and the type
  * it is served as. */
-const renderExtensions = ["webm", "mp4"] as const;
-const renderTypes = { webm: "video/webm", mp4: "video/mp4" } as const;
+const renderExtensions = ["webm", "mp4", "wav"] as const;
+const renderTypes = {
+  webm: "video/webm",
+  mp4: "video/mp4",
+  wav: "audio/wav",
+} as const;
 
 const renderArtifactRoute = createRoute({
   method: "post",

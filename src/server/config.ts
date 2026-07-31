@@ -31,6 +31,8 @@ const envSchema = z.object({
   MINIO_REGION: stringOr("us-east-1"),
   MIDI_TRUSTED_ORIGINS: z.string().optional(),
   MCP_TOKEN_HASH: optionalString,
+  RENDER_BROWSER_WS: optionalString,
+  RENDER_BROWSER_HEADERS: optionalString,
   MIDI_MAX_BYTES: z.preprocess(
     blankToUndefined,
     z.coerce.number().int().positive().optional(),
@@ -117,6 +119,47 @@ const bucketOrigin =
 
 const defaultMaxMidiBytes = 5 * 1024 * 1024;
 
+/** Where a render runs. A browser speaking the DevTools protocol over a socket,
+ * addressed by one opaque url because every host carries its credential
+ * differently: a token for one, an api key and project for another, nothing at
+ * all for a Chrome started by hand. Headers are for the few that want the
+ * credential there instead. */
+export type RenderBrowser = {
+  readonly endpoint: string;
+  readonly headers: Record<string, string>;
+};
+
+function renderHeaders(raw: string | undefined): Record<string, string> {
+  if (raw === undefined) {
+    return {};
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("RENDER_BROWSER_HEADERS is not valid JSON");
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("RENDER_BROWSER_HEADERS must be a JSON object");
+  }
+  const headers: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value !== "string") {
+      throw new Error(`RENDER_BROWSER_HEADERS.${key} must be a string`);
+    }
+    headers[key] = value;
+  }
+  return headers;
+}
+
+export const renderBrowser: RenderBrowser | null =
+  env.RENDER_BROWSER_WS === undefined
+    ? null
+    : {
+        endpoint: env.RENDER_BROWSER_WS,
+        headers: renderHeaders(env.RENDER_BROWSER_HEADERS),
+      };
+
 export const config = {
   appBaseUrl: env.APP_BASE_URL,
   // A raw ?url= plays only from our own origin plus these, so the paste service
@@ -128,6 +171,8 @@ export const config = {
     ...bucketOrigin,
   ],
   bucket: bucketConfig,
+  /** Null leaves rendering off, since there is nowhere to run one. */
+  renderBrowser,
   /** sha256 of the API key the MCP endpoint requires as a bearer token. Null
    * leaves the endpoint open, which is only ever the case in a dev checkout. */
   mcpTokenHash: env.MCP_TOKEN_HASH ?? null,

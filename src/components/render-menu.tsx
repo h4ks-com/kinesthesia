@@ -20,6 +20,12 @@ import {
   type RenderConfig,
   renderDuration,
 } from "@/lib/render/export";
+import {
+  handBack,
+  handBackFailure,
+  handbackFromUrl,
+  isExpected,
+} from "@/lib/render/handback";
 import { canRenderVideo, isFastVideo } from "@/lib/render/video-support";
 import type { BackdropSource, NoteDirection } from "@/lib/skins/types";
 
@@ -77,7 +83,36 @@ export function RenderMenu({
 
   // A render outlives a click, so an unmount mid-render has to stop it or it
   // keeps encoding detached and downloads a file into a page the user has left.
-  useEffect(() => () => abort.current?.abort(), []);
+  // A driven one has nobody to leave the page, and its only unmount is the one
+  // React does twice on purpose in development.
+  useEffect(
+    () => () => {
+      if (handbackFromUrl() === null) {
+        abort.current?.abort();
+      }
+    },
+    [],
+  );
+
+  // An address that asks for a render starts one without anybody clicking, which
+  // is how a browser somewhere else is driven.
+  const runNow = useRef(run);
+  runNow.current = run;
+  const drivenStarted = useRef(false);
+  useEffect(() => {
+    const asked = handbackFromUrl();
+    if (drivenStarted.current || asked === null) {
+      return;
+    }
+    drivenStarted.current = true;
+    // Asked for by whoever started the job, not merely by the address: a link
+    // is otherwise enough to set a stranger's browser encoding for nobody.
+    void isExpected(asked).then((expected) => {
+      if (expected) {
+        void runNow.current("video");
+      }
+    });
+  }, []);
 
   async function run(kind: JobKind): Promise<void> {
     const config: RenderConfig = {
@@ -161,11 +196,13 @@ export function RenderMenu({
         setJob(null);
         return;
       }
-      setJob({
-        kind,
-        phase: "error",
-        message: error instanceof Error ? error.message : "The render failed.",
-      });
+      const message =
+        error instanceof Error ? error.message : "The render failed.";
+      const asked = handbackFromUrl();
+      if (asked !== null) {
+        void handBackFailure(asked, message);
+      }
+      setJob({ kind, phase: "error", message });
     }
   }
 
@@ -175,7 +212,12 @@ export function RenderMenu({
     filename: string,
     realtime: boolean,
   ): void {
-    downloadBlob(blob, filename);
+    const asked = handbackFromUrl();
+    if (asked === null) {
+      downloadBlob(blob, filename);
+    } else {
+      void handBack(asked, blob, filename);
+    }
     setJob({ kind, phase: "done", filename, blob, realtime });
   }
 

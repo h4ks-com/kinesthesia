@@ -22,8 +22,9 @@ import {
   findRoom,
   type MultiplayerRoom,
 } from "@/server/multiplayer/rooms";
+import { claimJob, failJob, finishJob } from "@/server/render/jobs";
 import { saveScore, statsFor, topScores } from "@/server/scores/store";
-import { bucketEnabled, uploadMidi } from "@/server/storage/bucket";
+import { bucketEnabled, uploadFile, uploadMidi } from "@/server/storage/bucket";
 import {
   deleteVoicing,
   saveVoicing,
@@ -798,6 +799,169 @@ api.openapi(shareUploadRoute, async (c) => {
   }
   const url = await uploadMidi(`shared/${crypto.randomUUID()}.mid`, bytes);
   return c.json({ url }, 200);
+});
+
+/** How big a rendered video may be. A long song at the encoder's bitrate is
+ * tens of megabytes, and the cap only exists so a wedged render cannot fill the
+ * bucket. */
+const mostRenderBytes = 512 * 1024 * 1024;
+
+/** The containers a render can come out in, which is what the encoder picks
+ * between. Held to a list because the value names the stored file and the type
+ * it is served as. */
+const renderExtensions = ["webm", "mp4"] as const;
+const renderTypes = { webm: "video/webm", mp4: "video/mp4" } as const;
+
+const renderArtifactRoute = createRoute({
+  method: "post",
+  path: "/renders/{id}",
+  summary: "Hand back a finished render",
+  description:
+    "Used by the page doing the rendering, which proves itself with the key its own url carried. Not a public endpoint: a render is started through the MCP tool.",
+  request: {
+    params: z.object({ id: z.string() }),
+    query: z.object({
+      key: z.string().min(1),
+      extension: z.enum(renderExtensions),
+    }),
+    body: { content: { "application/octet-stream": { schema: z.any() } } },
+  },
+  responses: {
+    200: {
+      description: "Where the file now lives",
+      content: {
+        "application/json": { schema: z.object({ url: z.string() }) },
+      },
+    },
+    403: {
+      description: "No such render, or the wrong key",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+    413: {
+      description: "Larger than the server accepts",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+    503: {
+      description: "The finished render could not be stored",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+  },
+});
+
+api.openapi(renderArtifactRoute, async (c) => {
+  const { id } = c.req.valid("param");
+  const { key, extension } = c.req.valid("query");
+  const job = claimJob(id, key);
+  if (job === null) {
+    return c.json({ error: "No render is waiting on that" }, 403);
+  }
+  // Checked before the body is read, and a request that declares nothing is
+  // refused rather than buffered whole to find out how big it was.
+  const declared = Number(c.req.header("content-length") ?? "");
+  if (!Number.isFinite(declared) || declared > mostRenderBytes) {
+    failJob(job, "The render came out larger than this server accepts");
+    return c.json({ error: tooLarge }, 413);
+  }
+  const body = await c.req.arrayBuffer();
+  if (body.byteLength > mostRenderBytes) {
+    failJob(job, "The render came out larger than this server accepts");
+    return c.json({ error: tooLarge }, 413);
+  }
+  try {
+    const url = await uploadFile(
+      `renders/${job.id}.${extension}`,
+      new Uint8Array(body),
+      renderTypes[extension],
+    );
+    finishJob(job, url);
+    return c.json({ url }, 200);
+  } catch {
+    // Left running, the job would hold a browser open until its deadline for a
+    // render that is already over.
+    failJob(job, "The finished render could not be stored");
+    return c.json({ error: "The finished render could not be stored" }, 503);
+  }
+});
+
+const renderClaimRoute = createRoute({
+  method: "get",
+  path: "/renders/{id}",
+  summary: "Ask whether a render is really waiting",
+  description:
+    "Used by the page before it starts work, so a link somebody was handed cannot set a stranger's browser rendering.",
+  request: {
+    params: z.object({ id: z.string() }),
+    query: z.object({ key: z.string().min(1) }),
+  },
+  responses: {
+    200: {
+      description: "It is waiting",
+      content: {
+        "application/json": { schema: z.object({ waiting: z.boolean() }) },
+      },
+    },
+    403: {
+      description: "No such render, or the wrong key",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+  },
+});
+
+api.openapi(renderClaimRoute, async (c) => {
+  const { id } = c.req.valid("param");
+  const { key } = c.req.valid("query");
+  if (claimJob(id, key) === null) {
+    return c.json({ error: "No render is waiting on that" }, 403);
+  }
+  return c.json({ waiting: true }, 200);
+});
+
+const renderFailedRoute = createRoute({
+  method: "post",
+  path: "/renders/{id}/failed",
+  summary: "Report a render that could not finish",
+  request: {
+    params: z.object({ id: z.string() }),
+    query: z.object({ key: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Noted",
+      content: {
+        "application/json": { schema: z.object({ ok: z.boolean() }) },
+      },
+    },
+    403: {
+      description: "No such render, or the wrong key",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+  },
+});
+
+api.openapi(renderFailedRoute, async (c) => {
+  const { id } = c.req.valid("param");
+  const { key } = c.req.valid("query");
+  const job = claimJob(id, key);
+  if (job === null) {
+    return c.json({ error: "No render is waiting on that" }, 403);
+  }
+  failJob(job, c.req.valid("json").error.slice(0, 300));
+  return c.json({ ok: true }, 200);
 });
 
 api.doc31("/openapi.json", {

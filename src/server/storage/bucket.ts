@@ -21,10 +21,13 @@ export function bucketEnabled(): boolean {
 }
 
 /** Stores the bytes at `key` and returns the public URL that serves them. The
- * bucket is anonymous-read, so the returned URL resolves without credentials. */
-export async function uploadMidi(
+ * bucket is anonymous-read, so the returned URL resolves without credentials.
+ * The type is what the bucket will serve the file as, and a browser plays a
+ * video only when it is told what one is. */
+export async function uploadFile(
   key: string,
   bytes: Uint8Array,
+  type: string,
 ): Promise<string> {
   if (bucketConfig === null) {
     throw new Error("No object store is configured");
@@ -34,9 +37,16 @@ export async function uploadMidi(
     key,
     Buffer.from(bytes),
     bytes.byteLength,
-    { "Content-Type": "audio/midi" },
+    { "Content-Type": type },
   );
   return `${bucketConfig.publicBase}/${key}`;
+}
+
+export async function uploadMidi(
+  key: string,
+  bytes: Uint8Array,
+): Promise<string> {
+  return uploadFile(key, bytes, "audio/midi");
 }
 
 export async function putJson(key: string, value: unknown): Promise<void> {

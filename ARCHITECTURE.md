@@ -27,6 +27,11 @@ src/server/
   scores/store.ts             leaderboard queries
   voicings/store.ts           how people made a song sound, one save each
   storage/bucket.ts           uploads generated MIDI and project specs to the object store
+  render/jobs.ts              renders in flight, each with the one key that may
+                              hand its file back. In memory, like the rooms
+  render/browser.ts           drives a render in a browser somewhere else, over
+                              the DevTools protocol, and holds the limits on how
+                              many may run
   midi/
     types.ts                  MidiSource contract and result shapes
     registry.ts               sources available to search, and the source and
@@ -144,6 +149,8 @@ src/lib/
   render/video.ts             offline video render, WebCodecs with a recorder fallback
   render/video-support.ts     what this browser can encode, without loading an
                               encoder to find out
+  render/handback.ts          a render the address asked for: proving one was
+                              wanted, and returning the file to the server
   input/keyboard-map.ts       computer keyboard to pitch
   input/web-midi.ts           MIDI devices, including hot plug
   scoring/judge.ts            hit windows, combo and accuracy

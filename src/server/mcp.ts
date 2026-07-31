@@ -49,6 +49,12 @@ import {
 } from "@/server/midi/registry";
 import { fileEndpoint, searchMidi } from "@/server/midi/search";
 import {
+  driveRender,
+  renderEnabled,
+  renderRefusal,
+} from "@/server/render/browser";
+import { readJob, startJob } from "@/server/render/jobs";
+import {
   bucketEnabled,
   getJson,
   putJson,
@@ -615,6 +621,97 @@ function createMcpServer(): McpServer {
   const mcp = new McpServer(
     { name: "kinesthesia", version: "0.1.0" },
     { instructions: mcpInstructions },
+  );
+
+  mcp.registerTool(
+    "render_video",
+    {
+      title: "Render a song to a video file",
+      description:
+        "Start rendering a song to a video with its sound, drawn the same way the player draws it. Takes the same arguments as player_link, so a link you are happy with renders as it looks. Rendering runs in a browser and takes minutes, so this returns a job id straight away: poll render_status with it until the state stops being running, then post the url it gives you. The file is public and permanent.",
+      inputSchema: playerLinkShape,
+    },
+    async (input) => {
+      if (!renderEnabled()) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Rendering is turned off here. It needs both a render browser and an object store configured.",
+            },
+          ],
+          isError: true,
+        };
+      }
+      // Built through the same validator a link is, so a render can never ask
+      // for a view the player would refuse.
+      const link = playerLink({ ...input, mode: "watch" });
+      if (!link.ok) {
+        return { content: [{ type: "text", text: link.why }], isError: true };
+      }
+      const refusal = renderRefusal();
+      if (refusal !== null) {
+        return { content: [{ type: "text", text: refusal }], isError: true };
+      }
+      const job = startJob();
+      const target = new URL(link.url);
+      target.searchParams.set("render", "video");
+      target.searchParams.set("job", job.id);
+      target.searchParams.set("key", job.secret);
+      // Nothing awaits this: the render outlives the request that asked for it.
+      void driveRender(job, target);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ job: job.id, state: "running" }, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  mcp.registerTool(
+    "render_status",
+    {
+      title: "Check a render",
+      description:
+        "Where a render_video job has got to. State is running, done or failed; a done job carries the url of the finished file.",
+      inputSchema: {
+        job: z.string().min(1).describe("The job id render_video returned"),
+      },
+    },
+    async ({ job }) => {
+      const found = readJob(job);
+      if (found === null) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `No render called ${job}. It either never started or has been forgotten.`,
+            },
+          ],
+          isError: true,
+        };
+      }
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                job: found.id,
+                state: found.state,
+                url: found.url,
+                error: found.error,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    },
   );
 
   mcp.registerTool(

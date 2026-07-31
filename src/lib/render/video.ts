@@ -138,6 +138,9 @@ async function withWebCodecs(
     Math.ceil(renderDuration(config) * renderFps),
   );
   const scene = renderScene(config);
+  // Nothing is encoded until the background has what it needs, or the opening
+  // seconds come out without it.
+  await scene.ready;
 
   const webm = encoders.container.extension === "webm";
   const sound = {
@@ -236,6 +239,7 @@ async function withMediaRecorder(
   signal: AbortSignal,
 ): Promise<RenderedVideo> {
   const scene = renderScene(config);
+  await scene.ready;
   const audioContext = new AudioContext({ sampleRate: audio.sampleRate });
   const destination = audioContext.createMediaStreamDestination();
   const source = audioContext.createBufferSource();
@@ -308,6 +312,9 @@ async function withMediaRecorder(
  * reads. A background is layered underneath exactly as the page stacks it. */
 type Scene = {
   readonly canvas: HTMLCanvasElement;
+  /** Settles once the background has whatever it had to fetch, so the opening
+   * seconds are not rendered bare. */
+  readonly ready: Promise<void>;
   draw(position: number, elapsed: number): void;
   dispose(): void;
 };
@@ -337,6 +344,7 @@ function renderScene(config: RenderConfig): Scene {
   if (skin === null) {
     return {
       canvas: roll,
+      ready: Promise.resolve(),
       draw: (position) => renderer.draw(watchFrame(config, position)),
       dispose: () => {},
     };
@@ -349,6 +357,7 @@ function renderScene(config: RenderConfig): Scene {
     skin.dispose();
     return {
       canvas: roll,
+      ready: Promise.resolve(),
       draw: (position) => renderer.draw(watchFrame(config, position)),
       dispose: () => {},
     };
@@ -357,6 +366,7 @@ function renderScene(config: RenderConfig): Scene {
   const report: SkinReport = { keyboardTop: 0, travellers: [], strikes: [] };
   return {
     canvas: output,
+    ready: skin.ready ?? Promise.resolve(),
     draw(position, elapsed) {
       report.travellers.length = 0;
       report.strikes.length = 0;

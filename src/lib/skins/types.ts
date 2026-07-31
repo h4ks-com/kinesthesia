@@ -71,6 +71,10 @@ export type SkinInstance = {
   resize(width: number, height: number, ratio: number): void;
   draw(frame: SkinFrame): void;
   dispose(): void;
+  /** Settles once there is something to draw, for a background that has to
+   * fetch it. A render waits on this, or its opening seconds come out bare.
+   * Absent where a background is ready the moment it is made. */
+  readonly ready?: Promise<void>;
 };
 
 /** Both layers a skin may draw on, stacked and sized by the host. A skin never

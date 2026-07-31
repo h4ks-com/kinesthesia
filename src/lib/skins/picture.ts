@@ -35,13 +35,18 @@ export function pictureBackdrop(
         image.crossOrigin = "anonymous";
       }
       let ready = false;
-      image.addEventListener("load", () => {
-        ready = true;
-      });
-      // A dead address, or a host that will not say the picture may be used,
-      // leaves the roll plain. Nothing is drawn either way; this says so.
-      image.addEventListener("error", () => {
-        onFailed?.();
+      const arrived = new Promise<void>((settle) => {
+        image.addEventListener("load", () => {
+          ready = true;
+          settle();
+        });
+        // A dead address, or a host that will not say the picture may be used,
+        // leaves the roll plain. Nothing is drawn either way; this says so, and
+        // a render waiting on the picture stops waiting.
+        image.addEventListener("error", () => {
+          onFailed?.();
+          settle();
+        });
       });
       image.src = href;
 
@@ -49,6 +54,8 @@ export function pictureBackdrop(
       let ratio = 1;
 
       return {
+        ready: arrived,
+
         resize(width, height, nextRatio) {
           ratio = nextRatio;
           view = { width, height };

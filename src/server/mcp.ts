@@ -565,9 +565,11 @@ there when it refuses. The rise argument turns the notes around on its own, for
 a background that reads either way or for the plain roll, and is watch only for
 the same reason.
 
-Both are the listener's own setting first. Someone who has picked a background
-keeps it whatever a link says, so say a link is sent with one rather than that it
-will be seen with one. For a listener who has never picked, the link decides.
+A link that names a background shows it, whatever the listener has picked before,
+because naming one is showing something on purpose. A link that says nothing
+about it leaves their own choice alone. The visit does not overwrite what they
+have saved, so their background is back the next time they open a link that is
+quiet about it.
 
 player_link also accepts a direct .mid url in place of source and id, as long as
 the url is on an origin the deployment trusts. That is how a file from elsewhere,

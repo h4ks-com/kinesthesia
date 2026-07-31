@@ -303,14 +303,32 @@ test.describe("remembering the choice", () => {
     ).toHaveAttribute("aria-checked", "true");
   });
 
-  test("what this device remembers outranks a link", async ({ page }) => {
+  test("a link naming one shows it, whatever this device remembers", async ({
+    page,
+  }) => {
     await openWatch(page);
     await openPicker(page);
     await page.getByRole("button", { name: /^Ember/ }).click();
     await settingStored(page, "skin", "ember");
 
-    // Someone else's link does not get to replace a background you picked.
+    // A link that names a background is showing something on purpose.
     await page.goto(`${watchPath}&skin=abyss`);
+    await expect(page.locator("canvas")).toHaveCount(3);
+    await openSettings(page);
+    await expect(
+      page.getByRole("button", { name: /background/i }),
+    ).toContainText("abyss");
+  });
+
+  test("a link saying nothing leaves this device's own choice alone", async ({
+    page,
+  }) => {
+    await openWatch(page);
+    await openPicker(page);
+    await page.getByRole("button", { name: /^Ember/ }).click();
+    await settingStored(page, "skin", "ember");
+
+    await page.goto(watchPath);
     await expect(page.locator("canvas")).toHaveCount(3);
     await openSettings(page);
     await expect(
@@ -318,7 +336,7 @@ test.describe("remembering the choice", () => {
     ).toContainText("ember");
   });
 
-  test("choosing no background is a choice too, and outranks a link", async ({
+  test("choosing no background is a choice too, and a bare link keeps it", async ({
     page,
   }) => {
     await openWatch(page);
@@ -326,7 +344,7 @@ test.describe("remembering the choice", () => {
     await page.getByRole("button", { name: /^No background/ }).click();
     await settingCleared(page, "skin");
 
-    await page.goto(`${watchPath}&skin=abyss`);
+    await page.goto(watchPath);
     await expect(page.locator("canvas")).toBeVisible();
     await openSettings(page);
     await expect(

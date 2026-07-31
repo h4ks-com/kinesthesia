@@ -82,6 +82,9 @@ export function useBackground({
   const [rising, setRising] = useState(fromLink.rise);
   // A link is a stranger's decoration; anything else is this player's own.
   const [linked, setLinked] = useState(fromLink.skin !== null);
+  /** Whether the address named a background when the page opened, which is the
+   * only moment it can. */
+  const linkAsked = useRef(fromLink.skin !== null);
   const bootstrapped = useRef(false);
   const report = useRef(onChange);
   report.current = onChange;
@@ -101,8 +104,10 @@ export function useBackground({
       if (stored === null) {
         return;
       }
-      // Anything this device has been asked outranks the link.
-      if (stored.skin !== undefined) {
+      // A link naming a background is showing something on purpose, so it is
+      // what this visit gets. Only where the link says nothing does what this
+      // device remembers decide.
+      if (stored.skin !== undefined && !linkAsked.current) {
         setChosen(readStoredChoice(stored.skin));
         setLinked(false);
       }

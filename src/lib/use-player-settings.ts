@@ -17,7 +17,7 @@ import {
   type Speed,
 } from "@/lib/player-url";
 import { clampKeyWidth, defaultKeyWidth } from "@/lib/render/keyboard";
-import type { SkinId } from "@/lib/skins/types";
+import type { BackgroundChoice } from "@/lib/skins/backdrop";
 import {
   type GlobalSettings,
   loadGlobalSettings,
@@ -48,7 +48,7 @@ type Options = {
   /** The background and direction on screen now, for the same reason: they are
    * settings of this device, and the link carries them so copying it hands
    * over the view rather than the song alone. */
-  getView: () => { skin: SkinId | null; rise: boolean };
+  getView: () => { skin: BackgroundChoice | null; rise: boolean };
 };
 
 export type PlayerSettings = {

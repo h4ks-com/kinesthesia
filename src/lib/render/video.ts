@@ -366,6 +366,7 @@ function renderScene(config: RenderConfig): Scene {
       skin.draw({
         keyboardTop: report.keyboardTop,
         elapsed,
+        position,
         travellers: report.travellers,
         strikes: report.strikes,
       });

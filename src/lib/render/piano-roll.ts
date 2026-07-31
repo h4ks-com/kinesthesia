@@ -28,7 +28,9 @@ import {
 import { SparkField } from "@/lib/render/sparks";
 import type { NoteDirection, Strike, Traveller } from "@/lib/skins/types";
 
-const lookAhead = 3.5;
+/** Seconds of song between the top of the roll and the keys. Anything drawn
+ * behind the notes travels at this rate to move with them. */
+export const lookAhead = 3.5;
 /** Real seconds of warning before an owed note lands. Scaled by playback speed
  * so a fast song still gives the same time to react, and capped at the look
  * ahead so a long rest before the next note shows nothing until it nears. */

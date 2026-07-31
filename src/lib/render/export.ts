@@ -1,7 +1,7 @@
 import type { SongVoicing } from "@/lib/audio/voicing";
 import type { Song } from "@/lib/midi/song";
 import type { Frame, SkinReport } from "@/lib/render/piano-roll";
-import type { NoteDirection, Skin } from "@/lib/skins/types";
+import type { BackdropSource, NoteDirection } from "@/lib/skins/types";
 
 /** The watch view exactly as it stands, handed to an offline render. Nothing
  * here is interactive, so a frame is a pure function of position. */
@@ -17,7 +17,7 @@ export type RenderConfig = {
   readonly direction: NoteDirection;
   /** The background behind the roll, drawn into the video the same way it is
    * drawn on screen. Null leaves the roll on its own dark backdrop. */
-  readonly skin: Skin | null;
+  readonly skin: BackdropSource | null;
 };
 
 export const renderSize = { width: 1280, height: 720 } as const;

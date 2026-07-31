@@ -1,6 +1,6 @@
 import type { Transpose } from "@/lib/midi/song";
 import { defaultKeyWidth } from "@/lib/render/keyboard";
-import type { SkinId } from "@/lib/skins/types";
+import type { BackgroundChoice } from "@/lib/skins/backdrop";
 import { run, stores } from "@/lib/storage/idb";
 import { entryKey } from "@/lib/storage/library";
 
@@ -28,7 +28,9 @@ export type GlobalSettings = {
    * absent where this device has never been asked, null where the plain roll
    * was picked, and an id where a background was. A link only decides it for
    * someone who has never picked. */
-  readonly skin?: SkinId | null;
+  /** A device that picked one before pictures existed saved a bare id, so
+   * this is read through `readStoredChoice` rather than used as it comes. */
+  readonly skin?: BackgroundChoice | string | null;
   /** Sends the notes out of the keys rather than onto them. Absent until the
    * player says, for the same reason. */
   readonly rise?: boolean;

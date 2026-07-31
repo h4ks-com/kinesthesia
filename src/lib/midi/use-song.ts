@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { loadSong, type Song } from "@/lib/midi/song";
 import type { PlayerParams } from "@/lib/player-url";
 import { recordPlay } from "@/lib/storage/library";
-import { isLocalUrl } from "@/lib/storage/uploads";
+import { isDeviceLocal } from "@/lib/trusted-url";
 
 export type SongState =
   | { status: "loading" }
@@ -29,7 +29,7 @@ export function useSong(params: PlayerParams | null): SongState {
           return;
         }
         setState({ status: "ready", song });
-        if (!isLocalUrl(url)) {
+        if (!isDeviceLocal(url)) {
           void recordPlay({ url, name, source });
         }
       })

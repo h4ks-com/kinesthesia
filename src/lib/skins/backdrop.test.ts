@@ -45,10 +45,8 @@ describe("readBackdrop", () => {
     ).toEqual({ ...plain, scroll: true });
   });
 
-  it("keeps a picture kept on this device, which only this device resolves", () => {
-    expect(readBackdrop("url(local:abc-123)", trusted)?.source).toBe(
-      "local:abc-123",
-    );
+  it("refuses a picture held on one device, since a link cannot reach it", () => {
+    expect(readBackdrop("url(local:abc-123)", trusted)).toBeNull();
   });
 
   it("refuses a host the deployment does not trust", () => {
@@ -65,16 +63,25 @@ describe("readBackdrop", () => {
 
   it("holds brightness inside what the control can ask for", () => {
     expect(
-      readBackdrop("url(local:a) brightness(900%)", trusted)?.brightness,
+      readBackdrop(
+        "url(https://pics.example.com/a.jpg) brightness(900%)",
+        trusted,
+      )?.brightness,
     ).toBe(backdropBrightness.max);
     expect(
-      readBackdrop("url(local:a) brightness(0%)", trusted)?.brightness,
+      readBackdrop(
+        "url(https://pics.example.com/a.jpg) brightness(0%)",
+        trusted,
+      )?.brightness,
     ).toBe(backdropBrightness.min);
   });
 
   it("takes brightness with or without its sign", () => {
     expect(
-      readBackdrop("url(local:a) brightness(70)", trusted)?.brightness,
+      readBackdrop(
+        "url(https://pics.example.com/a.jpg) brightness(70)",
+        trusted,
+      )?.brightness,
     ).toBe(70);
   });
 });
@@ -95,7 +102,7 @@ describe("writeBackdrop", () => {
       plain,
       { ...plain, scroll: true },
       { ...plain, scroll: true, brightness: 150 },
-      { ...plain, source: "local:xyz", brightness: 25 },
+      { ...plain, brightness: 25 },
     ]) {
       expect(readBackdrop(writeBackdrop(backdrop), trusted)).toEqual(backdrop);
     }

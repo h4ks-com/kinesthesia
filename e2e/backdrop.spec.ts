@@ -154,11 +154,7 @@ test("a picture stays open to be shaped, and a shipped one is the whole choice",
 const striped =
   "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAQCAYAAAArij59AAAAGklEQVR4nGO4IyLyHx9mGCEKgOA/ATwSFAAAqtnAgXyUAVkAAAAASUVORK5CYII=";
 
-test("a travelling picture moves with the song and stops when it does", async ({
-  page,
-}) => {
-  await seenTour(page);
-  await serveFixture(page);
+async function serveStriped(page: Page): Promise<void> {
   await page.route("https://example.test/striped.png", (route) =>
     route.fulfill({
       status: 200,
@@ -167,6 +163,35 @@ test("a travelling picture moves with the song and stops when it does", async ({
       body: Buffer.from(striped, "base64"),
     }),
   );
+}
+
+/** Where the stripes sit down one column of the drawn picture, so a shift shows
+ * as a different reading. */
+async function column(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const canvas = [...document.querySelectorAll("canvas")].find(
+      (found) => found.getAttribute("role") !== "img" && found.width > 400,
+    );
+    const ctx = canvas?.getContext("2d");
+    if (canvas === undefined || ctx === null || ctx === undefined) {
+      return "";
+    }
+    const data = ctx.getImageData(4, 0, 1, canvas.height).data;
+    let out = "";
+    for (let y = 0; y < canvas.height; y += 4) {
+      out +=
+        (data[y * 4 + 3] ?? 0) > 10 && (data[y * 4] ?? 0) > 128 ? "1" : "0";
+    }
+    return out;
+  });
+}
+
+test("a travelling picture moves with the song and stops when it does", async ({
+  page,
+}) => {
+  await seenTour(page);
+  await serveFixture(page);
+  await serveStriped(page);
   await page.goto(
     `/watch?${playerQuery()}&skin=${encodeURIComponent(
       "url(https://example.test/striped.png) scroll",
@@ -175,39 +200,21 @@ test("a travelling picture moves with the song and stops when it does", async ({
   await page.locator("canvas").first().waitFor({ state: "visible" });
   await page.waitForTimeout(900);
 
-  const column = async (): Promise<string> =>
-    page.evaluate(() => {
-      const canvas = [...document.querySelectorAll("canvas")].find(
-        (found) => found.getAttribute("role") !== "img" && found.width > 400,
-      );
-      const ctx = canvas?.getContext("2d");
-      if (canvas === undefined || ctx == null) {
-        return "";
-      }
-      const data = ctx.getImageData(4, 0, 1, canvas.height).data;
-      let out = "";
-      for (let y = 0; y < canvas.height; y += 4) {
-        out +=
-          (data[y * 4 + 3] ?? 0) > 10 && (data[y * 4] ?? 0) > 128 ? "1" : "0";
-      }
-      return out;
-    });
-
   // Standing still before a note has been played.
-  const before = await column();
+  const before = await column(page);
   await page.waitForTimeout(1200);
-  expect(await column()).toBe(before);
+  expect(await column(page)).toBe(before);
 
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await page.waitForTimeout(1500);
-  const playing = await column();
+  const playing = await column(page);
   expect(playing).not.toBe(before);
 
   await page.getByRole("button", { name: "Pause" }).click();
   await page.waitForTimeout(400);
-  const paused = await column();
+  const paused = await column(page);
   await page.waitForTimeout(1500);
-  expect(await column()).toBe(paused);
+  expect(await column(page)).toBe(paused);
 });
 
 test("the picture is shown as it will look, since the roll behind is blurred", async ({
@@ -302,9 +309,45 @@ test("a picture survives the page being reloaded", async ({ page }) => {
   });
   await expect(page.getByLabel("Background brightness percent")).toBeVisible();
 
+  // A choice is written down a moment after the last change, and a link cannot
+  // carry a picture held here, so the reload has only that write to read.
+  await page.waitForTimeout(600);
   await page.reload();
   await page.locator("canvas").first().waitFor({ state: "visible" });
   await page.waitForTimeout(1200);
   // Chosen before the reload, so it is still what is drawn after one.
   expect(await reddest(page)).toBeGreaterThan(100);
+});
+
+test.describe("with a system asking for less movement", () => {
+  test("a link's picture is still shown, and holds still", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await seenTour(page);
+    await serveFixture(page);
+    await serveStriped(page);
+    await page.goto(
+      `/watch?${playerQuery()}&skin=${encodeURIComponent(
+        "url(https://example.test/striped.png) scroll",
+      )}`,
+    );
+    await page.locator("canvas").first().waitFor({ state: "visible" });
+    await page.waitForTimeout(1200);
+
+    expect(await reddest(page)).toBeGreaterThan(100);
+
+    const before = await column(page);
+    await page.getByRole("button", { name: "Play", exact: true }).click();
+    await page.waitForTimeout(1800);
+    expect(await column(page)).toBe(before);
+  });
+});
+
+test("a link naming a picture held on another device leaves the roll alone", async ({
+  page,
+}) => {
+  const asked: string[] = [];
+  page.on("request", (request) => asked.push(request.url()));
+  await open(page, "url(local:25b96c50-9bc4-47da-a25e-53fb4392eb98)");
+  expect(await reddest(page)).toBe(0);
+  expect(asked.filter((url) => url.startsWith("local:"))).toHaveLength(0);
 });

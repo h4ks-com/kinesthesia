@@ -22,7 +22,7 @@ import {
   playerPath,
 } from "@/lib/player-url";
 import { accuracy, type Score, scorePoints } from "@/lib/scoring/judge";
-import { isLocalUrl } from "@/lib/storage/uploads";
+import { isDeviceLocal } from "@/lib/trusted-url";
 
 const modeCatalog = [
   { mode: "watch", label: "Watch", icon: Eye },
@@ -89,7 +89,7 @@ export function PlayerHeader({
   onToggleMine,
   onSolo,
 }: PlayerHeaderProps) {
-  const local = isLocalUrl(params.url);
+  const local = isDeviceLocal(params.url);
   const switchable = modeCatalog.filter((entry) =>
     mode === "multiplayer" ? false : entry.mode !== mode,
   );

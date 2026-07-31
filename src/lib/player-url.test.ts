@@ -195,6 +195,17 @@ describe("the background in a link", () => {
     );
   });
 
+  it("leaves out a picture only the sending device holds", () => {
+    const url = buildPlayerUrl("https://x", "watch", {
+      ...song,
+      skin: {
+        kind: "image",
+        image: { source: "local:abc-123", scroll: false, brightness: 100 },
+      },
+    });
+    expect(new URL(url).searchParams.has("skin")).toBe(false);
+  });
+
   it("reads a picture back off a link", () => {
     const read = parse(
       new URLSearchParams(

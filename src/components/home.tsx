@@ -30,12 +30,12 @@ import {
 import {
   clearUploads,
   deleteUpload,
-  isLocalUrl,
   listUploads,
   markShared,
   readUpload,
   storeUpload,
 } from "@/lib/storage/uploads";
+import { isDeviceLocal } from "@/lib/trusted-url";
 import { shortestQuery, useLiveSearch } from "@/lib/use-live-search";
 import type { Viewer } from "@/server/auth";
 
@@ -207,7 +207,7 @@ export function Home({
   const matchedFavorites = filterLibrary(favorites, trimmed);
   const matchedUploads = filterLibrary(uploads, trimmed);
   const matchedRecent = filterLibrary(recent, trimmed).filter(
-    (entry) => !isLocalUrl(entry.url),
+    (entry) => !isDeviceLocal(entry.url),
   );
 
   return (

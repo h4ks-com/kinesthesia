@@ -2,7 +2,8 @@ import type { Midi } from "@tonejs/midi";
 import { readMidi } from "@/lib/midi/analysis";
 import { ExpressionTrail } from "@/lib/midi/expression";
 import { pedalSpans, releaseAt } from "@/lib/midi/sustain";
-import { isLocalUrl, readUpload } from "@/lib/storage/uploads";
+import { readUpload } from "@/lib/storage/uploads";
+import { isDeviceLocal } from "@/lib/trusted-url";
 
 export const noteNames = [
   "C",
@@ -300,7 +301,7 @@ export function transposeSong(song: Song, semitones: Transpose): Song {
 }
 
 export async function loadSong(url: string, name: string): Promise<Song> {
-  if (isLocalUrl(url)) {
+  if (isDeviceLocal(url)) {
     return parseSong(await readUpload(url), name);
   }
   const response = await fetch(url);

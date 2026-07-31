@@ -11,11 +11,12 @@ import {
 } from "@/lib/skins/registry";
 import type { BackdropSource, NoteDirection, Skin } from "@/lib/skins/types";
 import { skinReads } from "@/lib/skins/types";
-import { isLocalPicture, pictureHref } from "@/lib/storage/pictures";
+import { pictureHref } from "@/lib/storage/pictures";
 import {
   loadGlobalSettings,
   updateGlobalSettings,
 } from "@/lib/storage/settings";
+import { isDeviceLocal } from "@/lib/trusted-url";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
 
 export type Background = {
@@ -49,10 +50,10 @@ type Options = {
   readonly fixed: NoteDirection | null;
   /** Plain style takes the background with it. */
   readonly plain: boolean;
-  /** What the link asked for. It only decides anything for a player who has
-   * never picked one: a background is this device's own setting, and someone
-   * else's link does not get to replace it. A system asking for less movement
-   * refuses a link's background outright. */
+  /** What the link asked for. A link naming a background is showing something
+   * on purpose, so it wins over what this device remembers for the visit. A
+   * system asking for less movement refuses a link's animated background and
+   * holds a picture still. */
   readonly fromLink: {
     readonly skin: BackgroundChoice | null;
     readonly rise: boolean;
@@ -82,9 +83,12 @@ export function useBackground({
   const [rising, setRising] = useState(fromLink.rise);
   // A link is a stranger's decoration; anything else is this player's own.
   const [linked, setLinked] = useState(fromLink.skin !== null);
-  /** Whether the address named a background when the page opened, which is the
-   * only moment it can. */
-  const linkAsked = useRef(fromLink.skin !== null);
+  /** What the address named when the page opened, which is the only moment it
+   * can. */
+  const linkAsked = useRef({
+    skin: fromLink.skin !== null,
+    rise: fromLink.rise,
+  });
   const bootstrapped = useRef(false);
   const report = useRef(onChange);
   report.current = onChange;
@@ -107,11 +111,12 @@ export function useBackground({
       // A link naming a background is showing something on purpose, so it is
       // what this visit gets. Only where the link says nothing does what this
       // device remembers decide.
-      if (stored.skin !== undefined && !linkAsked.current) {
+      if (stored.skin !== undefined && !linkAsked.current.skin) {
         setChosen(readStoredChoice(stored.skin));
         setLinked(false);
       }
-      if (stored.rise !== undefined) {
+      // The link carries this only when it wants the notes turned around.
+      if (stored.rise !== undefined && !linkAsked.current.rise) {
         setRising(stored.rise);
       }
     });
@@ -125,7 +130,15 @@ export function useBackground({
   const hushed = plain || (still && linked);
   const wanted =
     hushed || chosen?.kind !== "built-in" ? null : findSkin(chosen.id);
-  const image = hushed || chosen?.kind !== "image" ? null : chosen.image;
+  // A picture already holds still, so less movement only costs it its scroll.
+  const picked = plain || chosen?.kind !== "image" ? null : chosen.image;
+  const image = useMemo(
+    () =>
+      picked !== null && still && picked.scroll
+        ? { ...picked, scroll: false }
+        : picked,
+    [picked, still],
+  );
 
   // A background that reads only one way decides the direction, so turning the
   // notes around can never make one vanish under the player.
@@ -155,12 +168,12 @@ export function useBackground({
     let made: string | null = null;
     void pictureHref(source).then((resolved) => {
       if (!live) {
-        if (resolved !== null && isLocalPicture(source)) {
+        if (resolved !== null && isDeviceLocal(source)) {
           URL.revokeObjectURL(resolved);
         }
         return;
       }
-      made = isLocalPicture(source) ? resolved : null;
+      made = isDeviceLocal(source) ? resolved : null;
       setLost(null);
       setHref(resolved);
     });

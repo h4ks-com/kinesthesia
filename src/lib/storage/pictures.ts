@@ -1,7 +1,7 @@
 import { run, stores } from "@/lib/storage/idb";
+import { isDeviceLocal, localScheme } from "@/lib/trusted-url";
 
 const pictureStore = stores.pictures;
-const scheme = "local:";
 
 export type StoredPicture = {
   readonly key: string;
@@ -19,13 +19,6 @@ export type Picture = {
   readonly addedAt: number;
 };
 
-/** Pictures stay on the device that added them. A background parameter naming
- * one resolves nowhere else, which is the trade for never uploading a file
- * somebody only wanted behind their own roll. */
-export function isLocalPicture(source: string): boolean {
-  return source.startsWith(scheme);
-}
-
 export async function storePicture(
   name: string,
   bytes: ArrayBuffer,
@@ -35,7 +28,7 @@ export async function storePicture(
   await run(pictureStore, "readwrite", (store) =>
     store.put({ key, name, bytes, type, addedAt: Date.now() }),
   );
-  return `${scheme}${key}`;
+  return `${localScheme}${key}`;
 }
 
 export async function listPictures(): Promise<readonly Picture[]> {
@@ -44,7 +37,7 @@ export async function listPictures(): Promise<readonly Picture[]> {
   );
   return rows
     .map((row) => ({
-      source: `${scheme}${row.key}`,
+      source: `${localScheme}${row.key}`,
       name: row.name,
       addedAt: row.addedAt,
     }))
@@ -53,20 +46,20 @@ export async function listPictures(): Promise<readonly Picture[]> {
 
 export async function deletePicture(source: string): Promise<void> {
   await run(pictureStore, "readwrite", (store) =>
-    store.delete(source.slice(scheme.length)),
+    store.delete(source.slice(localScheme.length)),
   );
 }
 
 /** An address the page can actually load the picture from. The object url is
  * the caller's to revoke, since only they know when it stops being drawn. */
 export async function pictureHref(source: string): Promise<string | null> {
-  if (!isLocalPicture(source)) {
+  if (!isDeviceLocal(source)) {
     return source;
   }
   const row = await run<StoredPicture | undefined>(
     pictureStore,
     "readonly",
-    (store) => store.get(source.slice(scheme.length)),
+    (store) => store.get(source.slice(localScheme.length)),
   );
   if (row === undefined) {
     return null;

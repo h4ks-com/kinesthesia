@@ -113,13 +113,13 @@ const playerLinkShape = {
     .string()
     .optional()
     .describe(
-      "Background drawn behind the notes, purely cosmetic. Either the name of one this build ships, or a picture written the way a CSS background is: url(https://host/a.jpg) followed by scroll or fixed and brightness(60%). fixed lays one copy over the roll and holds it still; scroll tiles the picture and travels it with the notes. The picture must be on an origin the deployment trusts, the same allowlist a .mid url is held to. Some shipped backgrounds send the notes out of the keys instead of onto them, and those are watch only. Left out for the plain roll. A listener who has already picked their own background keeps it, so this decides the look only for someone who never has",
+      "Background drawn behind the notes, purely cosmetic. Either the name of one this build ships, or a picture written the way a CSS background is: url(https://host/a.jpg) followed by scroll or fixed and brightness(60%). fixed lays one copy over the roll and holds it still; scroll tiles the picture and travels it with the notes. The picture must be on an origin the deployment trusts, the same allowlist a .mid url is held to. Some shipped backgrounds send the notes out of the keys instead of onto them, and those are watch only. Left out for the plain roll. Naming one shows it, whatever the listener picked before; leaving it out leaves their own choice alone. A device asking for less movement holds a picture still",
     ),
   rise: z
     .boolean()
     .optional()
     .describe(
-      "Send the notes out of the keys as they sound instead of onto them. A look rather than a way to read ahead, so it is watch only. Some backgrounds turn it on by themselves. Kept by a listener who has set it for themselves, like the background",
+      "Send the notes out of the keys as they sound instead of onto them. A look rather than a way to read ahead, so it is watch only. Some backgrounds turn it on by themselves. Asking for it turns the notes around whatever the listener set, like the background",
     ),
   start: z
     .number()
@@ -185,7 +185,7 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
   if (input.skin !== undefined && choice === null) {
     return {
       ok: false,
-      why: `unknown background: ${input.skin}. Try ${skinIds.join(" or ")}, or a picture on a trusted host written as url(https://host/a.jpg) repeat scroll brightness(60%)`,
+      why: `unknown background: ${input.skin}. Try ${skinIds.join(" or ")}, or a picture on a trusted host written as url(https://host/a.jpg) scroll brightness(60%)`,
     };
   }
   const skin = choice?.kind === "built-in" ? choice.id : null;

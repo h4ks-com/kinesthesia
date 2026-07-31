@@ -1,5 +1,5 @@
 import { type SkinId, skinIds } from "@/lib/skins/types";
-import { isPlayableUrl } from "@/lib/trusted-url";
+import { isDeviceLocal, isPlayableUrl } from "@/lib/trusted-url";
 
 /** A picture behind the roll, and how it sits there. Written into the `skin`
  * parameter in the shape of a CSS background, so a link says what it does
@@ -64,7 +64,9 @@ export function readBackdrop(
     return null;
   }
   const source = (match[1] ?? "").trim();
-  if (!isPlayableUrl(source, allowedOrigins)) {
+  // A picture held on one device resolves on that one only, so a link naming
+  // one leaves whoever opens it with their own background.
+  if (isDeviceLocal(source) || !isPlayableUrl(source, allowedOrigins)) {
     return null;
   }
   let { scroll, brightness } = plainBackdrop as {
@@ -121,7 +123,7 @@ export function readStoredChoice(value: unknown): BackgroundChoice | null {
   const image = held.image as Partial<Backdrop> | undefined;
   // Only a picture this device kept: a remote address saved by an older build
   // was never held to the allowlist, and this is not where that is checked.
-  if (typeof image?.source !== "string" || !image.source.startsWith("local:")) {
+  if (typeof image?.source !== "string" || !isDeviceLocal(image.source)) {
     return null;
   }
   return {

@@ -18,7 +18,7 @@ import {
   type PlayerMode,
   playerPath,
 } from "@/lib/player-url";
-import { isLocalUrl } from "@/lib/storage/uploads";
+import { isDeviceLocal } from "@/lib/trusted-url";
 
 const modes = [
   { mode: "watch", label: "Watch", icon: Eye, tip: "Watch it play" },
@@ -69,7 +69,7 @@ export function SongRow({
   share,
   signedIn = false,
 }: SongRowProps) {
-  const local = isLocalUrl(url);
+  const local = isDeviceLocal(url);
   const watchHref = playerPath("watch", {
     url,
     name,

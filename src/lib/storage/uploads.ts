@@ -1,8 +1,8 @@
 import { run, stores } from "@/lib/storage/idb";
 import { entryKey, type LibraryEntry } from "@/lib/storage/library";
+import { isDeviceLocal, localScheme } from "@/lib/trusted-url";
 
 const uploadStore = stores.uploads;
-const scheme = "local:";
 
 type StoredUpload = {
   readonly key: string;
@@ -15,10 +15,6 @@ type StoredUpload = {
   readonly sharedUrl?: string;
 };
 
-export function isLocalUrl(url: string): boolean {
-  return url.startsWith(scheme);
-}
-
 export async function storeUpload(
   name: string,
   bytes: ArrayBuffer,
@@ -27,11 +23,11 @@ export async function storeUpload(
   await run(uploadStore, "readwrite", (store) =>
     store.put({ key, name, bytes, uploadedAt: Date.now() }),
   );
-  return `${scheme}${key}`;
+  return `${localScheme}${key}`;
 }
 
 export async function readUpload(url: string): Promise<ArrayBuffer> {
-  const key = url.slice(scheme.length);
+  const key = url.slice(localScheme.length);
   const stored = await run<StoredUpload | undefined>(
     uploadStore,
     "readonly",
@@ -51,7 +47,7 @@ export async function listUploads(): Promise<LibraryEntry[]> {
   );
   return all
     .map((upload): LibraryEntry => {
-      const url = upload.sharedUrl ?? `${scheme}${upload.key}`;
+      const url = upload.sharedUrl ?? `${localScheme}${upload.key}`;
       return {
         key: entryKey("local", url),
         url,
@@ -74,8 +70,8 @@ export async function deleteUpload(url: string): Promise<void> {
 }
 
 async function storeKeyFor(url: string): Promise<string | null> {
-  if (isLocalUrl(url)) {
-    return url.slice(scheme.length);
+  if (isDeviceLocal(url)) {
+    return url.slice(localScheme.length);
   }
   const all = await run<StoredUpload[]>(uploadStore, "readonly", (store) =>
     store.getAll(),

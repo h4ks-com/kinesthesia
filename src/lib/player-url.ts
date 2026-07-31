@@ -14,8 +14,7 @@ import {
   writeBackdrop,
 } from "@/lib/skins/backdrop";
 import { skinIds } from "@/lib/skins/types";
-
-import { isPlayableUrl } from "@/lib/trusted-url";
+import { isDeviceLocal, isPlayableUrl } from "@/lib/trusted-url";
 
 export const playerModes = ["watch", "learn", "multiplayer"] as const;
 
@@ -41,7 +40,8 @@ export type PlayerParams = {
   /** Strips the page back to the keys and the falling notes, for recording. */
   readonly focus: boolean;
   /** The background drawn behind the roll. Carried in the link so a shared one
-   * arrives looking the way it was sent, and never saved to this device. */
+   * arrives looking the way it was sent, except for a picture kept on the
+   * device that sent it, which loads nowhere else. */
   readonly skin: BackgroundChoice | null;
   /** Sends the notes out of the keys rather than onto them. A look rather than
    * a way to read ahead, so it rides in the link with the background. */
@@ -162,7 +162,11 @@ export function buildPlayerUrl(
   if (explicit || params.transpose !== defaultTranspose) {
     target.searchParams.set("transpose", String(params.transpose));
   }
-  if (params.skin !== null) {
+  if (
+    params.skin !== null &&
+    (params.skin.kind === "built-in" ||
+      !isDeviceLocal(params.skin.image.source))
+  ) {
     target.searchParams.set(
       "skin",
       params.skin.kind === "built-in"

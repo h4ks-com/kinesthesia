@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
 import type { Context } from "hono";
 import { readMidi } from "@/lib/midi/analysis";
-import { isPlayableUrl } from "@/lib/player-url";
+import { isPlayableUrl } from "@/lib/trusted-url";
 import { currentViewer } from "@/server/auth";
 import { config } from "@/server/config";
 import type { Score } from "@/server/db/schema";

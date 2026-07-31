@@ -31,12 +31,13 @@ import {
   buildPlayerUrl,
   defaultSpeed,
   defaultStart,
-  isPlayableUrl,
   type PlayerMode,
   playerModes,
+  readSkinChoice,
   speeds,
 } from "@/lib/player-url";
 import { skinIds, skinReads } from "@/lib/skins/types";
+import { isPlayableUrl } from "@/lib/trusted-url";
 import { config } from "@/server/config";
 import { sourceFetch } from "@/server/http/fetch";
 import { analyseMidi } from "@/server/midi/analyse";
@@ -112,7 +113,7 @@ const playerLinkShape = {
     .string()
     .optional()
     .describe(
-      "Background drawn behind the notes, purely cosmetic. Some of them send the notes out of the keys instead of onto them, and those are watch only. Left out for the plain roll. A listener who has already picked their own background keeps it, so this decides the look only for someone who never has",
+      "Background drawn behind the notes, purely cosmetic. Either the name of one this build ships, or a picture written the way a CSS background is: url(https://host/a.jpg) followed by scroll or fixed and brightness(60%). fixed lays one copy over the roll and holds it still; scroll tiles the picture and travels it with the notes. The picture must be on an origin the deployment trusts, the same allowlist a .mid url is held to. Some shipped backgrounds send the notes out of the keys instead of onto them, and those are watch only. Left out for the plain roll. A listener who has already picked their own background keeps it, so this decides the look only for someone who never has",
     ),
   rise: z
     .boolean()
@@ -177,13 +178,17 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
   ) {
     return { ok: false, why: `speed must be one of ${speeds.join(", ")}` };
   }
-  const skin = skinIds.find((id) => id === input.skin) ?? null;
-  if (input.skin !== undefined && skin === null) {
+  const choice =
+    input.skin === undefined
+      ? null
+      : readSkinChoice(input.skin, config.trustedMidiOrigins);
+  if (input.skin !== undefined && choice === null) {
     return {
       ok: false,
-      why: `unknown background: ${input.skin}. Try ${skinIds.join(" or ")}`,
+      why: `unknown background: ${input.skin}. Try ${skinIds.join(" or ")}, or a picture on a trusted host written as url(https://host/a.jpg) repeat scroll brightness(60%)`,
     };
   }
+  const skin = choice?.kind === "built-in" ? choice.id : null;
   if (skin !== null && input.mode !== "watch" && !skinReads(skin, "down")) {
     const falling = skinIds.filter((id) => skinReads(id, "down"));
     return {
@@ -215,7 +220,7 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
       transpose: clampTranspose(input.transpose ?? defaultTranspose),
       focus: input.focus ?? false,
       rise: input.rise ?? false,
-      skin,
+      skin: choice,
       start: input.start ?? defaultStart,
     }),
   );
@@ -541,6 +546,14 @@ Those player links take the song as it comes. To open one at a different speed,
 in another key, on chosen tracks, partway through, stripped back for recording,
 or against a background, build it with player_link, passing the same source and
 id: it validates every value and refuses a combination the player would ignore.
+
+A background may also be a picture rather than one this build ships. Write it the
+way a CSS background is written, url(https://host/a.jpg) followed by scroll or
+fixed and brightness(60%); the defaults are fixed and brightness(100%). A picture
+either sits still and covers the roll, or travels with the notes, and travelling
+means tiled because one copy would run out. The picture has to sit on an origin
+the deployment trusts, the same allowlist a .mid url is held to, and a picture
+somebody saved on their own device cannot be linked to at all.
 
 The background is the skin argument, and it is decoration only: it never changes
 the song, the notes or the timing. Everything about it rides in the link and

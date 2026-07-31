@@ -8,7 +8,14 @@ import {
   defaultTranspose,
   type Transpose,
 } from "@/lib/midi/song";
-import { type SkinId, skinIds } from "@/lib/skins/types";
+import {
+  type BackgroundChoice,
+  readBackdrop,
+  writeBackdrop,
+} from "@/lib/skins/backdrop";
+import { skinIds } from "@/lib/skins/types";
+
+import { isPlayableUrl } from "@/lib/trusted-url";
 
 export const playerModes = ["watch", "learn", "multiplayer"] as const;
 
@@ -35,7 +42,7 @@ export type PlayerParams = {
   readonly focus: boolean;
   /** The background drawn behind the roll. Carried in the link so a shared one
    * arrives looking the way it was sent, and never saved to this device. */
-  readonly skin: SkinId | null;
+  readonly skin: BackgroundChoice | null;
   /** Sends the notes out of the keys rather than onto them. A look rather than
    * a way to read ahead, so it rides in the link with the background. */
   readonly rise: boolean;
@@ -124,27 +131,6 @@ export function parseTrustedOrigins(raw: string | undefined): string[] {
   return origins;
 }
 
-/** A raw url is played only from an allowed origin, so a crafted link cannot
- * point the player at an arbitrary host. Our own upload scheme always passes. */
-export function isPlayableUrl(
-  url: string,
-  allowed: readonly string[],
-): boolean {
-  if (/^local:[a-z0-9-]+$/.test(url)) {
-    return true;
-  }
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    return false;
-  }
-  return allowed.includes(parsed.origin);
-}
-
 /** Explicit spells out every song setting even at its default, so a link
  * copied from a running player reproduces that exact view. A default left
  * implicit defers to whatever the recipient's device remembers. */
@@ -177,7 +163,12 @@ export function buildPlayerUrl(
     target.searchParams.set("transpose", String(params.transpose));
   }
   if (params.skin !== null) {
-    target.searchParams.set("skin", params.skin);
+    target.searchParams.set(
+      "skin",
+      params.skin.kind === "built-in"
+        ? params.skin.id
+        : writeBackdrop(params.skin.image),
+    );
   }
   if (params.rise) {
     target.searchParams.set("rise", "1");
@@ -193,10 +184,19 @@ export function buildPlayerUrl(
 
 const localBase = "http://player.local";
 
-/** Only a background this build ships, so a stale or invented link falls back
- * to the plain roll rather than leaving a blank layer. */
-function readSkin(raw: string | null): SkinId | null {
-  return skinIds.find((id) => id === raw) ?? null;
+/** A background this build ships, or a picture from a host the deployment
+ * trusts. Anything else falls back to the plain roll rather than leaving a
+ * blank layer. */
+export function readSkinChoice(
+  raw: string | null,
+  allowedOrigins: readonly string[],
+): BackgroundChoice | null {
+  const built = skinIds.find((id) => id === raw);
+  if (built !== undefined) {
+    return { kind: "built-in", id: built };
+  }
+  const image = readBackdrop(raw, allowedOrigins);
+  return image === null ? null : { kind: "image", image };
 }
 
 export function playerPath(mode: PlayerMode, params: PlayerParams): string {
@@ -237,7 +237,7 @@ export function parsePlayerParams(
     transpose: clampTranspose(transpose),
     focus: searchParams.get("focus") === "1",
     rise: searchParams.get("rise") === "1",
-    skin: readSkin(searchParams.get("skin")),
+    skin: readSkinChoice(searchParams.get("skin"), allowedOrigins),
     start: readStart(searchParams.get("start")),
   };
 }

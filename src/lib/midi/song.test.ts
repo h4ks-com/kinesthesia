@@ -75,6 +75,12 @@ describe("parseSong lead-in", () => {
     const parsed = parseSong(midiStartingAt(4), "x");
     expect(parsed.notes[0]?.start).toBeCloseTo(4);
   });
+
+  it("runs on after the last note rather than stopping dead on it", () => {
+    const parsed = parseSong(midiStartingAt(4), "x");
+    const last = parsed.notes[parsed.notes.length - 1]?.end ?? 0;
+    expect(parsed.duration).toBeCloseTo(last + 2.5);
+  });
 });
 
 describe("parseSong rejects bad input", () => {
@@ -192,6 +198,12 @@ describe("parseSong sustain", () => {
     for (const note of parsed.notes) {
       expect(note.release).toBe(note.end);
     }
+  });
+
+  it("runs on past the pedal lift, not just the last note off", () => {
+    const parsed = parseSong(pedalled(), "x");
+    const lift = parsed.notes[0]?.release ?? 0;
+    expect(parsed.duration).toBeGreaterThan(lift + 2);
   });
 });
 

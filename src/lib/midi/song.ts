@@ -27,6 +27,11 @@ export const highestPitch = 108;
  * the strike line. */
 const startLeadIn = 2.5;
 
+/** Seconds the song runs on past its last sound. A file ends on the note-off,
+ * so stopping there cuts the release mid-ring and drops the roll on the beat;
+ * this lets it land. */
+const endTail = 2.5;
+
 /** A real MIDI is kilobytes; this only stops a hostile or mistaken file from
  * exhausting the tab's memory as it parses. */
 export const maxMidiBytes = 5 * 1024 * 1024;
@@ -215,9 +220,16 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
     }
   }
 
+  // Off the last release rather than the file's end: a song finishing under the
+  // pedal sounds past its final note-off.
+  const lastSound = runwayNotes.reduce(
+    (last, note) => Math.max(last, note.release),
+    midi.duration + shift,
+  );
+
   return {
     name,
-    duration: midi.duration + shift,
+    duration: lastSound + endTail,
     notes: runwayNotes,
     tracks,
     expression,

@@ -142,8 +142,10 @@ test("a picture stays open to be shaped, and a shipped one is the whole choice",
   await page.getByRole("button", { name: /background/i }).click();
   await expect(dialog).toBeVisible();
 
-  // A background this build ships needs nothing else said about it.
-  await page.getByRole("button", { name: /^Aurora/ }).click();
+  // A background this build ships needs nothing else said about it. The plain
+  // roll is the one choice every machine can make: a shader background is
+  // refused where there is no GPU to run it, which is every runner.
+  await page.getByRole("button", { name: /^No background/ }).click();
   await expect(dialog).toHaveCount(0);
 });
 

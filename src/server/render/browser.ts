@@ -77,7 +77,20 @@ export async function driveRender(job: RenderJob, target: URL): Promise<void> {
     return;
   }
 
+  // A browser somewhere else may end a session on a clock of its own. Losing it
+  // has to end the job then and there, or this would wait on a page that no
+  // longer exists until the deadline.
+  connection.on("disconnected", () => {
+    failJob(job, "The render browser ended the session before it finished");
+  });
+
   const page = await connection.newPage().catch(() => null);
+  page?.on("close", () => {
+    failJob(
+      job,
+      "The render browser closed the page before the render finished",
+    );
+  });
   // A tab held open past the deadline is the expensive failure here: the browser
   // is shared, so a hung render would starve everything else using it.
   const deadline = setTimeout(() => {

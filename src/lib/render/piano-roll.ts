@@ -890,31 +890,26 @@ export class PianoRollRenderer {
 
     for (const pitch of whiteKeys) {
       const x = whiteKeyLeft(pitch, whiteWidth);
-      // A lit key sinks a couple pixels, exposing the keybed above it.
+      // A key hinges at its far end, which is the top of the screen, so a
+      // pressed one dips at the near end and comes up short of where it stood.
       const sink = active.has(pitch) || held.has(pitch) ? 2 : 0;
       this.setKeyPaint(frame, active, pitch, this.whiteFace ?? "#dfe4ec", 20);
-      ctx.fillRect(
-        x + 0.5,
-        keyboardTop + sink,
-        whiteWidth - 1,
-        keyboardHeight - sink,
-      );
+      ctx.fillRect(x + 0.5, keyboardTop, whiteWidth - 1, keyboardHeight - sink);
       ctx.shadowBlur = 0;
-      // The bed a sunk key drops into, or the recess reads as a hole cut
-      // through to the roll behind.
+      // The bed the near end drops toward, at the front where it went down.
       if (sink > 0) {
         ctx.fillStyle = keybedFloor;
-        ctx.fillRect(x + 0.5, keyboardTop, whiteWidth - 1, sink);
+        ctx.fillRect(
+          x + 0.5,
+          keyboardTop + keyboardHeight - sink,
+          whiteWidth - 1,
+          sink,
+        );
       }
       ctx.fillStyle = keyEdgeLight;
-      ctx.fillRect(x + 0.5, keyboardTop + sink, 1, keyboardHeight - sink);
+      ctx.fillRect(x + 0.5, keyboardTop, 1, keyboardHeight - sink);
       ctx.fillStyle = keyEdgeShade;
-      ctx.fillRect(
-        x + whiteWidth - 1.5,
-        keyboardTop + sink,
-        1,
-        keyboardHeight - sink,
-      );
+      ctx.fillRect(x + whiteWidth - 1.5, keyboardTop, 1, keyboardHeight - sink);
       // Washed before the black keys are laid over it, so the wash never spills
       // onto a black key sitting on top and the layering reads true.
       if (!frame.plain) {
@@ -922,7 +917,7 @@ export class PianoRollRenderer {
           pitch,
           active,
           x + 0.5,
-          keyboardTop + sink,
+          keyboardTop,
           whiteWidth - 1,
           keyboardHeight - sink,
         );
@@ -942,16 +937,16 @@ export class PianoRollRenderer {
       ctx.fillStyle = sink > 0 ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.28)";
       ctx.fillRect(
         x - 1,
-        keyboardTop + blackHeight,
+        keyboardTop + blackHeight - sink,
         blackWidth + 2,
         sink > 0 ? 1 : 4,
       );
       this.setKeyPaint(frame, active, pitch, this.blackFace ?? "#0b0e15", 16);
-      ctx.fillRect(x, keyboardTop + sink, blackWidth, blackHeight - sink);
+      ctx.fillRect(x, keyboardTop, blackWidth, blackHeight - sink);
       ctx.shadowBlur = 0;
       if (sink > 0) {
         ctx.fillStyle = keybedFloor;
-        ctx.fillRect(x, keyboardTop, blackWidth, sink);
+        ctx.fillRect(x, keyboardTop + blackHeight - sink, blackWidth, sink);
       } else {
         // The front face of a key standing proud, where it turns toward the
         // player.
@@ -965,7 +960,7 @@ export class PianoRollRenderer {
           pitch,
           active,
           x,
-          keyboardTop + sink,
+          keyboardTop,
           blackWidth,
           blackHeight - sink,
         );

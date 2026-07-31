@@ -42,6 +42,8 @@ src/components/
   song-row.tsx                one song with its favourite and mode links
   share-upload.tsx            publishes one of your own files, behind a confirm
   skin-picker.tsx             the backgrounds, each running live before it is picked
+  custom-backgrounds.tsx      adding a picture of your own, and shaping the one
+                              in use
   library-section.tsx         preview, expand and bound a saved list
   player.tsx                  composes the hooks below into a mode, and hosts a
                               match through its aside, overlay and footer slots
@@ -67,6 +69,8 @@ src/components/
   parts-menu.tsx              the parts you play into and each one's instrument
 src/lib/
   player-url.ts               builds and parses player URLs
+  trusted-url.ts              whether a url may be opened at all, which the
+                              player, the pictures and the MCP tools all ask
   use-player-settings.ts      the settings a song plays with, restored from this
                               device and written back to the URL
   use-background.ts           picks, remembers and resolves the background and
@@ -111,6 +115,11 @@ src/lib/
   render/sparks.ts            the swarm thrown up from the keys, and its ceiling
   skins/types.ts              what a background is told, what it must answer,
                               and which way each one reads
+  skins/backdrop.ts           a picture behind the roll, written and read the way
+                              a CSS background is, and the older shape a device
+                              may have saved
+  skins/picture.ts            draws that picture: covering and still, or tiled
+                              down the roll and travelling with the notes
   skins/scene.ts              turns a paint function into a background: contexts,
                               sizing, the clock and the shader inputs
   skins/registry.ts           the backgrounds on offer, which suit a direction,
@@ -151,6 +160,8 @@ src/lib/
   storage/settings.ts         remembered settings, per song and global
   storage/uploads.ts          bytes of uploaded MIDI files, keyed by local: url,
                               and where one was published if it has been
+  storage/pictures.ts         background images, kept on this device only and
+                              never uploaded
 ```
 
 ## How playback stays in time

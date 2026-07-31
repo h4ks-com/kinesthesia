@@ -294,16 +294,24 @@ export async function settingStored(
         page.evaluate(
           (key) =>
             new Promise<unknown>((resolve) => {
-              const request = indexedDB.open("kinesthesia", 3);
+              const request = indexedDB.open("kinesthesia");
               request.onsuccess = () => {
                 const store = request.result
                   .transaction("settings", "readonly")
                   .objectStore("settings");
                 const row = store.get("global");
-                row.onsuccess = () =>
+                row.onsuccess = () => {
+                  const held = (
+                    row.result as Record<string, unknown> | undefined
+                  )?.[key];
+                  // A background is kept as a choice; every other setting is
+                  // the value itself.
                   resolve(
-                    (row.result as Record<string, unknown> | undefined)?.[key],
+                    typeof held === "object" && held !== null && "kind" in held
+                      ? ((held as { id?: string }).id ?? "picture")
+                      : held,
                   );
+                };
                 row.onerror = () => resolve(null);
               };
               request.onerror = () => resolve(null);
@@ -324,7 +332,7 @@ export async function settingCleared(page: Page, field: string): Promise<void> {
         page.evaluate(
           (key) =>
             new Promise<string>((resolve) => {
-              const request = indexedDB.open("kinesthesia", 3);
+              const request = indexedDB.open("kinesthesia");
               request.onsuccess = () => {
                 const row = request.result
                   .transaction("settings", "readonly")

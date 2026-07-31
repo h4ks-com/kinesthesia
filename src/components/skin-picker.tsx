@@ -2,14 +2,23 @@
 
 import { Check, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import type { Skin, SkinId, SkinInstance } from "@/lib/skins/types";
+import { CustomBackgrounds } from "@/components/custom-backgrounds";
+import type { BackgroundChoice } from "@/lib/skins/backdrop";
+import type {
+  BackdropSource,
+  Skin,
+  SkinId,
+  SkinInstance,
+} from "@/lib/skins/types";
 
 type SkinPickerProps = {
-  chosen: SkinId | null;
+  chosen: BackgroundChoice | null;
   /** Decided by the caller, which is the only place that knows which of these
    * read the way its notes travel. */
   available: readonly Skin[];
-  onChoose: (id: SkinId | null) => void;
+  /** Applied at once so the roll behind shows it. Picking a picture leaves the
+   * dialog up, since it is only half the choice: the rest is shaping it. */
+  onChoose: (next: BackgroundChoice | null) => void;
   onClose: () => void;
 };
 
@@ -26,12 +35,12 @@ function beat(elapsed: number): boolean {
 /** Runs one skin small, so the choice is made by looking rather than by name.
  * A skin the device cannot run reports it, so the tile can refuse the choice
  * rather than accepting one that quietly does nothing. */
-function Preview({
-  skin,
+export function Preview({
+  source,
   onUnsupported,
 }: {
-  skin: Skin;
-  onUnsupported: () => void;
+  source: BackdropSource;
+  onUnsupported?: () => void;
 }) {
   const base = useRef<HTMLCanvasElement | null>(null);
   const overlay = useRef<HTMLCanvasElement | null>(null);
@@ -44,9 +53,9 @@ function Preview({
     if (under === null || over === null) {
       return;
     }
-    const made = skin.create({ base: under, overlay: over });
+    const made = source.create({ base: under, overlay: over });
     if (made === null) {
-      refuse.current();
+      refuse.current?.();
       return;
     }
     const instance: SkinInstance = made;
@@ -56,6 +65,9 @@ function Preview({
     let frame = requestAnimationFrame(function loop() {
       const elapsed = (performance.now() - started) / 1000;
       instance.draw({
+        // No song to read, so the preview's own clock stands in for one and a
+        // travelling picture still travels.
+        position: elapsed,
         keyboardTop: box.height,
         elapsed,
         travellers: previewTravellers.map((across, index) => ({
@@ -76,7 +88,7 @@ function Preview({
       cancelAnimationFrame(frame);
       instance.dispose();
     };
-  }, [skin]);
+  }, [source]);
 
   return (
     <span className="relative block h-24 w-full overflow-hidden rounded-lg bg-void">
@@ -190,16 +202,23 @@ export function SkinPicker({
   }, [onClose]);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Background"
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-void/70 p-4 backdrop-blur"
-    >
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-void/70 p-4 backdrop-blur">
+      {/* The way out for anyone who opened this to look. Hidden from assistive
+          technology, which has Escape and the close button already. */}
+      <button
+        type="button"
+        aria-hidden="true"
+        tabIndex={-1}
+        onClick={onClose}
+        className="absolute inset-0 cursor-default"
+      />
       <div
         ref={dialog}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Background"
         tabIndex={-1}
-        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl border border-line-strong bg-panel p-4 shadow-2xl outline-none"
+        className="relative max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-line-strong bg-panel p-4 shadow-2xl outline-none"
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
@@ -218,12 +237,20 @@ export function SkinPicker({
           </button>
         </div>
 
-        <div className="flex flex-col gap-2.5">
+        <CustomBackgrounds chosen={chosen} onChoose={onChoose} />
+
+        <h3 className="mt-4 mb-2.5 font-semibold text-sm text-text">
+          The ones that come with it
+        </h3>
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
           <Choice
             title="No background"
             blurb="A flat dark backdrop. Nothing moves behind the notes."
             selected={chosen === null}
-            onSelect={() => onChoose(null)}
+            onSelect={() => {
+              onChoose(null);
+              onClose();
+            }}
           >
             <Flat />
           </Choice>
@@ -232,12 +259,15 @@ export function SkinPicker({
               key={skin.id}
               title={skin.name}
               blurb={unsupported.has(skin.id) ? "Needs WebGL2." : skin.blurb}
-              selected={chosen === skin.id}
+              selected={chosen?.kind === "built-in" && chosen.id === skin.id}
               disabled={unsupported.has(skin.id)}
-              onSelect={() => onChoose(skin.id)}
+              onSelect={() => {
+                onChoose({ kind: "built-in", id: skin.id });
+                onClose();
+              }}
             >
               <Preview
-                skin={skin}
+                source={skin}
                 onUnsupported={() =>
                   setUnsupported((known) => new Set(known).add(skin.id))
                 }

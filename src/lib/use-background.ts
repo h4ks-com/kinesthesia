@@ -52,8 +52,8 @@ type Options = {
   readonly plain: boolean;
   /** What the link asked for. A link naming a background is showing something
    * on purpose, so it wins over what this device remembers for the visit. A
-   * system asking for less movement refuses a link's animated background and
-   * holds a picture still. */
+   * system asking for less movement refuses a link's animated background, one
+   * that runs on a clock of its own. */
   readonly fromLink: {
     readonly skin: BackgroundChoice | null;
     readonly rise: boolean;
@@ -130,15 +130,11 @@ export function useBackground({
   const hushed = plain || (still && linked);
   const wanted =
     hushed || chosen?.kind !== "built-in" ? null : findSkin(chosen.id);
-  // A picture already holds still, so less movement only costs it its scroll.
-  const picked = plain || chosen?.kind !== "image" ? null : chosen.image;
-  const image = useMemo(
-    () =>
-      picked !== null && still && picked.scroll
-        ? { ...picked, scroll: false }
-        : picked,
-    [picked, still],
-  );
+  // A travelling picture is moved by the playhead alone: it holds still until
+  // the song plays and stops the moment it is paused, so the transport is
+  // already the control a system asking for less movement wants. A shipped
+  // background animates on a clock of its own, which is why that one is refused.
+  const image = plain || chosen?.kind !== "image" ? null : chosen.image;
 
   // A background that reads only one way decides the direction, so turning the
   // notes around can never make one vanish under the player.

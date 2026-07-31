@@ -320,7 +320,9 @@ test("a picture survives the page being reloaded", async ({ page }) => {
 });
 
 test.describe("with a system asking for less movement", () => {
-  test("a link's picture is still shown, and holds still", async ({ page }) => {
+  // The travel is the playhead's, so pausing stops it. That is the control such
+  // a system is asking for, and it is why a picture is not held back here.
+  test("a link's picture still travels with the song", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await seenTour(page);
     await serveFixture(page);
@@ -336,9 +338,13 @@ test.describe("with a system asking for less movement", () => {
     expect(await reddest(page)).toBeGreaterThan(100);
 
     const before = await column(page);
+    expect(before).not.toBe("");
+    await page.waitForTimeout(1000);
+    expect(await column(page)).toBe(before);
+
     await page.getByRole("button", { name: "Play", exact: true }).click();
     await page.waitForTimeout(1800);
-    expect(await column(page)).toBe(before);
+    expect(await column(page)).not.toBe(before);
   });
 });
 

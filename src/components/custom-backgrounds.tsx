@@ -19,7 +19,6 @@ import {
   pictureHref,
   storePicture,
 } from "@/lib/storage/pictures";
-import { useReducedMotion } from "@/lib/use-reduced-motion";
 
 /** Big enough for any photo worth putting behind a roll, small enough that the
  * device can hold several and draw one every frame. */
@@ -79,7 +78,6 @@ export function CustomBackgrounds({
   const [failed, setFailed] = useState<string | null>(null);
   const input = useRef<HTMLInputElement | null>(null);
   const thumbnails = useThumbnails(pictures);
-  const still = useReducedMotion();
 
   useEffect(() => {
     void listPictures().then(setPictures);
@@ -250,14 +248,9 @@ export function CustomBackgrounds({
             />
             <Toggle
               label="Travel with the notes"
-              checked={image.scroll && !still}
-              disabled={still}
+              checked={image.scroll}
               onChange={(scroll) => shape({ scroll })}
-              tip={
-                still
-                  ? "Your system asks for less movement, so the picture is held still."
-                  : "Tiles the picture and moves it with the notes."
-              }
+              tip="Tiles the picture and moves it with the notes, so it travels while the song plays and stops when it does."
             />
           </div>
         </div>

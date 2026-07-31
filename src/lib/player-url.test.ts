@@ -154,7 +154,7 @@ describe("the background in a link", () => {
   it("carries a background it ships", () => {
     const url = buildPlayerUrl("https://x", "watch", {
       ...song,
-      skin: "cruise",
+      skin: { kind: "built-in", id: "cruise" },
     });
     expect(new URL(url).searchParams.get("skin")).toBe("cruise");
   });
@@ -168,12 +168,58 @@ describe("the background in a link", () => {
     const read = parse(
       new URLSearchParams(`url=${encodeURIComponent(song.url)}&skin=cruise`),
     );
-    expect(read?.skin).toBe("cruise");
+    expect(read?.skin).toEqual({ kind: "built-in", id: "cruise" });
   });
 
   it("ignores a background this build does not ship", () => {
     const read = parse(
       new URLSearchParams(`url=${encodeURIComponent(song.url)}&skin=made-up`),
+    );
+    expect(read?.skin).toBeNull();
+  });
+
+  it("carries a picture, and the words describing it", () => {
+    const url = buildPlayerUrl("https://x", "watch", {
+      ...song,
+      skin: {
+        kind: "image",
+        image: {
+          source: "https://x.test/a.jpg",
+          scroll: true,
+          brightness: 60,
+        },
+      },
+    });
+    expect(new URL(url).searchParams.get("skin")).toBe(
+      "url(https://x.test/a.jpg) scroll brightness(60%)",
+    );
+  });
+
+  it("reads a picture back off a link", () => {
+    const read = parse(
+      new URLSearchParams(
+        `url=${encodeURIComponent(song.url)}&skin=${encodeURIComponent(
+          "url(https://x.test/a.jpg) scroll",
+        )}`,
+      ),
+    );
+    expect(read?.skin).toEqual({
+      kind: "image",
+      image: {
+        source: "https://x.test/a.jpg",
+        scroll: true,
+        brightness: 100,
+      },
+    });
+  });
+
+  it("refuses a picture from a host the deployment does not trust", () => {
+    const read = parse(
+      new URLSearchParams(
+        `url=${encodeURIComponent(song.url)}&skin=${encodeURIComponent(
+          "url(https://elsewhere.test/a.jpg)",
+        )}`,
+      ),
     );
     expect(read?.skin).toBeNull();
   });

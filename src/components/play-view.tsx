@@ -429,16 +429,13 @@ export function PlayView({
           <SkinPicker
             chosen={background.chosen}
             available={background.offered}
-            onChoose={(next) => {
-              background.choose(next);
-              setPickingSkin(false);
-            }}
+            onChoose={background.choose}
             onClose={() => setPickingSkin(false)}
           />
         ) : null}
 
         <PianoRollView
-          skin={background.skin}
+          skin={background.source}
           direction="up"
           song={song}
           hiddenTracks={noAutoNotes}
@@ -499,7 +496,7 @@ export function PlayView({
             plainStyle={plainStyle}
             onPlainStyle={onPlainStyle}
             onPickSkin={() => setPickingSkin(true)}
-            skinName={background.skin?.name.toLowerCase() ?? "plain"}
+            skinName={background.name}
             onRising={null}
             rising={true}
             risingHeldBy={null}

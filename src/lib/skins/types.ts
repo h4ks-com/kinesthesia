@@ -56,7 +56,11 @@ export type Strike = {
 export type SkinFrame = {
   /** Where the keys begin, which is the line notes travel from or toward. */
   readonly keyboardTop: number;
+  /** Seconds the layer has been up. Animation that runs on its own reads this. */
   readonly elapsed: number;
+  /** Where the song is. Anything that should hold still while playback does
+   * reads this instead, since it stops when the song stops. */
+  readonly position: number;
   /** Note heads climbing away from the keys. Empty while notes fall. */
   readonly travellers: readonly Traveller[];
   /** Notes that landed since the last frame, whichever way they travel. */
@@ -79,14 +83,17 @@ export type SkinSurface = {
   readonly overlay: HTMLCanvasElement;
 };
 
-export type Skin = {
+/** Anything the roll can mount behind itself. A background this build ships and
+ * a picture someone brought both answer to this and nothing more. */
+export type BackdropSource = {
+  create(surface: SkinSurface): SkinInstance | null;
+};
+
+export type Skin = BackdropSource & {
   readonly id: SkinId;
   readonly name: string;
   readonly blurb: string;
   /** The directions this skin reads correctly in. A skin whose world is being
    * flown through only makes sense when notes travel away from the keys. */
   readonly directions: readonly NoteDirection[];
-  /** Null where the device cannot run it, so the choice falls back rather than
-   * leaving a blank layer. */
-  create(surface: SkinSurface): SkinInstance | null;
 };

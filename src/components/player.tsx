@@ -566,7 +566,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                     plain={plainStyle}
                     speed={speed}
                     direction={background.direction}
-                    skin={background.skin}
+                    skin={background.source}
                     title={songTitle}
                   />
                 ) : null
@@ -585,15 +585,12 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
               <SkinPicker
                 chosen={background.chosen}
                 available={background.offered}
-                onChoose={(next) => {
-                  background.choose(next);
-                  setPickingSkin(false);
-                }}
+                onChoose={background.choose}
                 onClose={() => setPickingSkin(false)}
               />
             ) : null}
             <PianoRollView
-              skin={background.skin}
+              skin={background.source}
               direction={background.direction}
               song={song}
               hiddenTracks={hiddenTracks}
@@ -661,7 +658,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             onPickSkin={
               background.offered.length > 0 ? () => setPickingSkin(true) : null
             }
-            skinName={background.skin?.name.toLowerCase() ?? "plain"}
+            skinName={background.name}
             onRising={background.canTurn ? background.turn : null}
             rising={background.direction === "up"}
             risingHeldBy={background.heldBy?.name.toLowerCase() ?? null}

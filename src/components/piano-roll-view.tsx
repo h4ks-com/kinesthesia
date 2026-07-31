@@ -9,7 +9,11 @@ import type { Reach } from "@/lib/input/keyboard-map";
 import type { ExpressionTrail } from "@/lib/midi/expression";
 import type { LiveNote, Song } from "@/lib/midi/song";
 import { PianoRollRenderer, type SkinReport } from "@/lib/render/piano-roll";
-import type { NoteDirection, Skin, SkinInstance } from "@/lib/skins/types";
+import type {
+  BackdropSource,
+  NoteDirection,
+  SkinInstance,
+} from "@/lib/skins/types";
 
 /** A skin is decoration, so it is drawn at most half again the css resolution
  * however dense the screen is. */
@@ -41,7 +45,7 @@ type PianoRollViewProps = {
   /** How the bend and modulation wheels moved, per track. Play mode only. */
   expression?: ExpressionTrail;
   /** The cosmetic layer drawn behind the roll. Null leaves the roll opaque. */
-  skin: Skin | null;
+  skin: BackdropSource | null;
   /** Which way notes travel, which decides what a skin is looking at. */
   direction?: NoteDirection;
   /** Playback speed, so the owed-note foreshadow leads by a constant reaction
@@ -138,13 +142,14 @@ export function PianoRollView({
     }
     let frame = requestAnimationFrame(function loop() {
       const skinned = skinRef.current;
+      const at = getPosition();
       if (skinned !== null) {
         reportRef.current.travellers.length = 0;
         reportRef.current.strikes.length = 0;
       }
       renderer.draw({
         song,
-        position: getPosition(),
+        position: at,
         live: liveRef.current?.() ?? null,
         sustain: sustainRef.current?.() ?? false,
         expression: expressionRef.current ?? null,
@@ -168,6 +173,7 @@ export function PianoRollView({
         skinned.draw({
           keyboardTop: reportRef.current.keyboardTop,
           elapsed: (performance.now() - skinClock.current) / 1000,
+          position: at,
           travellers: reportRef.current.travellers,
           strikes: reportRef.current.strikes,
         });

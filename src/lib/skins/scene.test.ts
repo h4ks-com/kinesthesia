@@ -10,7 +10,14 @@ function at(x: number): Traveller {
 }
 
 function frame(over: Partial<SkinFrame> = {}): SkinFrame {
-  return { keyboardTop: 160, elapsed: 1, travellers: [], strikes: [], ...over };
+  return {
+    keyboardTop: 160,
+    elapsed: 1,
+    position: 0,
+    travellers: [],
+    strikes: [],
+    ...over,
+  };
 }
 
 describe("reading the mood of a frame", () => {

@@ -21,7 +21,7 @@ import {
   renderDuration,
 } from "@/lib/render/export";
 import { canRenderVideo, isFastVideo } from "@/lib/render/video-support";
-import type { NoteDirection, Skin } from "@/lib/skins/types";
+import type { BackdropSource, NoteDirection } from "@/lib/skins/types";
 
 type RenderMenuProps = {
   song: Song;
@@ -31,7 +31,7 @@ type RenderMenuProps = {
   speed: number;
   direction: NoteDirection;
   /** The background on screen, so the file carries it too. */
-  skin: Skin | null;
+  skin: BackdropSource | null;
   title: string;
 };
 

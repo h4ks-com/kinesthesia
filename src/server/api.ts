@@ -881,7 +881,14 @@ api.openapi(renderArtifactRoute, async (c) => {
     );
     finishJob(job, url);
     return c.json({ url }, 200);
-  } catch {
+  } catch (reason: unknown) {
+    // Said out loud, because the object store's own reason is the only thing
+    // that separates a bucket that is full from one that refused the write, and
+    // the caller is only ever told that it did not land.
+    console.error(
+      `render ${job.id} could not be stored (${body.byteLength} bytes):`,
+      reason,
+    );
     // Left running, the job would hold a browser open until its deadline for a
     // render that is already over.
     failJob(job, "The finished render could not be stored");

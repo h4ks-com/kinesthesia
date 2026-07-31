@@ -21,7 +21,10 @@ export type RenderConfig = {
 };
 
 export const renderSize = { width: 1280, height: 720 } as const;
-export const renderFps = 60;
+/** Falling notes carry their motion in long straight travel, which reads fine
+ * at half the rate a game needs, and every frame here is one the encoder has to
+ * pay for twice: once drawn, once compressed. */
+export const renderFps = 30;
 
 const noPitches: ReadonlySet<number> = new Set();
 

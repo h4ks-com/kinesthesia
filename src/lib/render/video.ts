@@ -112,7 +112,10 @@ async function supportedVideoConfig(
       codec,
       width,
       height,
-      bitrate: 6_000_000,
+      // A roll is flat colour, hard edges and a mostly still keyboard, which
+      // compresses far better than film. Enough that the file stays postable
+      // where a chat caps an attachment at tens of megabytes.
+      bitrate: 2_000_000,
       framerate: renderFps,
     };
     const support = await VideoEncoder.isConfigSupported(config).catch(

@@ -1,18 +1,11 @@
-import type { SceneView } from "@/lib/skins/scene";
-
-/** Worlds that pass while the keys fly through space. Each is shaded once into
- * its own small canvas and then only ever blitted, so the surface holds still
- * as it nears instead of boiling, and a frame costs one draw. */
-
+/** Cruise, as a background script. Source rather than a module because it is
+ * evaluated inside the worker, the same way one somebody wrote is. Planets is
+ * used by no other background, so it is inlined here rather than made a
+ * shared global. */
+export const cruiseScript = String.raw`
 /** Muted on purpose: a planet is scenery, and the notes have to stay the
  * brightest thing on screen. */
-type Palette = {
-  readonly low: readonly [number, number, number];
-  readonly high: readonly [number, number, number];
-  readonly air: string;
-};
-
-const palettes: readonly Palette[] = [
+const palettes = [
   { low: [42, 32, 24], high: [176, 142, 100], air: "rgba(196,166,120,0.16)" },
   { low: [22, 36, 50], high: [128, 176, 202], air: "rgba(150,190,215,0.18)" },
   { low: [46, 24, 20], high: [184, 106, 72], air: "rgba(200,130,96,0.14)" },
@@ -22,17 +15,17 @@ const palettes: readonly Palette[] = [
 
 /** The sun that lights every one of them, so a whole field agrees on where the
  * light is coming from. Normalised. */
-const light = { x: -0.52, y: -0.58, z: 0.63 } as const;
+const light = { x: -0.52, y: -0.58, z: 0.63 };
 /** How much of the dark side still shows. Not zero: a planet cut to a hard
  * crescent reads as a logo. */
 const ambient = 0.1;
 
-function hash(x: number, y: number): number {
+function hash(x, y) {
   const mixed = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
   return mixed - Math.floor(mixed);
 }
 
-function noise(x: number, y: number): number {
+function noise(x, y) {
   const gridX = Math.floor(x);
   const gridY = Math.floor(y);
   const fx = x - gridX;
@@ -46,7 +39,7 @@ function noise(x: number, y: number): number {
   return (a + (b - a) * ux) * (1 - uy) + (c + (d - c) * ux) * uy;
 }
 
-function clouds(x: number, y: number): number {
+function clouds(x, y) {
   let sum = 0;
   let amp = 0.5;
   let scale = 1;
@@ -58,30 +51,16 @@ function clouds(x: number, y: number): number {
   return sum;
 }
 
-export type Planet = {
-  readonly sprite: HTMLCanvasElement;
-  /** Direction out of the point being travelled toward, before depth. */
-  readonly x: number;
-  readonly y: number;
-  z: number;
-  /** Screen radius at full depth, which the projection divides. */
-  readonly reach: number;
-  /** How fast the depth is eaten, so one crosses over a minute or so. */
-  readonly approach: number;
-};
-
 /** Shaded per pixel off the sphere's own normal, which is what separates a
  * planet from a circle with a gradient in it: the terminator curves, the limb
  * darkens, and the surface wraps rather than sliding. */
-function renderPlanet(size: number, banded: boolean): HTMLCanvasElement | null {
-  const sprite = document.createElement("canvas");
-  sprite.width = size;
-  sprite.height = size;
+function renderPlanet(size, banded) {
+  const sprite = new OffscreenCanvas(size, size);
   const ctx = sprite.getContext("2d");
   if (ctx === null) {
     return null;
   }
-  const palette = palettes[Math.floor(Math.random() * palettes.length)];
+  const palette = palettes[Math.floor(random() * palettes.length)];
   if (palette === undefined) {
     return null;
   }
@@ -89,13 +68,13 @@ function renderPlanet(size: number, banded: boolean): HTMLCanvasElement | null {
   const middle = size / 2;
   // A ringed world gives most of its sprite over to the rings, so the body sits
   // smaller inside the same square.
-  const ringed = Math.random() < 0.38;
+  const ringed = random() < 0.38;
   const radius = size * (ringed ? 0.25 : 0.42);
   const ringInner = radius * 1.35;
   const ringOuter = radius * 2.0;
-  const tilt = 0.16 + Math.random() * 0.24;
-  const seed = Math.random() * 90;
-  const bandCount = 5 + Math.random() * 7;
+  const tilt = 0.16 + random() * 0.24;
+  const seed = random() * 90;
+  const bandCount = 5 + random() * 7;
   const image = ctx.createImageData(size, size);
   const pixels = image.data;
 
@@ -149,9 +128,7 @@ function renderPlanet(size: number, banded: boolean): HTMLCanvasElement | null {
     drawRings(ctx, middle, ringInner, ringOuter, tilt, palette, Math.PI, 0);
   }
   // Composited rather than assigned, so the rings already down are kept.
-  const body = document.createElement("canvas");
-  body.width = size;
-  body.height = size;
+  const body = new OffscreenCanvas(size, size);
   const bodyCtx = body.getContext("2d");
   if (bodyCtx === null) {
     return null;
@@ -189,16 +166,7 @@ function renderPlanet(size: number, banded: boolean): HTMLCanvasElement | null {
 /** Half a ring system, as a stack of thin bands with gaps cut through them.
  * Drawn twice per world, once behind the body and once in front, so the body
  * sits inside the rings the way it does from anywhere but edge on. */
-function drawRings(
-  ctx: CanvasRenderingContext2D,
-  middle: number,
-  inner: number,
-  outer: number,
-  tilt: number,
-  palette: Palette,
-  from: number,
-  to: number,
-): void {
+function drawRings(ctx, middle, inner, outer, tilt, palette, from, to) {
   const bands = 26;
   ctx.save();
   for (let band = 0; band < bands; band += 1) {
@@ -210,7 +178,7 @@ function drawRings(
       (noise(along * 21, 8.7) > 0.28 ? 1 : 0.15);
     const lit = palette.high;
     ctx.globalAlpha = 0.5 * density;
-    ctx.strokeStyle = `rgb(${lit[0]},${lit[1]},${lit[2]})`;
+    ctx.strokeStyle = "rgb(" + lit[0] + "," + lit[1] + "," + lit[2] + ")";
     ctx.lineWidth = ((outer - inner) / bands) * 1.4;
     ctx.beginPath();
     ctx.ellipse(middle, middle, reach, reach * tilt, 0, from, to);
@@ -224,31 +192,28 @@ function drawRings(
 const planetRate = 0.024;
 const spriteSize = 168;
 
-export class Planets {
-  private live: Planet | null = null;
+class Planets {
+  constructor() {
+    this.live = null;
+  }
 
   /** Drawn before everything else in the scene, since it is the furthest thing
    * out there and nothing in front of it should be dimmed by it. */
-  paint(
-    ctx: CanvasRenderingContext2D,
-    view: SceneView,
-    away: { x: number; y: number; reach: number },
-    step: number,
-  ): void {
-    if (this.live === null && Math.random() < planetRate * step) {
-      const sprite = renderPlanet(spriteSize, Math.random() < 0.5);
+  paint(ctx, view, away, step) {
+    if (this.live === null && random() < planetRate * step) {
+      const sprite = renderPlanet(spriteSize, random() < 0.5);
       if (sprite !== null) {
         // Off the line of travel, so it drifts out of the distance rather than
         // swelling in the middle of the screen.
-        const around = Math.random() * Math.PI * 2;
-        const out = 0.22 + Math.random() * 0.5;
+        const around = random() * Math.PI * 2;
+        const out = 0.22 + random() * 0.5;
         this.live = {
           sprite,
           x: Math.cos(around) * out,
           y: Math.sin(around) * out,
           z: 1,
-          reach: 5 + Math.random() * 5,
-          approach: 0.012 + Math.random() * 0.012,
+          reach: 5 + random() * 5,
+          approach: 0.012 + random() * 0.012,
         };
       }
     }
@@ -283,3 +248,114 @@ export class Planets {
     ctx.globalAlpha = 1;
   }
 }
+
+/** Dimmer than the still field, because streaking stars are already carrying
+ * the eye and the notes still have to win. */
+const nebulaGain = 0.5;
+
+/** Stars are held in a space with depth and projected, so they spread out of
+ * the point being travelled toward and streak more the nearer they come. A
+ * column of falling lines reads as rain; this reads as motion. */
+const starCount = 200;
+/** How fast depth is eaten. The whole field crosses in a few seconds. */
+const approach = 0.55;
+const nearest = 0.06;
+
+/** Real starlight is not white. A few warm and blue ones stop the field looking
+ * like static. */
+const starColours = [
+  "#ffffff",
+  "#dce8ff",
+  "#bcd4ff",
+  "#ffe9c8",
+  "#ffd3a8",
+];
+
+function place(star, fresh) {
+  star.x = (random() - 0.5) * 2.4;
+  star.y = (random() - 0.5) * 2.4;
+  star.z = fresh ? random() : 1;
+  star.color = starColours[Math.floor(random() * starColours.length)] ?? "#ffffff";
+  star.twinkle = random() * Math.PI * 2;
+}
+
+function seed() {
+  const stars = [];
+  for (let count = 0; count < starCount; count += 1) {
+    const star = { x: 0, y: 0, z: 1, color: "#ffffff", twinkle: 0 };
+    place(star, true);
+    stars.push(star);
+  }
+  return stars;
+}
+
+/** Travelling toward the top of the roll, so the field spreads out of a point
+ * above it and pours down past the keys. */
+function vanishing(view) {
+  return {
+    x: view.width / 2,
+    y: -view.height * 0.25,
+    reach: Math.max(view.width, view.height),
+  };
+}
+
+background({
+  name: "Cruising",
+  blurb:
+    "The keys fly through space. Stars streak past, a world drifts by now and then, and the rocks your notes reach break apart.",
+  directions: ["up"],
+  shader: { source: nebulaSource(0.06), gain: nebulaGain },
+
+  create() {
+    const stars = seed();
+    const planets = new Planets();
+    const field = new RockField({
+      max: 9,
+      rate: 1.2,
+      smallest: 13,
+      largest: 30,
+    });
+
+    return {
+      paint(ctx, view, frame) {
+        const away = vanishing(view);
+        // Furthest thing out there, so everything else is drawn over it.
+        planets.paint(ctx, view, away, frame.step);
+
+        for (const star of stars) {
+          const was = star.z;
+          star.z -= approach * frame.step;
+          if (star.z <= nearest) {
+            place(star, false);
+            continue;
+          }
+          const x = away.x + (star.x / star.z) * away.reach * 0.5;
+          const y = away.y + (star.y / star.z) * away.reach * 0.5;
+          if (y > view.keyboardTop + 40 || x < -60 || x > view.width + 60) {
+            continue;
+          }
+          const wasX = away.x + (star.x / was) * away.reach * 0.5;
+          const wasY = away.y + (star.y / was) * away.reach * 0.5;
+          const closeness = 1 - star.z;
+          const shine =
+            (0.25 + closeness * 0.75) *
+            (0.75 + 0.25 * Math.sin(frame.elapsed * 3 + star.twinkle));
+
+          ctx.globalAlpha = Math.min(1, shine);
+          ctx.strokeStyle = star.color;
+          ctx.lineWidth = 0.5 + closeness * 2.1;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(wasX, wasY);
+          ctx.lineTo(x, y);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        ctx.lineCap = "butt";
+
+        field.paint(ctx, view.width, view.height, frame.step, frame);
+      },
+    };
+  },
+});
+`;

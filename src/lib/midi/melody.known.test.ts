@@ -73,6 +73,8 @@ function arrangement(
     notes: notes.sort((left, right) => left.start - right.start),
     tracks: [pitched(0)],
     expression: new ExpressionTrail(),
+    harmony: [],
+    key: null,
   };
 }
 
@@ -143,6 +145,8 @@ describe("reduceToMelody on tunes with a known shape", () => {
       notes: notes.sort((left, right) => left.start - right.start),
       tracks: [pitched(0)],
       expression: new ExpressionTrail(),
+      harmony: [],
+      key: null,
     };
     const atTuneSpeed: MelodyOptions = {
       tracks: new Set([0]),

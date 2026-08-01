@@ -9,6 +9,7 @@ import {
   skinsFor,
   suitsDirection,
 } from "@/lib/skins/registry";
+import { scriptBackdrop } from "@/lib/skins/runtime/host";
 import type { BackdropSource, NoteDirection, Skin } from "@/lib/skins/types";
 import { skinReads } from "@/lib/skins/types";
 import { pictureHref } from "@/lib/storage/pictures";
@@ -136,6 +137,32 @@ export function useBackground({
   // background animates on a clock of its own, which is why that one is refused.
   const image = plain || chosen?.kind !== "image" ? null : chosen.image;
 
+  /** One somebody added. Its script is fetched rather than bundled, so it is
+   * held here until it arrives and the roll stays plain in the meantime. */
+  const added = hushed || chosen?.kind !== "script" ? null : chosen.id;
+  const [addedSource, setAddedSource] = useState<{
+    readonly id: string;
+    readonly source: string;
+  } | null>(null);
+  useEffect(() => {
+    if (added === null) {
+      setAddedSource(null);
+      return;
+    }
+    let live = true;
+    void fetch(`/api/skins/${added}`)
+      .then((answer) => (answer.ok ? answer.text() : null))
+      .then((source) => {
+        if (live && source !== null) {
+          setAddedSource({ id: added, source });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [added]);
+
   // A background that reads only one way decides the direction, so turning the
   // notes around can never make one vanish under the player.
   const heldBy =
@@ -189,6 +216,18 @@ export function useBackground({
         ? null
         : pictureBackdrop(image, href, direction, () => setLost(href)),
     [image, href, direction],
+  );
+
+  /** An added background, once its script is here and is the one asked for. A
+   * broken one drops the roll back to plain rather than leaving a dead layer. */
+  const addedSource_ = useMemo(
+    () =>
+      addedSource === null || addedSource.id !== added
+        ? null
+        : scriptBackdrop(addedSource.source, {
+            onBroke: () => setChosen(null),
+          }),
+    [addedSource, added],
   );
 
   // A slider shaping a picture calls this on every step, and a write each time
@@ -260,13 +299,15 @@ export function useBackground({
     offered: fixed === null ? everySkin : skinsFor(fixed),
     canTurn: fixed === null,
     heldBy,
-    source: source_ ?? wanted,
+    source: source_ ?? addedSource_ ?? wanted,
     name:
       source_ !== null && lost !== href
         ? "your picture"
         : source_ !== null
           ? "picture missing"
-          : (wanted?.name.toLowerCase() ?? "plain"),
+          : addedSource_ !== null
+            ? "an added background"
+            : (wanted?.name.toLowerCase() ?? "plain"),
     choose,
     turn,
   };

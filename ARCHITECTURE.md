@@ -32,6 +32,13 @@ src/server/
   render/browser.ts           drives a render in a browser somewhere else, over
                               the DevTools protocol, and holds the limits on how
                               many may run
+  skins/store.ts              backgrounds somebody added, and what is refused
+  skins/declared.ts           the name a script gives itself, parsed out of its
+                              own background() call without running it
+  skins/check.ts              runs a submitted background in the render browser
+                              before it is kept, so its author hears why it
+                              would not draw. Skipped where there is no browser
+  skins/doc.ts                how to write one, for whoever asks
   midi/
     types.ts                  MidiSource contract and result shapes
     registry.ts               sources available to search, and the source and
@@ -47,6 +54,8 @@ src/components/
   song-row.tsx                one song with its favourite and mode links
   share-upload.tsx            publishes one of your own files, behind a confirm
   skin-picker.tsx             the backgrounds, each running live before it is picked
+  added-backgrounds.tsx       the section for ones added over the api, each
+                              fetched and run only once its tile is looked at
   custom-backgrounds.tsx      adding a picture of your own, and shaping the one
                               in use
   library-section.tsx         preview, expand and bound a saved list
@@ -125,25 +134,10 @@ src/lib/
                               may have saved
   skins/picture.ts            draws that picture: covering and still, or tiled
                               down the roll and travelling with the notes
-  skins/scene.ts              turns a paint function into a background: contexts,
-                              sizing, the clock and the shader inputs
   skins/registry.ts           the backgrounds on offer, which suit a direction,
                               and which way notes travel under one
-  skins/fullscreen.ts         the one triangle a shader background draws on, the
-                              uniforms every shader takes, and the shared nebula
-  skins/particles.ts          a pool with a ceiling for anything thrown in the air
-  skins/rubble.ts             the asteroids notes break, the field they drift in,
-                              and the dust and chips a break leaves
-  skins/starfield.ts          drifting gas, stars, and rocks the notes break
-  skins/cruise.ts             the same space travelled through, stars streaking past
-  skins/planets.ts            the worlds that drift by, shaded once off a sphere
-  skins/aurora.ts             curtains of light that lift and change hue as you play
-  skins/rainfall.ts           a storm behind glass, rings where notes land
-  skins/abyss.ts              deep water, light shafts, bubbles trailing the notes
-  skins/deep-life.ts          the schools and the submarine that cross the deep
-  skins/horizon.ts            a grid out to a banded sun, a beam per struck key
-  skins/ember.ts              black rock, sparks off the keys, heat in the keybed
-  skins/ink.ts                near-black paper a struck key blooms ink across
+  use-nearby.ts               whether an element has come near enough to be
+                              looked at, for work worth putting off until then
   render/export.ts            the watch view as a render job: size, frame, files
   render/audio.ts             offline audio render to a WAV, at the live voicing
   render/video.ts             offline video render, WebCodecs with a recorder fallback
@@ -151,6 +145,15 @@ src/lib/
                               encoder to find out
   render/handback.ts          a render the address asked for: proving one was
                               wanted, and returning the file to the server
+  skins/api.ts                the whole surface a background is written against
+  skins/runtime/source.ts     the worker every background is drawn inside, and
+                              everything it is denied before one runs
+  skins/runtime/stdlib.ts     what a background is given to draw with
+  skins/runtime/host.ts       runs one somewhere it cannot reach anything, and
+                              stops it when it throws or falls behind
+  skins/runtime/stamp.ts      the worker's address, stamped with its contents
+  skins/scripts/              every background this build ships, as scripts
+  midi/harmony.ts             what is sounding, named, and read back by a cursor
   input/keyboard-map.ts       computer keyboard to pitch
   input/web-midi.ts           MIDI devices, including hot plug
   scoring/judge.ts            hit windows, combo and accuracy

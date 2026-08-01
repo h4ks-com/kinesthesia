@@ -32,6 +32,8 @@ function song(notes: SongNote[]): Song {
     notes,
     tracks,
     expression: new ExpressionTrail(),
+    harmony: [],
+    key: null,
   };
 }
 

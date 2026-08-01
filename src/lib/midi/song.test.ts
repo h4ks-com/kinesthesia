@@ -47,6 +47,8 @@ const song: Song = {
   ],
   notes: [note(60, 0), note(64, 0), note(67, 0), note(38, 1)],
   expression: new ExpressionTrail(),
+  harmony: [],
+  key: null,
 };
 
 function withLine(line: readonly number[]): Song {

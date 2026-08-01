@@ -1,7 +1,8 @@
 "use client";
 
 import { Check, X } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, type Ref, useEffect, useRef, useState } from "react";
+import { AddedBackgrounds } from "@/components/added-backgrounds";
 import { CustomBackgrounds } from "@/components/custom-backgrounds";
 import type { BackgroundChoice } from "@/lib/skins/backdrop";
 import type {
@@ -10,6 +11,7 @@ import type {
   SkinId,
   SkinInstance,
 } from "@/lib/skins/types";
+import { useNearby } from "@/lib/use-nearby";
 
 type SkinPickerProps = {
   chosen: BackgroundChoice | null;
@@ -34,7 +36,9 @@ function beat(elapsed: number): boolean {
 
 /** Runs one skin small, so the choice is made by looking rather than by name.
  * A skin the device cannot run reports it, so the tile can refuse the choice
- * rather than accepting one that quietly does nothing. */
+ * rather than accepting one that quietly does nothing. Both ways it can fail
+ * arrive here: no drawing context at all, and a worker that starts and then
+ * says it cannot go on, which is what a device without WebGL2 gives. */
 export function Preview({
   source,
   onUnsupported,
@@ -53,7 +57,9 @@ export function Preview({
     if (under === null || over === null) {
       return;
     }
-    const made = source.create({ base: under, overlay: over });
+    const made = source.create({ base: under, overlay: over }, () =>
+      refuse.current?.(),
+    );
     if (made === null) {
       refuse.current?.();
       return;
@@ -75,12 +81,25 @@ export function Preview({
           y: box.height * (0.9 - ((elapsed * 0.32 + index * 0.31) % 1)),
           radius: 7,
           color: index === 1 ? "#f0a93a" : "#35d6a4",
+          pitch: 60,
+          velocity: 0.8,
         })),
         // A landing every so often, so a skin that only answers to strikes has
         // something to show in its tile.
         strikes: beat(elapsed)
-          ? [{ x: box.width * (0.2 + Math.random() * 0.6), color: "#35d6a4" }]
+          ? [
+              {
+                x: box.width * (0.2 + Math.random() * 0.6),
+                color: "#35d6a4",
+                pitch: 60,
+                velocity: 0.8,
+              },
+            ]
           : [],
+        step: 1 / 60,
+        pressed: [],
+        chord: null,
+        key: null,
       });
       frame = requestAnimationFrame(loop);
     });
@@ -109,13 +128,14 @@ function Flat() {
   );
 }
 
-function Choice({
+export function Choice({
   title,
   blurb,
   selected,
   disabled = false,
   onSelect,
   children,
+  ref,
 }: {
   title: string;
   blurb: string;
@@ -123,14 +143,26 @@ function Choice({
   disabled?: boolean;
   onSelect: () => void;
   children?: ReactNode;
+  /** The tile itself, for a caller that only wants to run a preview once it is
+   * near enough to be looked at. A wrapper would not do: a grid item laid out
+   * with display:contents generates no box, and a box is what can be watched
+   * for. */
+  ref?: Ref<HTMLButtonElement>;
 }) {
   return (
     <button
+      ref={ref}
       type="button"
-      onClick={onSelect}
-      disabled={disabled}
+      // Refused rather than disabled: a disabled button leaves the tab order,
+      // and the dialog's own trap skips it, so the one person who most needs
+      // to hear why a background is unavailable is the one who never reaches
+      // it. This stays focusable and says so.
+      onClick={disabled ? undefined : onSelect}
+      aria-disabled={disabled}
       aria-pressed={selected}
-      className={`flex flex-col gap-2 rounded-xl border p-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+      className={`flex flex-col gap-2 rounded-xl border p-2.5 text-left transition-colors ${
+        disabled ? "cursor-not-allowed opacity-50" : ""
+      } ${
         selected
           ? "border-accent bg-accent-soft/20"
           : "border-line hover:border-line-strong"
@@ -151,6 +183,49 @@ function Choice({
         </span>
       </div>
     </button>
+  );
+}
+
+/** One shipped background, run only once its tile is near enough to be looked
+ * at. A shader preview holds a WebGL context, and a browser keeps only so many
+ * of those at once before it starts dropping the oldest, which is a tile that
+ * quietly stops drawing. */
+function BuiltInTile({
+  skin,
+  chosen,
+  unsupported,
+  onUnsupported,
+  onChoose,
+  onClose,
+}: {
+  skin: Skin;
+  chosen: BackgroundChoice | null;
+  unsupported: boolean;
+  onUnsupported: () => void;
+  onChoose: (next: BackgroundChoice) => void;
+  onClose: () => void;
+}) {
+  const holder = useRef<HTMLButtonElement | null>(null);
+  const near = useNearby(holder);
+
+  return (
+    <Choice
+      ref={holder}
+      title={skin.name}
+      blurb={unsupported ? "Does not run here." : skin.blurb}
+      selected={chosen?.kind === "built-in" && chosen.id === skin.id}
+      disabled={unsupported}
+      onSelect={() => {
+        onChoose({ kind: "built-in", id: skin.id });
+        onClose();
+      }}
+    >
+      {near && !unsupported ? (
+        <Preview source={skin} onUnsupported={onUnsupported} />
+      ) : (
+        <span className="block h-24 w-full rounded-lg bg-void" />
+      )}
+    </Choice>
   );
 }
 
@@ -240,7 +315,7 @@ export function SkinPicker({
         <CustomBackgrounds chosen={chosen} onChoose={onChoose} />
 
         <h3 className="mt-4 mb-2.5 font-semibold text-sm text-text">
-          The ones that come with it
+          Built in
         </h3>
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
           <Choice
@@ -255,26 +330,25 @@ export function SkinPicker({
             <Flat />
           </Choice>
           {available.map((skin) => (
-            <Choice
+            <BuiltInTile
               key={skin.id}
-              title={skin.name}
-              blurb={unsupported.has(skin.id) ? "Needs WebGL2." : skin.blurb}
-              selected={chosen?.kind === "built-in" && chosen.id === skin.id}
-              disabled={unsupported.has(skin.id)}
-              onSelect={() => {
-                onChoose({ kind: "built-in", id: skin.id });
-                onClose();
-              }}
-            >
-              <Preview
-                source={skin}
-                onUnsupported={() =>
-                  setUnsupported((known) => new Set(known).add(skin.id))
-                }
-              />
-            </Choice>
+              skin={skin}
+              chosen={chosen}
+              unsupported={unsupported.has(skin.id)}
+              onUnsupported={() =>
+                setUnsupported((known) => new Set(known).add(skin.id))
+              }
+              onChoose={onChoose}
+              onClose={onClose}
+            />
           ))}
         </div>
+
+        <AddedBackgrounds
+          chosen={chosen}
+          onChoose={onChoose}
+          onClose={onClose}
+        />
       </div>
     </div>
   );

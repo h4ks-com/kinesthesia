@@ -56,6 +56,8 @@ function playSong(parts: readonly PlayPart[]): Song {
     notes: [],
     tracks: parts.map(partToTrack),
     expression: new ExpressionTrail(),
+    harmony: [],
+    key: null,
   };
 }
 

@@ -46,6 +46,8 @@ function song(notes: SongNote[], tracks: SongTrack[] = [track(0)]): Song {
     notes: [...notes].sort((left, right) => left.start - right.start),
     tracks,
     expression: new ExpressionTrail(),
+    harmony: [],
+    key: null,
   };
 }
 

@@ -1,9 +1,6 @@
-import { drift, Particles } from "@/lib/skins/particles";
-import { defineSkin, type SceneView } from "@/lib/skins/scene";
-import type { SkinFrame } from "@/lib/skins/types";
-
-/** Three sheets at different depths. The near one is fast, bright and steep;
- * the far one barely moves. Parallax is what makes flat rain read as weather. */
+/** Rainfall, as a background script. Source rather than a module because it is
+ * evaluated inside the worker, the same way one somebody wrote is. */
+export const rainfallScript = String.raw`
 const sheets = [
   {
     count: 46,
@@ -26,36 +23,30 @@ const sheets = [
     width: 0.8,
     shade: "rgba(120,160,215,0.14)",
   },
-] as const;
+];
 
-type Drop = { x: number; y: number; speed: number; length: number };
-
-type Sheet = { drops: Drop[]; look: (typeof sheets)[number] };
-
-/** A ring spreading over the glass where a note landed, and the flash that lit
- * it. Kept dim: the pane is between the storm and the roll. */
 const ringLife = 1.5;
 
-function seed(sheet: Sheet, view: SceneView): void {
+function seed(sheet, view) {
   sheet.drops.length = 0;
   for (let count = 0; count < sheet.look.count; count += 1) {
     sheet.drops.push({
-      x: Math.random() * view.width,
-      y: Math.random() * view.height,
-      speed: sheet.look.speed * (0.85 + Math.random() * 0.3),
-      length: sheet.look.length * (0.7 + Math.random() * 0.6),
+      x: random() * view.width,
+      y: random() * view.height,
+      speed: sheet.look.speed * (0.85 + random() * 0.3),
+      length: sheet.look.length * (0.7 + random() * 0.6),
     });
   }
 }
 
-export const rainfall = defineSkin({
-  id: "rainfall",
+background({
   name: "Rainfall",
   blurb:
     "A storm behind glass. The rain falls the way the notes do, every key struck sets a ring spreading across the pane, and a full chord throws lightning.",
+  directions: ["down"],
 
-  createScene() {
-    const sheetState: Sheet[] = sheets.map((look) => ({ drops: [], look }));
+  create() {
+    const sheetState = sheets.map((look) => ({ drops: [], look }));
     const rings = new Particles(40);
     const splashes = new Particles(120);
     let seeded = 0;
@@ -63,7 +54,7 @@ export const rainfall = defineSkin({
     let lightning = 0;
 
     return {
-      paint(ctx, view, frame: SkinFrame, step) {
+      paint(ctx, view, frame) {
         if (seeded !== view.width) {
           for (const sheet of sheetState) {
             seed(sheet, view);
@@ -83,14 +74,14 @@ export const rainfall = defineSkin({
           flash = 1;
           lightning = 1.4;
         }
-        lightning = Math.max(0, lightning - step);
+        lightning = Math.max(0, lightning - frame.step);
         if (flash > 0) {
           const sheetGlow = ctx.createLinearGradient(0, 0, 0, view.keyboardTop);
-          sheetGlow.addColorStop(0, `rgba(196,220,255,${flash * 0.2})`);
+          sheetGlow.addColorStop(0, "rgba(196,220,255," + flash * 0.2 + ")");
           sheetGlow.addColorStop(1, "rgba(196,220,255,0)");
           ctx.fillStyle = sheetGlow;
           ctx.fillRect(0, 0, view.width, view.keyboardTop);
-          flash = Math.max(0, flash - step * 3.4);
+          flash = Math.max(0, flash - frame.step * 3.4);
         }
 
         for (const sheet of sheetState) {
@@ -98,16 +89,16 @@ export const rainfall = defineSkin({
           ctx.lineWidth = sheet.look.width;
           ctx.beginPath();
           for (const drop of sheet.drops) {
-            drop.y += drop.speed * step;
+            drop.y += drop.speed * frame.step;
             if (drop.y - drop.length > view.keyboardTop) {
               drop.y = -drop.length;
-              drop.x = Math.random() * view.width;
+              drop.x = random() * view.width;
               if (splashes.count < 60) {
                 splashes.add({
                   x: drop.x,
                   y: view.keyboardTop,
-                  vx: (Math.random() - 0.5) * 40,
-                  vy: -40 - Math.random() * 60,
+                  vx: (random() - 0.5) * 40,
+                  vy: -40 - random() * 60,
                   fade: 2.6,
                   size: 1,
                   seed: 0,
@@ -123,7 +114,7 @@ export const rainfall = defineSkin({
         // What bounces back off the keys, so the rain lands rather than stops.
         ctx.fillStyle = "rgba(191,219,254,0.5)";
         splashes.sweep(
-          step,
+          frame.step,
           view,
           (particle, delta) => {
             particle.vy += 420 * delta;
@@ -150,7 +141,7 @@ export const rainfall = defineSkin({
 
         ctx.lineWidth = 1.4;
         rings.sweep(
-          step,
+          frame.step,
           view,
           (particle, delta) => {
             particle.size += 230 * delta;
@@ -175,3 +166,4 @@ export const rainfall = defineSkin({
     };
   },
 });
+`;

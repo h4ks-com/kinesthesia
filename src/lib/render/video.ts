@@ -3,6 +3,7 @@ import {
   Muxer as WebmMuxer,
   ArrayBufferTarget as WebmTarget,
 } from "webm-muxer";
+import { chordAt } from "@/lib/midi/harmony";
 import {
   type RenderConfig,
   renderDuration,
@@ -187,7 +188,7 @@ async function withWebCodecs(
       if (failure !== null) {
         throw failure;
       }
-      scene.draw((index / renderFps) * config.rate, index / renderFps);
+      await scene.draw((index / renderFps) * config.rate, index / renderFps);
       const frame = new VideoFrame(scene.canvas, {
         timestamp: Math.round((index / renderFps) * 1_000_000),
         duration: Math.round(1_000_000 / renderFps),
@@ -296,7 +297,7 @@ async function withMediaRecorder(
         reject(new DOMException("Render cancelled", "AbortError"));
         return;
       }
-      scene.draw(Math.min(real * config.rate, config.song.duration), real);
+      void scene.draw(Math.min(real * config.rate, config.song.duration), real);
       onProgress(Math.min(1, real / outDuration));
       if (real >= outDuration) {
         stop();
@@ -318,11 +319,14 @@ type Scene = {
   /** Settles once the background has whatever it had to fetch, so the opening
    * seconds are not rendered bare. */
   readonly ready: Promise<void>;
-  draw(position: number, elapsed: number): void;
+  draw(position: number, elapsed: number): Promise<void>;
   dispose(): void;
 };
 
 /** What the page shows behind a background that does not fill every pixel. */
+/** A render has nobody at a keyboard. */
+const noPressed: readonly number[] = [];
+
 const ground = "#060709";
 
 function surface(): HTMLCanvasElement {
@@ -348,7 +352,9 @@ function renderScene(config: RenderConfig): Scene {
     return {
       canvas: roll,
       ready: Promise.resolve(),
-      draw: (position) => renderer.draw(watchFrame(config, position)),
+      draw: async (position) => {
+        renderer.draw(watchFrame(config, position));
+      },
       dispose: () => {},
     };
   }
@@ -361,27 +367,42 @@ function renderScene(config: RenderConfig): Scene {
     return {
       canvas: roll,
       ready: Promise.resolve(),
-      draw: (position) => renderer.draw(watchFrame(config, position)),
+      draw: async (position) => {
+        renderer.draw(watchFrame(config, position));
+      },
       dispose: () => {},
     };
   }
 
   const report: SkinReport = { keyboardTop: 0, travellers: [], strikes: [] };
+  let cursor = 0;
   return {
     canvas: output,
     ready: skin.ready ?? Promise.resolve(),
-    draw(position, elapsed) {
+    async draw(position, elapsed) {
       report.travellers.length = 0;
       report.strikes.length = 0;
       // The roll fills the report as it draws, so the background answers to
       // where the notes are this frame rather than the one before.
       renderer.draw(watchFrame(config, position, report));
-      skin.draw({
+      const named = chordAt(config.song.harmony, position, cursor);
+      cursor = named.cursor;
+      // Awaited, because a background drawn in a worker answers on its own
+      // turn: encoding the frame before it lands would leave the opening
+      // frames bare and make the same song come out different every render.
+      await skin.draw({
         keyboardTop: report.keyboardTop,
         elapsed,
         position,
+        // The rate a render lays frames down at, never a measured one: a
+        // background stepped by the wall clock would come out differently
+        // every time the same song was rendered.
+        step: 1 / renderFps,
         travellers: report.travellers,
         strikes: report.strikes,
+        pressed: noPressed,
+        chord: named.chord,
+        key: config.song.key,
       });
       ctx.fillStyle = ground;
       ctx.fillRect(0, 0, width, height);

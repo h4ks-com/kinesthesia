@@ -116,6 +116,7 @@ export type SkinReport = {
 function reportTraveller(
   report: SkinReport | null,
   pitch: number,
+  velocity: number,
   top: number,
   whiteWidth: number,
   color: NoteColor,
@@ -125,6 +126,8 @@ function reportTraveller(
     y: top,
     radius: whiteWidth * 0.5,
     color: color.glow,
+    pitch,
+    velocity,
   });
 }
 
@@ -523,6 +526,8 @@ export class PianoRollRenderer {
         frame.report?.strikes.push({
           x: keyCenter(note.pitch, whiteWidth),
           color: color.glow,
+          pitch: note.pitch,
+          velocity: note.velocity,
         });
       }
       // A rising note is only starting its climb when its end passes, so this
@@ -609,7 +614,14 @@ export class PianoRollRenderer {
       // Only a note climbing away from the keys travels through the scene; a
       // falling one is heading for the line and never reaches anything.
       if (rising && !ghost) {
-        reportTraveller(frame.report, note.pitch, top, whiteWidth, color);
+        reportTraveller(
+          frame.report,
+          note.pitch,
+          note.velocity,
+          top,
+          whiteWidth,
+          color,
+        );
       }
 
       // The hue holds across the body and only lifts in the last of the bar,
@@ -725,11 +737,20 @@ export class PianoRollRenderer {
         frame.report?.strikes.push({
           x: keyCenter(note.pitch, whiteWidth),
           color: color.glow,
+          pitch: note.pitch,
+          velocity: note.velocity,
         });
       }
 
       const top = keyboardTop - headAge * scale;
-      reportTraveller(frame.report, note.pitch, top, whiteWidth, color);
+      reportTraveller(
+        frame.report,
+        note.pitch,
+        note.velocity,
+        top,
+        whiteWidth,
+        color,
+      );
       const noteWidth = isBlackKey(note.pitch) ? blackNote : whiteNote;
       const x = keyCenter(note.pitch, whiteWidth) - noteWidth / 2;
       const y = Math.max(0, top);

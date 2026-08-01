@@ -7,6 +7,7 @@ import {
 } from "react";
 import type { Reach } from "@/lib/input/keyboard-map";
 import type { ExpressionTrail } from "@/lib/midi/expression";
+import { chordAt } from "@/lib/midi/harmony";
 import type { LiveNote, Song } from "@/lib/midi/song";
 import { PianoRollRenderer, type SkinReport } from "@/lib/render/piano-roll";
 import type {
@@ -106,6 +107,12 @@ export function PianoRollView({
   // changes: a skin outlives that, and a clock that jumped back would throw its
   // whole field off screen.
   const skinClock = useRef<number | null>(null);
+  /** Where the harmony was looked up last, so naming what is sounding costs one
+   * comparison a frame rather than a search of the whole song. */
+  const chordCursor = useRef(0);
+  const skinLast = useRef(0);
+  const songRef = useRef(song);
+  songRef.current = song;
   const rateRef = useRef(rate);
   rateRef.current = rate;
   const playTrackRef = useRef(playTrack);
@@ -170,12 +177,27 @@ export function PianoRollView({
       // a skin reacts to where the notes are now rather than a frame behind.
       if (skinned !== null) {
         skinClock.current ??= performance.now();
+        const elapsed = (performance.now() - skinClock.current) / 1000;
+        const song = songRef.current;
+        const named = chordAt(song.harmony, at, chordCursor.current);
+        chordCursor.current = named.cursor;
+        // Clamped, so a tab coming back does not hand a background a step it
+        // would move a whole scene by.
+        const step =
+          skinLast.current === 0
+            ? 1 / 60
+            : Math.max(0, Math.min(0.05, elapsed - skinLast.current));
+        skinLast.current = elapsed;
         skinned.draw({
           keyboardTop: reportRef.current.keyboardTop,
-          elapsed: (performance.now() - skinClock.current) / 1000,
+          elapsed,
           position: at,
+          step,
           travellers: reportRef.current.travellers,
           strikes: reportRef.current.strikes,
+          pressed: [...getPressed()],
+          chord: named.chord,
+          key: song.key,
         });
       }
       frame = requestAnimationFrame(loop);

@@ -36,6 +36,7 @@ import {
   readSkinChoice,
   speeds,
 } from "@/lib/player-url";
+import { skinSource, skins } from "@/lib/skins/registry";
 import { skinIds, skinReads } from "@/lib/skins/types";
 import { isPlayableUrl } from "@/lib/trusted-url";
 import { config } from "@/server/config";
@@ -54,6 +55,13 @@ import {
   renderRefusal,
 } from "@/server/render/browser";
 import { readJob, startJob } from "@/server/render/jobs";
+import { backgroundApiDoc } from "@/server/skins/doc";
+import {
+  addCustomSkin,
+  listCustomSkins,
+  readCustomSkin,
+  removeCustomSkin,
+} from "@/server/skins/store";
 import {
   bucketEnabled,
   getJson,
@@ -251,7 +259,10 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
   return { ok: true, url: built.toString() };
 }
 
-function mcpAuthorized(header: string | undefined): boolean {
+/** The one credential this deployment has for a caller that is not a person.
+ * Exported because the background routes are gated by the same token: an agent
+ * adds one, and everybody else may only read and use it. */
+export function mcpAuthorized(header: string | undefined): boolean {
   const expected = config.mcpTokenHash;
   // With no hash set the endpoint is open only outside production, so a
   // deployment that forgets MCP_TOKEN_HASH refuses every request rather than
@@ -627,7 +638,19 @@ is drawn into the video. Neither returns a file. They return a job id, because a
 render takes a while: poll render_status with that id until the state is no
 longer running, then post the url a finished one carries. A failed one says why.
 Prefer render_audio when nobody needs to see the notes, and prefer a plain link
-over either when somebody can just as well open it.`;
+over either when somebody can just as well open it.
+
+The background behind the notes is a script, and so is every one this build
+ships: there is one interface and no separate kind. list_backgrounds names what
+can be drawn, read_background hands back the source of any of them, and
+background_api is the whole interface written out. Reading ink, which is the
+smallest, alongside background_api is enough to write one. add_background stores
+a new one and returns an id, and that id goes in the skin argument anywhere a
+shipped name would. A script is refused if it will not parse or never registers
+itself, and at the other end the worker it runs in stops it if it throws or
+falls behind, so a background can never take the player down with it. Adding and
+removing are the only things here a listener cannot do for themselves, which is
+why they take this token; anyone may list, read and use.`;
 
 function createMcpServer(): McpServer {
   const mcp = new McpServer(
@@ -742,6 +765,145 @@ function createMcpServer(): McpServer {
           },
         ],
       };
+    },
+  );
+
+  mcp.registerTool(
+    "list_backgrounds",
+    {
+      title: "List the backgrounds",
+      description:
+        "Every background the roll can draw: the ones this build ships and the ones that have been added. The id is what the skin argument of player_link and the render tools takes.",
+      inputSchema: {},
+    },
+    async () => {
+      const custom = bucketEnabled() ? await listCustomSkins() : [];
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                builtIn: skins.map((skin) => ({
+                  id: skin.id,
+                  name: skin.name,
+                  blurb: skin.blurb,
+                  directions: skin.directions,
+                })),
+                added: custom,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    },
+  );
+
+  mcp.registerTool(
+    "read_background",
+    {
+      title: "Read a background's script",
+      description:
+        "The source a background is drawn by. Read one before writing your own: they are all written against the same small api, and the shipped ones are the worked examples of it.",
+      inputSchema: {
+        id: z.string().min(1).describe("A background id from list_backgrounds"),
+      },
+    },
+    async ({ id }) => {
+      const built = skinIds.find((known) => known === id);
+      const source =
+        built !== undefined
+          ? skinSource(built)
+          : bucketEnabled()
+            ? await readCustomSkin(id)
+            : null;
+      if (source === null) {
+        return {
+          content: [{ type: "text", text: `No background called ${id}` }],
+          isError: true,
+        };
+      }
+      return { content: [{ type: "text", text: source }] };
+    },
+  );
+
+  mcp.registerTool(
+    "background_api",
+    {
+      title: "How to write a background",
+      description:
+        "The whole interface a background script is written against, with what it is told each frame and what it may draw with. Read this and one shipped background, and you can write one.",
+      inputSchema: {},
+    },
+    async () => ({ content: [{ type: "text", text: backgroundApiDoc }] }),
+  );
+
+  mcp.registerTool(
+    "add_background",
+    {
+      title: "Add a background",
+      description:
+        "Stores a background script so anyone can pick it, and returns the id to put in a skin argument. Its name and blurb come from its own background() call, both written as plain strings. Where this deployment has a render browser the script is run there first and refused with the reason where it throws, where its shader will not compile, or where it will not keep up, so a failed add tells you what to fix. Adding is the only thing here a listener cannot do for themselves, which is why it takes this token.",
+      inputSchema: {
+        source: z
+          .string()
+          .min(1)
+          .describe(
+            "The script, which must call background({ name, blurb, create }) once",
+          ),
+      },
+    },
+    async ({ source }) => {
+      if (!bucketEnabled()) {
+        return {
+          content: [{ type: "text", text: "Backgrounds cannot be kept here." }],
+          isError: true,
+        };
+      }
+      const added = await addCustomSkin(source);
+      if (!added.ok) {
+        return { content: [{ type: "text", text: added.why }], isError: true };
+      }
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                ...added.skin,
+                playUrl: `${config.appBaseUrl}/watch?skin=${added.skin.id}`,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    },
+  );
+
+  mcp.registerTool(
+    "remove_background",
+    {
+      title: "Remove an added background",
+      description:
+        "Takes an added background out of every listing. The ones this build ships cannot be removed.",
+      inputSchema: {
+        id: z.string().min(1).describe("The id of an added background"),
+      },
+    },
+    async ({ id }) => {
+      const gone = bucketEnabled() ? await removeCustomSkin(id) : false;
+      return gone
+        ? { content: [{ type: "text", text: `Removed ${id}` }] }
+        : {
+            content: [
+              { type: "text", text: `No added background called ${id}` },
+            ],
+            isError: true,
+          };
     },
   );
 

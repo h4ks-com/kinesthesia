@@ -1,94 +1,96 @@
-/** Asteroids and what is left of them. Shared by the space backgrounds so a
- * rock looks the same wherever it turns up, and so an explosion is worth
- * watching rather than a puff of squares. */
+/** Globals a background script runs against inside the render worker. Scripts
+ * cannot `import`, so this is the same particle pool, rock field, mood
+ * function and shader source that the bundled skins use, ported to plain JS
+ * and installed on `self`. `Math.random()` is replaced by the runtime's seeded
+ * `random()` everywhere it appears, so a render is reproducible. */
+export const stdlibSource = String.raw`
+class Particles {
+  constructor(ceiling) {
+    this.pool = [];
+    this.ceiling = ceiling;
+  }
 
-import type { SkinFrame, Traveller } from "@/lib/skins/types";
+  get count() {
+    return this.pool.length;
+  }
 
-export type Rock = {
-  x: number;
-  y: number;
-  drift: number;
-  fall: number;
-  spin: number;
-  angle: number;
-  radius: number;
-  /** The silhouette, as a reach per corner. Cut once so a rock keeps its own
-   * shape while it tumbles rather than boiling. */
-  readonly shape: readonly number[];
-  readonly craters: readonly { x: number; y: number; r: number }[];
-};
+  add(spark) {
+    if (this.pool.length >= this.ceiling) {
+      return;
+    }
+    this.pool.push({ ...spark, life: spark.life ?? 1 });
+  }
 
-type Chunk = {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  spin: number;
-  angle: number;
-  size: number;
-  life: number;
-  fade: number;
-  color: string;
-};
+  sweep(step, view, move, draw) {
+    const edge = Math.max(view.width, view.height) * 0.25;
+    for (let index = this.pool.length - 1; index >= 0; index -= 1) {
+      const particle = this.pool[index];
+      if (particle === undefined) {
+        continue;
+      }
+      move(particle, step);
+      particle.life -= particle.fade * step;
+      if (
+        particle.life <= 0 ||
+        particle.y < -edge ||
+        particle.y > view.height + edge ||
+        particle.x < -edge ||
+        particle.x > view.width + edge
+      ) {
+        const last = this.pool.pop();
+        if (last !== undefined && index < this.pool.length) {
+          this.pool[index] = last;
+        }
+        continue;
+      }
+      draw(particle);
+    }
+  }
+}
+self.Particles = Particles;
 
-type Flash = {
-  x: number;
-  y: number;
-  life: number;
-  reach: number;
-  color: string;
-};
+function drift(particle, step) {
+  particle.x += particle.vx * step;
+  particle.y += particle.vy * step;
+}
+self.drift = drift;
 
-type Dust = {
-  x: number;
-  y: number;
-  life: number;
-  reach: number;
-};
-
-/** Pieces are chips off the rock, so they carry its colours and none of their
- * own. Stone, not soil: a warm rock reads as dirt against a cold sky. */
-const rockShades = ["#3d4045", "#2b2d31", "#4d5157", "#212326"] as const;
+const rockShades = ["#3d4045", "#2b2d31", "#4d5157", "#212326"];
 
 const corners = 11;
 const maxChunks = 320;
 const maxFlashes = 12;
 const maxDust = 90;
 
-export function makeRock(x: number, y: number, radius: number): Rock {
-  const shape: number[] = [];
+function makeRock(x, y, radius) {
+  const shape = [];
   for (let corner = 0; corner < corners; corner += 1) {
-    shape.push(0.62 + Math.random() * 0.45);
+    shape.push(0.62 + random() * 0.45);
   }
-  const craters: { x: number; y: number; r: number }[] = [];
+  const craters = [];
   for (let count = 0; count < 3; count += 1) {
-    const around = Math.random() * Math.PI * 2;
-    const out = Math.random() * radius * 0.45;
+    const around = random() * Math.PI * 2;
+    const out = random() * radius * 0.45;
     craters.push({
       x: Math.cos(around) * out,
       y: Math.sin(around) * out,
-      r: radius * (0.11 + Math.random() * 0.16),
+      r: radius * (0.11 + random() * 0.16),
     });
   }
   return {
     x,
     y,
-    drift: (Math.random() - 0.5) * 30,
-    fall: 60 + Math.random() * 70,
-    spin: (Math.random() - 0.5) * 1.4,
-    angle: Math.random() * Math.PI * 2,
+    drift: (random() - 0.5) * 30,
+    fall: 60 + random() * 70,
+    spin: (random() - 0.5) * 1.4,
+    angle: random() * Math.PI * 2,
     radius,
     shape,
     craters,
   };
 }
 
-/** A rock still above the view is not in play: breaking it there spends the
- * whole burst where nobody sees it, and a busy roll reaches that high. */
-export function struckBy(
-  rock: Rock,
-  travellers: readonly Traveller[],
-): Traveller | null {
+function struckBy(rock, travellers) {
   if (rock.y + rock.radius < 0) {
     return null;
   }
@@ -101,11 +103,7 @@ export function struckBy(
   );
 }
 
-function traceRock(
-  ctx: CanvasRenderingContext2D,
-  rock: Rock,
-  scale: number,
-): void {
+function traceRock(ctx, rock, scale) {
   ctx.beginPath();
   rock.shape.forEach((reach, corner) => {
     const around = (corner / rock.shape.length) * Math.PI * 2;
@@ -115,8 +113,7 @@ function traceRock(
   ctx.closePath();
 }
 
-/** Lit from the upper left, so a rock reads as a solid rather than a hole. */
-export function drawRock(ctx: CanvasRenderingContext2D, rock: Rock): void {
+function drawRock(ctx, rock) {
   ctx.save();
   ctx.translate(rock.x, rock.y);
   ctx.rotate(rock.angle);
@@ -176,61 +173,59 @@ export function drawRock(ctx: CanvasRenderingContext2D, rock: Rock): void {
   ctx.restore();
 }
 
-/** What a broken rock leaves: dust and pieces of the rock itself, thrown out
- * and then gone. Nothing here glows, so a break never outshines the notes. */
-export class Rubble {
-  private readonly chunks: Chunk[] = [];
-  private readonly flashes: Flash[] = [];
-  private readonly dust: Dust[] = [];
+class Rubble {
+  constructor() {
+    this.chunks = [];
+    this.flashes = [];
+    this.dust = [];
+  }
 
-  burst(x: number, y: number, radius: number, color: string): void {
+  burst(x, y, radius, color) {
     if (this.flashes.length < maxFlashes) {
       this.flashes.push({ x, y, life: 1, reach: radius * 1.6, color });
     }
     for (let puff = 0; puff < 4 && this.dust.length < maxDust; puff += 1) {
-      const around = Math.random() * Math.PI * 2;
-      const out = Math.random() * radius * 0.7;
+      const around = random() * Math.PI * 2;
+      const out = random() * radius * 0.7;
       this.dust.push({
         x: x + Math.cos(around) * out,
         y: y + Math.sin(around) * out,
         life: 1,
-        reach: radius * (1.1 + Math.random()),
+        reach: radius * (1.1 + random()),
       });
     }
-    const pieces = 16 + Math.floor(Math.random() * 10);
+    const pieces = 16 + Math.floor(random() * 10);
     for (let index = 0; index < pieces; index += 1) {
       if (this.chunks.length >= maxChunks) {
         break;
       }
-      const around = Math.random() * Math.PI * 2;
-      const speed = 0.8 + Math.random() * 3.4;
+      const around = random() * Math.PI * 2;
+      const speed = 0.8 + random() * 3.4;
       this.chunks.push({
         x,
         y,
         vx: Math.cos(around) * speed,
         vy: Math.sin(around) * speed,
-        spin: (Math.random() - 0.5) * 0.3,
-        angle: Math.random() * Math.PI * 2,
-        size: radius * (0.08 + Math.random() * 0.24),
+        spin: (random() - 0.5) * 0.3,
+        angle: random() * Math.PI * 2,
+        size: radius * (0.08 + random() * 0.24),
         life: 1,
-        fade: 0.014 + Math.random() * 0.016,
+        fade: 0.014 + random() * 0.016,
         color:
-          rockShades[Math.floor(Math.random() * rockShades.length)] ??
+          rockShades[Math.floor(random() * rockShades.length)] ??
           "#2b2d31",
       });
     }
   }
 
-  /** Swap the last entry into the hole rather than shifting everything after
-   * it, so a busy frame costs the same as a quiet one. */
-  private static drop<T>(pool: T[], index: number): void {
+  static drop(pool, index) {
     const last = pool.pop();
     if (last !== undefined && index < pool.length) {
       pool[index] = last;
     }
   }
 
-  paint(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  paint(ctx, width, height) {
     // The dust sits under everything, so the bright parts read against it.
     for (let index = this.dust.length - 1; index >= 0; index -= 1) {
       const puff = this.dust[index];
@@ -332,48 +327,25 @@ export class Rubble {
   }
 }
 
-/** Big enough that breaking it should leave something behind. Anything smaller
- * is spent in one hit. */
 const splitAbove = 16;
 const smallestPiece = 6;
-/** Headroom over the spawn cap, so pieces have somewhere to go without letting
- * a long session fill the sky. */
 const pieceRoom = 8;
 
-export type RockFieldOptions = {
-  readonly max: number;
-  /** Rocks entering per second. */
-  readonly rate: number;
-  readonly smallest: number;
-  readonly largest: number;
-};
-
-/** A drifting field of rocks that the notes break. Everything here is per
- * second and stepped by a measured delta, so a 120 Hz screen sees the same
- * scene as a 60 Hz one rather than twice the rocks at half the speed. */
-export class RockField {
-  private readonly rocks: Rock[] = [];
-  private readonly rubble = new Rubble();
-  private readonly options: RockFieldOptions;
-
-  constructor(options: RockFieldOptions) {
+class RockField {
+  constructor(options) {
+    this.rocks = [];
+    this.rubble = new Rubble();
     this.options = options;
   }
 
-  paint(
-    ctx: CanvasRenderingContext2D,
-    width: number,
-    height: number,
-    step: number,
-    frame: SkinFrame,
-  ): void {
+  paint(ctx, width, height, step, frame) {
     const { max, rate, smallest, largest } = this.options;
-    if (this.rocks.length < max && Math.random() < rate * step) {
+    if (this.rocks.length < max && random() < rate * step) {
       this.rocks.push(
         makeRock(
-          Math.random() * width,
+          random() * width,
           -40,
-          smallest + Math.random() * (largest - smallest),
+          smallest + random() * (largest - smallest),
         ),
       );
     }
@@ -396,7 +368,7 @@ export class RockField {
         this.rocks.splice(index, 1);
         continue;
       }
-      const struck = struckBy(rock, frame.travellers);
+      const struck = struckBy(rock, frame.notes);
       if (struck !== null) {
         this.rubble.burst(rock.x, rock.y, rock.radius, struck.color);
         this.rocks.splice(index, 1);
@@ -409,18 +381,16 @@ export class RockField {
     this.rubble.paint(ctx, width, height);
   }
 
-  /** What a broken rock leaves behind: two or three smaller ones thrown apart,
-   * each still solid enough to be hit again. A small one leaves nothing. */
-  private split(rock: Rock): void {
+  split(rock) {
     if (rock.radius < splitAbove) {
       return;
     }
-    const pieces = 2 + Math.floor(Math.random() * 2);
+    const pieces = 2 + Math.floor(random() * 2);
     for (let index = 0; index < pieces; index += 1) {
       if (this.rocks.length >= this.options.max + pieceRoom) {
         return;
       }
-      const around = (index / pieces) * Math.PI * 2 + Math.random();
+      const around = (index / pieces) * Math.PI * 2 + random();
       const piece = makeRock(
         rock.x,
         rock.y,
@@ -430,8 +400,127 @@ export class RockField {
       // Kept falling, so a piece thrown upward still comes back down the roll
       // rather than hanging above it.
       piece.fall = Math.max(25, rock.fall * 0.75 + Math.sin(around) * 80);
-      piece.spin = (Math.random() - 0.5) * 3.4;
+      piece.spin = (random() - 0.5) * 3.4;
       this.rocks.push(piece);
     }
   }
 }
+self.RockField = RockField;
+
+const still = { tone: 0.5, energy: 0 };
+
+function moodOf(frame, view) {
+  const marks = frame.notes.length > 0 ? frame.notes : frame.strikes;
+  if (marks.length === 0 || view.width === 0) {
+    return still;
+  }
+  let across = 0;
+  for (const mark of marks) {
+    across += mark.x;
+  }
+  return {
+    tone: Math.min(1, Math.max(0, across / marks.length / view.width)),
+    energy: Math.min(1, marks.length / 6),
+  };
+}
+self.moodOf = moodOf;
+
+const shaderPrelude = [
+  "#version 300 es",
+  "precision highp float;",
+  "out vec4 colour;",
+  "uniform vec2 size;",
+  "uniform float time;",
+  "uniform float gain;",
+  "uniform float tone;",
+  "uniform float energy;",
+  "",
+  "/* No sine: sin(dot(p, big)) loses its precision once the coordinates are a few",
+  "   hundred pixels out, which degenerates into diagonal banding and leaves one",
+  "   side of the screen bare. This mixes the bits instead, so it holds up across a",
+  "   whole canvas. */",
+  "float hash(vec2 p) {",
+  "  vec3 mixed = fract(vec3(p.xyx) * 0.1031);",
+  "  mixed += dot(mixed, mixed.yzx + 33.33);",
+  "  return fract((mixed.x + mixed.y) * mixed.z);",
+  "}",
+  "",
+  "float noise(vec2 p) {",
+  "  vec2 i = floor(p);",
+  "  vec2 f = fract(p);",
+  "  vec2 u = f * f * (3.0 - 2.0 * f);",
+  "  return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x),",
+  "             mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);",
+  "}",
+  "",
+  "float clouds(vec2 p) {",
+  "  float sum = 0.0;",
+  "  float amp = 0.5;",
+  "  for (int i = 0; i < 5; i++) {",
+  "    sum += noise(p) * amp;",
+  "    p *= 2.02;",
+  "    amp *= 0.5;",
+  "  }",
+  "  return sum;",
+  "}",
+  "",
+  "/* Stars on a grid of cells, one per cell, placed and sized by the cell's own",
+  "   hash, so the field is dense without any of them being sampled twice. The cut",
+  "   decides how many cells hold one, the twinkle how much they breathe. */",
+  "float stars(vec2 pixel, float cell, float cut, float twinkle) {",
+  "  vec2 grid = floor(pixel / cell);",
+  "  vec2 within = fract(pixel / cell);",
+  "  float pick = hash(grid);",
+  "  if (pick < cut) {",
+  "    return 0.0;",
+  "  }",
+  "  // Placed anywhere in its cell, so the grid the field is built on never shows.",
+  "  vec2 at = vec2(hash(grid + 1.7), hash(grid + 4.3));",
+  "  float bright = (pick - cut) / (1.0 - cut);",
+  "  // Mostly faint with a few standing out, which is what a real field looks like.",
+  "  float weight = pow(bright, 2.2);",
+  "  float near = 1.0 - smoothstep(0.0, 0.055 + weight * 0.10, length(within - at));",
+  "  float breathe = 1.0 - twinkle + twinkle * sin(time * 1.4 + pick * 40.0);",
+  "  return near * weight * breathe;",
+  "}",
+  "",
+].join("\n");
+self.shaderPrelude = shaderPrelude;
+
+function nebulaSource(drift) {
+  return (
+    shaderPrelude +
+    "\n" +
+    [
+      "void main() {",
+      "  vec2 uv = gl_FragCoord.xy / size;",
+      "  vec2 p = uv * vec2(size.x / size.y, 1.0);",
+      "",
+      "  float drift = time * " + drift.toFixed(3) + ";",
+      "  float a = clouds(p * 2.4 + vec2(drift * 0.3, drift));",
+      "  float b = clouds(p * 3.7 - vec2(drift * 0.2, drift * 0.7));",
+      "",
+      "  vec3 deep = vec3(0.015, 0.02, 0.05);",
+      "  vec3 violet = vec3(0.34, 0.13, 0.60);",
+      "  vec3 teal = vec3(0.05, 0.34, 0.42);",
+      "  vec3 rose = vec3(0.42, 0.12, 0.28);",
+      "  vec3 sky = deep",
+      "    + violet * pow(a, 1.7) * 0.72",
+      "    + teal * pow(b, 2.1) * 0.55",
+      "    + rose * pow(a * b, 2.6) * 0.75;",
+      "",
+      "  // Three layers at different densities, so the field has depth rather than",
+      "  // reading as one sheet of dots. The gas thins them where it is thickest.",
+      "  float behind = 1.0 - clamp(a * 0.55, 0.0, 0.6);",
+      "  float field = stars(gl_FragCoord.xy, 34.0, 0.86, 0.35) * 0.85",
+      "              + stars(gl_FragCoord.xy, 19.0, 0.90, 0.5) * 0.5",
+      "              + stars(gl_FragCoord.xy, 11.0, 0.94, 0.6) * 0.3;",
+      "  sky += vec3(0.85, 0.90, 1.0) * field * behind;",
+      "",
+      "  colour = vec4(sky * gain, 1.0);",
+      "}",
+    ].join("\n")
+  );
+}
+self.nebulaSource = nebulaSource;
+`;

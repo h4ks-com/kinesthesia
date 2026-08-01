@@ -1,7 +1,9 @@
 import type { Midi } from "@tonejs/midi";
-import { readMidi } from "@/lib/midi/analysis";
+import { estimateKey, readMidi } from "@/lib/midi/analysis";
 import { ExpressionTrail } from "@/lib/midi/expression";
+import { type HarmonySpan, nameChord, rootOf } from "@/lib/midi/harmony";
 import { pedalSpans, releaseAt } from "@/lib/midi/sustain";
+import type { SongKey } from "@/lib/skins/types";
 import { readUpload } from "@/lib/storage/uploads";
 import { isDeviceLocal } from "@/lib/trusted-url";
 
@@ -98,7 +100,55 @@ export type Song = {
   readonly tracks: readonly SongTrack[];
   /** The bend and modulation the file writes, per track. */
   readonly expression: ExpressionTrail;
+  /** What is sounding across the song, named once here because naming a chord
+   * costs more than a frame has. A background reads it through `chordAt`. */
+  readonly harmony: readonly HarmonySpan[];
+  /** The key the whole song sits in, where one fits well enough to say. */
+  readonly key: SongKey | null;
 };
+
+/** How often the harmony is named. Short enough to catch a chord change, long
+ * enough that a run of passing notes does not rename it every beat. */
+const harmonyWindow = 0.5;
+
+function harmonyOf(
+  notes: readonly SongNote[],
+  duration: number,
+): HarmonySpan[] {
+  const spans: HarmonySpan[] = [];
+  // Nothing a chord can be named, so the opening silence is a span of its own
+  // rather than the first thing skipped. A timeline that starts at the first
+  // chord is read as that chord holding from zero, and every song opens on a
+  // runway with nothing sounding on it.
+  let last: string | null = null;
+  let from = 0;
+  for (let at = 0; at < duration; at += harmonyWindow) {
+    const until = at + harmonyWindow;
+    const sounding: number[] = [];
+    // The notes are sorted by start, so the scan only has to move forward.
+    while (from < notes.length && (notes[from]?.end ?? 0) < at) {
+      from += 1;
+    }
+    for (let i = from; i < notes.length; i += 1) {
+      const note = notes[i];
+      if (note === undefined || note.start >= until) {
+        break;
+      }
+      if (note.end > at) {
+        sounding.push(note.pitch);
+      }
+    }
+    const chord = nameChord(sounding);
+    const name = chord?.name ?? "";
+    // Only where it changed: a background asking what is sounding wants the
+    // chord, not one entry per window of the same one.
+    if (name !== last) {
+      spans.push({ at, chord });
+      last = name;
+    }
+  }
+  return spans;
+}
 
 export function isBlackKey(pitch: number): boolean {
   const offset = pitch % 12;
@@ -227,9 +277,12 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
     midi.duration + shift,
   );
 
+  const key = estimateKey(midi);
   return {
     name,
     duration: lastSound + endTail,
+    harmony: harmonyOf(runwayNotes, lastSound + endTail),
+    key: key === null ? null : { root: rootOf(key.tonic), mode: key.mode },
     notes: runwayNotes,
     tracks,
     expression,

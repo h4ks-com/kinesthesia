@@ -10,6 +10,7 @@ import {
 } from "@/lib/midi/song";
 import {
   type BackgroundChoice,
+  isAddedSkinId,
   readBackdrop,
   writeBackdrop,
 } from "@/lib/skins/backdrop";
@@ -164,12 +165,11 @@ export function buildPlayerUrl(
   }
   if (
     params.skin !== null &&
-    (params.skin.kind === "built-in" ||
-      !isDeviceLocal(params.skin.image.source))
+    (params.skin.kind !== "image" || !isDeviceLocal(params.skin.image.source))
   ) {
     target.searchParams.set(
       "skin",
-      params.skin.kind === "built-in"
+      params.skin.kind === "built-in" || params.skin.kind === "script"
         ? params.skin.id
         : writeBackdrop(params.skin.image),
     );
@@ -198,6 +198,9 @@ export function readSkinChoice(
   const built = skinIds.find((id) => id === raw);
   if (built !== undefined) {
     return { kind: "built-in", id: built };
+  }
+  if (raw !== null && isAddedSkinId(raw)) {
+    return { kind: "script", id: raw };
   }
   const image = readBackdrop(raw, allowedOrigins);
   return image === null ? null : { kind: "image", image };

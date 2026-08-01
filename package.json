@@ -31,6 +31,7 @@
     "@modelcontextprotocol/sdk": "1.29.0",
     "@scalar/hono-api-reference": "0.11.11",
     "@tonejs/midi": "2.0.28",
+    "acorn": "^8.18.0",
     "drizzle-orm": "0.45.2",
     "hono": "4.12.30",
     "lucide-react": "^1.25.0",

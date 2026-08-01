@@ -2,12 +2,15 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
 import type { Context } from "hono";
 import { readMidi } from "@/lib/midi/analysis";
+import { skinSource, skins } from "@/lib/skins/registry";
+import { runtimeBundle } from "@/lib/skins/runtime/stamp";
+import { skinIds } from "@/lib/skins/types";
 import { isPlayableUrl } from "@/lib/trusted-url";
 import { currentViewer } from "@/server/auth";
 import { config } from "@/server/config";
 import type { Score } from "@/server/db/schema";
 import { sourceFetch } from "@/server/http/fetch";
-import { mcpHandler } from "@/server/mcp";
+import { mcpAuthorized, mcpHandler } from "@/server/mcp";
 import { analyseMidi } from "@/server/midi/analyse";
 import { infoInputShape, searchInputShape } from "@/server/midi/inputs";
 import {
@@ -24,6 +27,12 @@ import {
 } from "@/server/multiplayer/rooms";
 import { claimJob, failJob, finishJob } from "@/server/render/jobs";
 import { saveScore, statsFor, topScores } from "@/server/scores/store";
+import {
+  addCustomSkin,
+  listCustomSkins,
+  readCustomSkin,
+  removeCustomSkin,
+} from "@/server/skins/store";
 import { bucketEnabled, uploadFile, uploadMidi } from "@/server/storage/bucket";
 import {
   deleteVoicing,
@@ -232,6 +241,19 @@ function shortLink(c: Context, midiUrl: string): Response {
   }
   return c.redirect(midiUrl, 302);
 }
+
+/** The worker every background is drawn inside. Served rather than bundled
+ * because only a response can carry the policy that forbids it the network, and
+ * that policy is most of what makes running someone else's drawing code safe. */
+api.get("/skins/runtime.js", (c) =>
+  c.body(runtimeBundle, 200, {
+    "content-type": "text/javascript; charset=utf-8",
+    "content-security-policy":
+      "default-src 'none'; script-src 'unsafe-eval'; connect-src 'none'",
+    // Safe to keep for good: the address carries what it holds.
+    "cache-control": "public, max-age=31536000, immutable",
+  }),
+);
 
 api.get("/g/:uuid", (c) => {
   const uuid = c.req.param("uuid");
@@ -973,6 +995,213 @@ api.openapi(renderFailedRoute, async (c) => {
   }
   failJob(job, c.req.valid("json").error.slice(0, 300));
   return c.json({ ok: true }, 200);
+});
+
+/** Backgrounds anyone may read and use, and only an agent may change. Listing
+ * and reading are open because the picker is anonymous; adding and removing
+ * take the one credential this deployment has for something that is not a
+ * person. The ones this build ships are compiled in, so they are absent from
+ * every write path rather than defended in one. */
+const customSkinSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  blurb: z.string(),
+  addedAt: z.number(),
+});
+
+const listSkinsRoute = createRoute({
+  method: "get",
+  path: "/skins",
+  summary: "List the backgrounds available",
+  description:
+    "Every background the roll can draw: the ones this build ships and the ones that have been added. Open to anyone, since choosing one needs no account.",
+  responses: {
+    200: {
+      description: "What may be drawn behind the notes",
+      content: {
+        "application/json": {
+          schema: z.object({
+            builtIn: z.array(
+              z.object({
+                id: z.string(),
+                name: z.string(),
+                blurb: z.string(),
+                directions: z.array(z.string()),
+              }),
+            ),
+            custom: z.array(customSkinSchema),
+          }),
+        },
+      },
+    },
+  },
+});
+
+api.openapi(listSkinsRoute, async (c) => {
+  const custom = bucketEnabled() ? await listCustomSkins() : [];
+  return c.json(
+    {
+      builtIn: skins.map((skin) => ({
+        id: skin.id,
+        name: skin.name,
+        blurb: skin.blurb,
+        directions: [...skin.directions],
+      })),
+      custom: [...custom],
+    },
+    200,
+  );
+});
+
+const readSkinRoute = createRoute({
+  method: "get",
+  path: "/skins/{id}",
+  summary: "Read a background's script",
+  description:
+    "The source a background is drawn by, whether it ships with this build or was added. Reading one is how you learn the shape before writing your own.",
+  request: { params: z.object({ id: z.string() }) },
+  responses: {
+    200: {
+      description: "The script",
+      content: { "text/plain": { schema: z.any() } },
+    },
+    404: {
+      description: "No background by that name",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+  },
+});
+
+api.openapi(readSkinRoute, async (c) => {
+  const { id } = c.req.valid("param");
+  const built = skinIds.find((known) => known === id);
+  if (built !== undefined) {
+    return c.text(skinSource(built), 200, skinSourceHeaders);
+  }
+  const source = bucketEnabled() ? await readCustomSkin(id) : null;
+  if (source === null) {
+    return c.json({ error: "No background by that name" }, 404);
+  }
+  return c.text(source, 200, skinSourceHeaders);
+});
+
+/** Read as text, never run as a script. Every reader here fetches this and
+ * hands the string to a worker, so nothing needs it to be executable, and
+ * serving an added background as javascript from our own origin would turn one
+ * token into a same-origin script anyone could point a tag at. */
+const skinSourceHeaders = {
+  "content-type": "text/plain; charset=utf-8",
+  "x-content-type-options": "nosniff",
+};
+
+const addSkinRoute = createRoute({
+  method: "post",
+  path: "/skins",
+  summary: "Add a background",
+  description:
+    "Stores a background script so anyone can pick it. Its name and blurb are read off its own background() call. Where a render browser is configured the script is run there first and refused with the reason where it will not draw. Takes the same bearer token the MCP endpoint does: a background is code, and code is not something a page may add on a visitor's say-so.",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({ source: z.string().min(1) }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Added",
+      content: { "application/json": { schema: customSkinSchema } },
+    },
+    400: {
+      description: "The script was refused",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+    401: {
+      description: "A valid bearer token is required",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+    503: {
+      description: "No object store is configured",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+  },
+});
+
+api.openapi(addSkinRoute, async (c) => {
+  // Stricter than the MCP endpoint, which stays open in a dev checkout: what is
+  // stored here is executed in every visitor's browser, so it takes a token
+  // wherever it runs.
+  if (config.mcpTokenHash === null) {
+    return c.json(
+      { error: "Adding a background needs MCP_TOKEN_HASH set" },
+      401,
+    );
+  }
+  if (!mcpAuthorized(c.req.header("authorization"))) {
+    return c.json({ error: "A valid bearer token is required" }, 401);
+  }
+  if (!bucketEnabled()) {
+    return c.json({ error: "Backgrounds cannot be kept here" }, 503);
+  }
+  const { source } = c.req.valid("json");
+  const added = await addCustomSkin(source);
+  return added.ok ? c.json(added.skin, 200) : c.json({ error: added.why }, 400);
+});
+
+const removeSkinRoute = createRoute({
+  method: "delete",
+  path: "/skins/{id}",
+  summary: "Remove an added background",
+  description:
+    "Takes an added background out of every listing. The ones this build ships cannot be removed; they are not stored anywhere to remove from.",
+  request: { params: z.object({ id: z.string() }) },
+  responses: {
+    200: {
+      description: "Removed",
+      content: {
+        "application/json": { schema: z.object({ ok: z.boolean() }) },
+      },
+    },
+    401: {
+      description: "A valid bearer token is required",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+    404: {
+      description: "No added background by that name",
+      content: {
+        "application/json": { schema: z.object({ error: z.string() }) },
+      },
+    },
+  },
+});
+
+api.openapi(removeSkinRoute, async (c) => {
+  if (config.mcpTokenHash === null) {
+    return c.json(
+      { error: "Removing a background needs MCP_TOKEN_HASH set" },
+      401,
+    );
+  }
+  if (!mcpAuthorized(c.req.header("authorization"))) {
+    return c.json({ error: "A valid bearer token is required" }, 401);
+  }
+  const { id } = c.req.valid("param");
+  const gone = bucketEnabled() ? await removeCustomSkin(id) : false;
+  return gone
+    ? c.json({ ok: true }, 200)
+    : c.json({ error: "No added background by that name" }, 404);
 });
 
 api.doc31("/openapi.json", {

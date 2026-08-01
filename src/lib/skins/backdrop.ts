@@ -25,7 +25,19 @@ export type Backdrop = {
  * or a picture someone brought. */
 export type BackgroundChoice =
   | { readonly kind: "built-in"; readonly id: SkinId }
+  /** One somebody added, held by the id it was stored under. The script itself
+   * is fetched when it is drawn, so a link stays short and a background can be
+   * changed without every link to it going stale. */
+  | { readonly kind: "script"; readonly id: string }
   | { readonly kind: "image"; readonly image: Backdrop };
+
+/** The shape of an added background's id, which is the only thing a link may
+ * name it by. Held to what we mint so a crafted one cannot reach elsewhere. */
+export function isAddedSkinId(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+    value,
+  );
+}
 
 export const backdropBrightness = { min: 10, max: 200 } as const;
 export const plainBrightness = 100;

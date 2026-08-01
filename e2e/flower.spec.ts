@@ -83,13 +83,33 @@ test("the flower meadow colours on major and fades on minor", async ({
       };
     });
 
+  /** Where the song has got to, which is what the meadow answers. A run under
+   * load plays behind the wall clock, so sleeping for six seconds can read the
+   * major bars while the song is still on the runway. */
+  const reached = async (seconds: number): Promise<void> => {
+    await expect
+      .poll(
+        async () => {
+          const shown = await page.locator("footer span").first().textContent();
+          const [minutes, secs] = (shown ?? "0:00")
+            .split(" ")[0]
+            ?.split(":") ?? ["0", "0"];
+          return Number(minutes) * 60 + Number(secs);
+        },
+        { timeout: 60000, intervals: [250] },
+      )
+      .toBeGreaterThanOrEqual(seconds);
+  };
+
   const atRest = await read();
   await page.getByRole("button", { name: "Play", exact: true }).click();
-  await page.waitForTimeout(6500);
+  // Six bars of C major run from the second second, so this lands inside them.
+  await reached(7);
   const afterMajor = await read();
 
-  // The song turns minor halfway through, and the meadow should fall back.
-  await page.waitForTimeout(6000);
+  // The song turns minor halfway through, and the meadow should fall back. Read
+  // well after the turn, since the meadow drains slower than it fills.
+  await reached(13);
   const afterMinor = await read();
   console.log(
     `### rest=${JSON.stringify(atRest)} afterMajor=${JSON.stringify(afterMajor)} afterMinor=${JSON.stringify(afterMinor)}`,

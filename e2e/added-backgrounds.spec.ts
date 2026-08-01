@@ -90,9 +90,17 @@ test("one that will not run is shown as one that cannot be chosen", async ({
 }) => {
   test.setTimeout(120000);
   await openPicker(page);
+  // Asked of this tile rather than of the page: a device that cannot run a
+  // shader says the same thing under every background that needs one, and an
+  // unscoped match would then be answered by a tile this test never named.
   const broken = page.getByRole("button", { name: /Dud/ });
-  await expect(broken).toBeDisabled({ timeout: 15000 });
-  await expect(page.getByText("Does not run here.")).toBeVisible();
+  await expect(broken).toHaveAttribute("aria-disabled", "true", {
+    timeout: 15000,
+  });
+  await expect(broken).toContainText("Does not run here.");
+  // Refused rather than removed from the tab order, so the reason is reachable.
+  await broken.focus();
+  await expect(broken).toBeFocused();
 });
 
 test("choosing one draws it behind the keys", async ({ page }) => {

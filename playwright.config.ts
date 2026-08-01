@@ -22,8 +22,8 @@ export default defineConfig({
       use: {
         ...devices["Desktop Firefox"],
         // A runner has no GPU, and Firefox refuses WebGL there unless told the
-        // software path is acceptable. Without it every shader background is
-        // correctly reported unsupported and none of them can be exercised.
+        // software path is acceptable. Enough for a canvas on the page, which
+        // is what the picture backgrounds draw on.
         launchOptions: {
           firefoxUserPrefs: {
             "webgl.force-enabled": true,
@@ -36,7 +36,22 @@ export default defineConfig({
       // pointer capture, storage. Reading lit pixels back off a canvas that is
       // still animating measures the rasteriser and the frame clock, which are
       // meant to differ, so those specs stay on one engine.
-      testIgnore: [/bend\.spec\.ts/],
+      //
+      // A background draws its shader in a worker, onto an OffscreenCanvas.
+      // Firefox gives that path to its GPU process, and a runner has no GPU
+      // process to give it to, so there it reports no WebGL2 and every shader
+      // background is correctly dark. Neither the software renderer nor asking
+      // for WebGL in process reaches it. The specs that read those pixels run
+      // on one engine; every spec that asks what Firefox itself does with a
+      // background, the sandbox and the worker protocol among them, still runs
+      // on both.
+      testIgnore: [
+        /bend\.spec\.ts/,
+        /skin-previews\.spec\.ts/,
+        /skins-run-as-scripts\.spec\.ts/,
+        /background-doc\.spec\.ts/,
+        /flower\.spec\.ts/,
+      ],
     },
   ],
   webServer: {

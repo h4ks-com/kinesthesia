@@ -75,7 +75,7 @@ test("added backgrounds are offered after the built-in ones", async ({
   await expect(page.getByRole("heading", { name: "Added" })).toBeVisible();
 
   const built = await page
-    .getByRole("heading", { name: "Built in" })
+    .getByRole("heading", { name: "Default skins" })
     .evaluate((node) => node.getBoundingClientRect().top + window.scrollY);
   const added = await page
     .getByRole("heading", { name: "Added" })

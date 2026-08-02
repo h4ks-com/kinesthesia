@@ -43,7 +43,7 @@ background({
   name: "Rainfall",
   blurb:
     "A storm behind glass. The rain falls the way the notes do, every key struck sets a ring spreading across the pane, and a full chord throws lightning.",
-  directions: ["down"],
+  directions: ["up", "down"],
 
   create() {
     const sheetState = sheets.map((look) => ({ drops: [], look }));

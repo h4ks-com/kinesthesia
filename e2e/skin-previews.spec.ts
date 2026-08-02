@@ -22,10 +22,19 @@ test("every background in the picker draws its own preview", async ({
   const dialog = page.getByRole("dialog", { name: "Background" });
   await expect(dialog).toBeVisible();
   // Walked down rather than jumped to the end, so every tile in between comes
-  // near and starts, not only the last screenful.
+  // near and starts, not only the last screenful. The modal scrolls on its
+  // overlay rather than the dialog, so the scroller is found from the dialog.
   for (let step = 0; step < 8; step += 1) {
-    await dialog.evaluate((box, at) => {
-      box.scrollTo(0, (box.scrollHeight / 8) * at);
+    await dialog.evaluate((dialogEl, at) => {
+      let node = dialogEl.parentElement;
+      while (node !== null) {
+        const overflowY = getComputedStyle(node).overflowY;
+        if (overflowY === "auto" || overflowY === "scroll") {
+          node.scrollTo(0, (node.scrollHeight / 8) * at);
+          return;
+        }
+        node = node.parentElement;
+      }
     }, step + 1);
     await page.waitForTimeout(400);
   }

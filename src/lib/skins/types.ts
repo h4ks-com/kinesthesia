@@ -13,8 +13,8 @@ export const skinDirections = {
   /** The whole field is travelled through. */
   cruise: ["up"],
   aurora: ["up", "down"],
-  /** The rain has to agree with the notes. */
-  rainfall: ["down"],
+  /** Rain falls whether the notes do or not. */
+  rainfall: ["up", "down"],
   /** Bubbles only rise. */
   abyss: ["up"],
   /** The floor rushes toward you. */

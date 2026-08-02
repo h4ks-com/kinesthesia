@@ -12,7 +12,7 @@ import { skinIds } from "@/lib/skins/types";
 /** Real skins, because a hand-built one would carry directions the table no
  * longer takes its answer from. */
 const flying = findSkin("cruise");
-const grounded = findSkin("rainfall");
+const grounded = findSkin("horizon");
 
 describe("the skin registry", () => {
   it("ships one skin per declared id, since a link may name any of them", () => {

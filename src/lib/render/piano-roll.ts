@@ -58,6 +58,15 @@ const keybedFloor = "#0a0d14";
 const keyEdgeLight = "rgba(255,255,255,0.5)";
 const keyEdgeShade = "rgba(8,11,17,0.18)";
 const blackKeyLip = "rgba(146,158,180,0.42)";
+/** How far the near end of a pressed key drops toward the bed. */
+const pressSink = 2;
+/** What a note played as softly as possible keeps of its opacity. Never zero,
+ * since a MIDI whose notes all carry one velocity must not read as a dim roll. */
+const softestNote = 0.6;
+
+function punchOf(velocity: number): number {
+  return softestNote + velocity * (1 - softestNote);
+}
 
 export type Frame = {
   readonly song: Song;
@@ -168,6 +177,7 @@ export class PianoRollRenderer {
   private shadowAt = -1;
   private whiteFace: CanvasGradient | null = null;
   private blackFace: CanvasGradient | null = null;
+  private whiteTilt: CanvasGradient | null = null;
   private facesAt = -1;
   private pan = 0;
   /** While a finger is panning, and for a while after, it decides where the
@@ -558,7 +568,7 @@ export class PianoRollRenderer {
           const half =
             Math.min(isBlackKey(note.pitch) ? blackNote : whiteNote, 13) / 2;
           const centre = keyCenter(note.pitch, whiteWidth);
-          ctx.globalAlpha = ghost ? 0.22 : 0.74 + note.velocity * 0.26;
+          ctx.globalAlpha = ghost ? 0.22 : punchOf(note.velocity);
           ctx.fillStyle = frame.plain ? color.flat : color.glow;
           ctx.beginPath();
           ctx.moveTo(centre, strike - half * 1.6);
@@ -646,10 +656,7 @@ export class PianoRollRenderer {
       } else {
         fill = sounding ? color.core : color.glow;
       }
-      // Velocity only sets how firmly the note sits, since a MIDI whose notes
-      // all carry one velocity must not end up a uniformly dim roll.
-      const punch = 0.74 + note.velocity * 0.26;
-      ctx.globalAlpha = ghost ? 0.22 : punch;
+      ctx.globalAlpha = ghost ? 0.22 : punchOf(note.velocity);
       ctx.fillStyle = fill;
       // A falling note climbs into the future, so a height above the line is a
       // moment still to come and the file already knows the wheels there.
@@ -770,7 +777,7 @@ export class PianoRollRenderer {
       } else {
         fill = color.glow;
       }
-      ctx.globalAlpha = 0.74 + note.velocity * 0.26;
+      ctx.globalAlpha = punchOf(note.velocity);
       ctx.fillStyle = fill;
       const trail = frame.expression;
       const bent =
@@ -913,12 +920,21 @@ export class PianoRollRenderer {
       const x = whiteKeyLeft(pitch, whiteWidth);
       // A key hinges at its far end, which is the top of the screen, so a
       // pressed one dips at the near end and comes up short of where it stood.
-      const sink = active.has(pitch) || held.has(pitch) ? 2 : 0;
+      const sink = active.has(pitch) || held.has(pitch) ? pressSink : 0;
       this.setKeyPaint(frame, active, pitch, this.whiteFace ?? "#dfe4ec", 20);
       ctx.fillRect(x + 0.5, keyboardTop, whiteWidth - 1, keyboardHeight - sink);
       ctx.shadowBlur = 0;
       // The bed the near end drops toward, at the front where it went down.
       if (sink > 0) {
+        if (this.whiteTilt !== null) {
+          ctx.fillStyle = this.whiteTilt;
+          ctx.fillRect(
+            x + 0.5,
+            keyboardTop,
+            whiteWidth - 1,
+            keyboardHeight - sink,
+          );
+        }
         ctx.fillStyle = keybedFloor;
         ctx.fillRect(
           x + 0.5,
@@ -951,7 +967,7 @@ export class PianoRollRenderer {
       }
       const blackWidth = blackKeyWidth(whiteWidth);
       const x = blackKeyLeft(pitch, whiteWidth);
-      const sink = active.has(pitch) || held.has(pitch) ? 2 : 0;
+      const sink = active.has(pitch) || held.has(pitch) ? pressSink : 0;
       // The shadow a black key casts on the whites just past its tip. A key
       // that has gone down sits nearer the bed, and its shadow shrinking is
       // most of what reads as pressed.
@@ -963,11 +979,19 @@ export class PianoRollRenderer {
         sink > 0 ? 1 : 4,
       );
       this.setKeyPaint(frame, active, pitch, this.blackFace ?? "#0b0e15", 16);
+      const blackFill = ctx.fillStyle;
       ctx.fillRect(x, keyboardTop, blackWidth, blackHeight - sink);
       ctx.shadowBlur = 0;
       if (sink > 0) {
+        // The front of the key, turned down and away. Painted from the key's
+        // own face rather than left as bare bed, or a lit key ends in a black
+        // tab that reads as a hole punched out of it.
         ctx.fillStyle = keybedFloor;
         ctx.fillRect(x, keyboardTop + blackHeight - sink, blackWidth, sink);
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = blackFill;
+        ctx.fillRect(x, keyboardTop + blackHeight - sink, blackWidth, sink);
+        ctx.globalAlpha = 1;
       } else {
         // The front face of a key standing proud, where it turns toward the
         // player.
@@ -1116,6 +1140,23 @@ export class PianoRollRenderer {
     black.addColorStop(0.85, "#090c12");
     black.addColorStop(1, "#05070b");
     this.blackFace = black;
+
+    // A key hinges at its far end, so pressing turns its face up into the
+    // light and a specular band gathers against the hinge. It only ever adds
+    // light: a pressed key is usually a key carrying a note, and shading its
+    // face would spend the bloom to say what the gap at the near end already
+    // says. Depth is the bright hinge against the dark bed, not a shadow.
+    const tilt = ctx.createLinearGradient(
+      0,
+      keyboardTop,
+      0,
+      keyboardTop + keyboardHeight,
+    );
+    tilt.addColorStop(0, "rgba(255,255,255,0.5)");
+    tilt.addColorStop(0.09, "rgba(255,255,255,0.16)");
+    tilt.addColorStop(0.34, "rgba(255,255,255,0)");
+    this.whiteTilt = tilt;
+
     this.facesAt = keyboardTop;
   }
 

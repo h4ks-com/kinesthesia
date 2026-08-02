@@ -51,6 +51,8 @@ test("free roam offers a background and starts with none", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: /^No background/ }),
   ).toHaveAttribute("aria-pressed", "true");
+  // Rain falls whichever way the notes go, so free roam gets it too.
+  await expect(page.getByRole("button", { name: /^Rainfall/ })).toBeVisible();
 });
 
 test("choosing one mounts a layer behind the roll and closes the picker", async ({
@@ -209,7 +211,7 @@ test.describe("in watch", () => {
     await openSettings(page);
     await page.getByRole("switch", { name: /notes rise/ }).click();
     await page.getByRole("button", { name: /background/i }).click();
-    await page.getByRole("button", { name: /^Rainfall/ }).click();
+    await page.getByRole("button", { name: /^Horizon/ }).click();
     await openSettings(page);
     const toggle = page.getByRole("switch", { name: /notes rise/ });
     await expect(toggle).toHaveAttribute("aria-checked", "false");

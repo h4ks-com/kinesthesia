@@ -18,7 +18,6 @@ import {
   updateGlobalSettings,
 } from "@/lib/storage/settings";
 import { isDeviceLocal } from "@/lib/trusted-url";
-import { useReducedMotion } from "@/lib/use-reduced-motion";
 
 export type Background = {
   /** What is picked, whether or not it can run here. The picker ticks this. */
@@ -52,9 +51,7 @@ type Options = {
   /** Plain style takes the background with it. */
   readonly plain: boolean;
   /** What the link asked for. A link naming a background is showing something
-   * on purpose, so it wins over what this device remembers for the visit. A
-   * system asking for less movement refuses a link's animated background, one
-   * that runs on a clock of its own. */
+   * on purpose, so it wins over what this device remembers for the visit. */
   readonly fromLink: {
     readonly skin: BackgroundChoice | null;
     readonly rise: boolean;
@@ -82,8 +79,6 @@ export function useBackground({
 }: Options): Background {
   const [chosen, setChosen] = useState<BackgroundChoice | null>(fromLink.skin);
   const [rising, setRising] = useState(fromLink.rise);
-  // A link is a stranger's decoration; anything else is this player's own.
-  const [linked, setLinked] = useState(fromLink.skin !== null);
   /** What the address named when the page opened, which is the only moment it
    * can. */
   const linkAsked = useRef({
@@ -114,7 +109,6 @@ export function useBackground({
       // device remembers decide.
       if (stored.skin !== undefined && !linkAsked.current.skin) {
         setChosen(readStoredChoice(stored.skin));
-        setLinked(false);
       }
       // The link carries this only when it wants the notes turned around.
       if (stored.rise !== undefined && !linkAsked.current.rise) {
@@ -127,19 +121,13 @@ export function useBackground({
   // be drawn, and the address it becomes is ours to let go of.
   const [href, setHref] = useState<string | null>(null);
   const [lost, setLost] = useState<string | null>(null);
-  const still = useReducedMotion();
-  const hushed = plain || (still && linked);
   const wanted =
-    hushed || chosen?.kind !== "built-in" ? null : findSkin(chosen.id);
-  // A travelling picture is moved by the playhead alone: it holds still until
-  // the song plays and stops the moment it is paused, so the transport is
-  // already the control a system asking for less movement wants. A shipped
-  // background animates on a clock of its own, which is why that one is refused.
+    plain || chosen?.kind !== "built-in" ? null : findSkin(chosen.id);
   const image = plain || chosen?.kind !== "image" ? null : chosen.image;
 
   /** One somebody added. Its script is fetched rather than bundled, so it is
    * held here until it arrives and the roll stays plain in the meantime. */
-  const added = hushed || chosen?.kind !== "script" ? null : chosen.id;
+  const added = plain || chosen?.kind !== "script" ? null : chosen.id;
   const [addedSource, setAddedSource] = useState<{
     readonly id: string;
     readonly source: string;
@@ -250,7 +238,6 @@ export function useBackground({
       held?.kind === "image" &&
       next.image.source === held.image.source;
     setChosen(next);
-    setLinked(false);
     // Picking a background that only reads one way is the whole of the choice
     // for anyone who does not want to make two.
     // A picture reads either way, so only a background this build ships can

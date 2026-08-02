@@ -151,20 +151,20 @@ test.describe("in watch", () => {
     }
   });
 
-  /** The system asking for less movement is a default, not a lock: a link is
-   * refused, a deliberate pick is not. A nested `test.use` does not reach the
-   * page, so the context is built by hand. */
+  /** Reduced motion never holds a background back, whether it arrived by link or
+   * by a deliberate pick. A nested `test.use` does not reach the page, so the
+   * context is built by hand. */
   test.describe("with reduced motion", () => {
-    test("a background named by a link is left off", async ({ browser }) => {
+    test("a background named by a link is still shown", async ({ browser }) => {
       const context = await browser.newContext({ reducedMotion: "reduce" });
       const page = await context.newPage();
       await serveFixture(page);
       await page.goto(`${watchPath}&skin=ember`);
-      await expect(page.locator("canvas")).toBeVisible();
+      await expect(page.locator("canvas")).toHaveCount(3);
       await openSettings(page);
       await expect(
         page.getByRole("button", { name: /background/i }),
-      ).toContainText("plain");
+      ).toContainText("ember");
       await context.close();
     });
 

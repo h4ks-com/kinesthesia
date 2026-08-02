@@ -1,3 +1,4 @@
+import type { MidiShortcut } from "@/lib/input/midi-shortcuts";
 import type { Transpose } from "@/lib/midi/song";
 import { defaultKeyWidth } from "@/lib/render/keyboard";
 import type { BackgroundChoice } from "@/lib/skins/backdrop";
@@ -34,6 +35,10 @@ export type GlobalSettings = {
   /** Sends the notes out of the keys rather than onto them. Absent until the
    * player says, for the same reason. */
   readonly rise?: boolean;
+  /** Controller buttons bound to backgrounds, one button each. Held on this
+   * device since a physical button always means the same thing to the hands in
+   * front of it, and played back whichever mode is running. */
+  readonly midiShortcuts?: readonly MidiShortcut[];
 };
 
 const globalKey = "global";

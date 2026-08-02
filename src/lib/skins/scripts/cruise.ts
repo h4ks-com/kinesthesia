@@ -2,7 +2,7 @@
  * evaluated inside the worker, the same way one somebody wrote is. Planets is
  * used by no other background, so it is inlined here rather than made a
  * shared global. */
-export const cruiseScript = String.raw`
+export const cruiseScript = `
 /** Muted on purpose: a planet is scenery, and the notes have to stay the
  * brightest thing on screen. */
 const palettes = [

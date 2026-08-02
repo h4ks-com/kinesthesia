@@ -1,6 +1,6 @@
 /** Rainfall, as a background script. Source rather than a module because it is
  * evaluated inside the worker, the same way one somebody wrote is. */
-export const rainfallScript = String.raw`
+export const rainfallScript = `
 const sheets = [
   {
     count: 46,

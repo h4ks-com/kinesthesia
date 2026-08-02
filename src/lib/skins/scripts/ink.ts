@@ -1,6 +1,6 @@
 /** Ink, as a background script. Source rather than a module because it is
  * evaluated inside the worker, the same way one somebody wrote is. */
-export const inkScript = String.raw`
+export const inkScript = `
 const bloomLife = 3.4;
 const most = 60;
 

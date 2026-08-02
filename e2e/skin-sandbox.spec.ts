@@ -78,7 +78,7 @@ test("a background cannot reach the network or the browser's stores", async ({
       throw new Error("LEAKED:" + reachable.concat(sneaky).join(",") + ".");
     `,
   );
-  console.log("### " + why);
+  console.log(`### ${why}`);
   expect(why).toContain("LEAKED:.");
 });
 
@@ -109,7 +109,7 @@ test("a background cannot read a clock or an unseeded random", async ({
       );
     `,
   );
-  console.log("### " + why);
+  console.log(`### ${why}`);
   // A render of the same song has to come out identical every time.
   expect(why).toContain("CLOCK:0,0,0,0,intl=throws,random=throws,strict=true.");
 });

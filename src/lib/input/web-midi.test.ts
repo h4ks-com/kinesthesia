@@ -50,8 +50,13 @@ describe("decodeMidi", () => {
     });
   });
 
-  it("ignores control changes it does not model", () => {
-    expect(decodeMidi(bytes(0xb0, 7, 100), 0)).toBeNull();
+  it("passes through a control change it does not model", () => {
+    expect(decodeMidi(bytes(0xb0, 7, 100), 0)).toEqual({
+      type: "control",
+      channel: 0,
+      controller: 7,
+      value: 100,
+    });
   });
 
   it("ignores messages it does not model", () => {
@@ -96,7 +101,49 @@ describe("expression events", () => {
     });
   });
 
-  it("still ignores controls that are neither sustain nor modulation", () => {
-    expect(decodeMidi(bytes(0xb0, 7, 100), 0)).toBeNull();
+  it("keeps a control change on the channel it arrived on", () => {
+    expect(decodeMidi(bytes(0xb5, 70, 10), 0)).toEqual({
+      type: "control",
+      channel: 5,
+      controller: 70,
+      value: 10,
+    });
+  });
+});
+
+describe("yamaha sysex", () => {
+  it("reads a Genos2 slider as a sysex control with its address as the key", () => {
+    const event = decodeMidi(
+      bytes(0xf0, 0x43, 0x10, 0x4c, 0x10, 0x00, 0x0b, 0x7f, 0xf7),
+      0,
+    );
+    expect(event).toEqual({
+      type: "sysex",
+      key: [0x43, 0x10, 0x4c, 0x10, 0x00, 0x0b],
+      value: 0x7f,
+    });
+  });
+
+  it("carries the swept value through the slider's travel", () => {
+    const mid = decodeMidi(
+      bytes(0xf0, 0x43, 0x10, 0x4c, 0x10, 0x00, 0x0b, 0x40, 0xf7),
+      0,
+    );
+    expect(mid !== null && mid.type === "sysex" ? mid.value : null).toBe(0x40);
+  });
+
+  it("ignores sysex that is not a Yamaha parameter change", () => {
+    expect(
+      decodeMidi(
+        bytes(0xf0, 0x7e, 0x10, 0x4c, 0x10, 0x00, 0x0b, 0x7f, 0xf7),
+        0,
+      ),
+    ).toBeNull();
+  });
+
+  it("ignores a Yamaha parameter change of the wrong length", () => {
+    expect(
+      decodeMidi(bytes(0xf0, 0x43, 0x10, 0x4c, 0x10, 0x00, 0x0b, 0xf7), 0),
+    ).toBeNull();
   });
 });

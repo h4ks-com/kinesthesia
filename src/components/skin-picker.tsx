@@ -1,9 +1,16 @@
 "use client";
 
-import { Check, X } from "lucide-react";
+import { Cable, Check, X } from "lucide-react";
 import { type ReactNode, type Ref, useEffect, useRef, useState } from "react";
 import { AddedBackgrounds } from "@/components/added-backgrounds";
 import { CustomBackgrounds } from "@/components/custom-backgrounds";
+import {
+  bindingFor,
+  type ControlRef,
+  type MidiShortcuts,
+  sameTarget,
+  sliderBinding,
+} from "@/lib/input/midi-shortcuts";
 import type { BackgroundChoice } from "@/lib/skins/backdrop";
 import type {
   BackdropSource,
@@ -22,6 +29,8 @@ type SkinPickerProps = {
    * dialog up, since it is only half the choice: the rest is shaping it. */
   onChoose: (next: BackgroundChoice | null) => void;
   onClose: () => void;
+  /** Null where the caller has no MIDI surface, and the tiles read as they did. */
+  shortcuts: MidiShortcuts | null;
 };
 
 /** How a skin looks in the preview, with note heads climbing so a skin that
@@ -128,6 +137,176 @@ function Flat() {
   );
 }
 
+/** A control's name as it sits in a badge: a channel controller by its number,
+ * a Yamaha slider by the address it reports. */
+function controlLabel(control: ControlRef): string {
+  if (control.kind === "cc") {
+    return `CC ${control.controller} · ch${control.channel}`;
+  }
+  const address = control.key
+    .slice(-3)
+    .map((byte) => byte.toString(16).padStart(2, "0").toUpperCase())
+    .join(" ");
+  return `sysex ${address}`;
+}
+
+/** The controller button a background is bound to, or the way to bind one. It
+ * sits below the tile rather than inside it: its own buttons would be swallowed
+ * by the tile's click. */
+function MidiBinding({
+  target,
+  shortcuts,
+}: {
+  target: BackgroundChoice | null;
+  shortcuts: MidiShortcuts;
+}) {
+  const binding = bindingFor(shortcuts.bindings, target);
+  const learning = shortcuts.learning;
+  const learningThis =
+    learning?.kind === "button" && sameTarget(learning.target, target);
+
+  if (learningThis) {
+    return (
+      <div className="flex flex-col gap-1 px-0.5">
+        <div className="flex items-center justify-between">
+          <span className="inline-flex items-center gap-1.5 font-mono text-accent text-xs">
+            <span className="size-1.5 animate-ping rounded-full bg-accent" />
+            waiting for a midi event
+          </span>
+          <button
+            type="button"
+            onClick={shortcuts.cancelLearn}
+            aria-label="Cancel binding"
+            className="text-faint transition-colors hover:text-text"
+          >
+            <X className="size-3.5" aria-hidden="true" />
+          </button>
+        </div>
+        {shortcuts.conflict === null ? null : (
+          <p className="text-danger text-xs">
+            {shortcuts.conflict === "reserved"
+              ? "That one is used while playing."
+              : "That control already switches another background."}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (binding !== null && binding.kind === "button") {
+    return (
+      <div className="flex items-center justify-between px-0.5">
+        <button
+          type="button"
+          onClick={() => shortcuts.beginLearnButton(target)}
+          data-tip="Bind a different control"
+          data-tip-side="bottom"
+          className="inline-flex items-center gap-1 font-mono text-faint text-xs transition-colors hover:text-accent"
+        >
+          <Cable className="size-3" aria-hidden="true" />
+          {controlLabel(binding.control)}
+        </button>
+        <button
+          type="button"
+          onClick={() => shortcuts.clearButton(binding.control)}
+          aria-label="Clear binding"
+          data-tip="Clear"
+          data-tip-side="bottom"
+          className="text-faint transition-colors hover:text-danger"
+        >
+          <X className="size-3.5" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => shortcuts.beginLearnButton(target)}
+      aria-label="Assign a MIDI control event to this background"
+      data-tip="Assign a MIDI control event to this background"
+      data-tip-side="bottom"
+      className="self-start rounded-md p-1 text-faint transition-colors hover:text-accent"
+    >
+      <Cable className="size-3.5" aria-hidden="true" />
+    </button>
+  );
+}
+
+/** One slider spread across every background, so a single control reaches them
+ * all by where it sits in its travel. It owns the whole set rather than a tile,
+ * so it lives at the foot of the picker. */
+function SliderBinding({ shortcuts }: { shortcuts: MidiShortcuts }) {
+  const slider = sliderBinding(shortcuts.bindings);
+  const learning = shortcuts.learning?.kind === "slider";
+
+  if (learning) {
+    return (
+      <div className="flex items-center gap-2">
+        <span
+          className="inline-flex items-center gap-1.5 font-mono text-accent text-xs"
+          data-tip="Move the control across its whole travel so its range is read."
+          data-tip-side="top"
+        >
+          <span className="size-1.5 animate-ping rounded-full bg-accent" />
+          move the control…
+        </span>
+        <button
+          type="button"
+          onClick={shortcuts.cancelLearn}
+          aria-label="Cancel"
+          data-tip="Cancel"
+          data-tip-side="top"
+          className="text-faint transition-colors hover:text-text"
+        >
+          <X className="size-3.5" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
+  if (slider !== null && slider.kind === "slider") {
+    return (
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={shortcuts.beginLearnSlider}
+          aria-label={`Reassign the background control, currently ${controlLabel(slider.control)}`}
+          data-tip={`Reassign the background control (${controlLabel(slider.control)})`}
+          data-tip-side="top"
+          className="inline-flex items-center gap-1 rounded-md p-1 text-faint transition-colors hover:text-accent"
+        >
+          <Cable className="size-3.5" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={shortcuts.clearSlider}
+          aria-label="Clear the background control"
+          data-tip="Clear the background control"
+          data-tip-side="top"
+          className="rounded-md p-1 text-faint transition-colors hover:text-danger"
+        >
+          <X className="size-3.5" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={shortcuts.beginLearnSlider}
+      aria-label="Assign a continuous control to scroll through every background"
+      data-tip="Assign a continuous control to scroll through every background"
+      data-tip-side="top"
+      className="rounded-md p-1 text-faint transition-colors hover:text-accent"
+    >
+      <Cable className="size-3.5" aria-hidden="true" />
+    </button>
+  );
+}
+
 export function Choice({
   title,
   blurb,
@@ -136,6 +315,8 @@ export function Choice({
   onSelect,
   children,
   ref,
+  target,
+  shortcuts,
 }: {
   title: string;
   blurb: string;
@@ -147,20 +328,17 @@ export function Choice({
    * near enough to be looked at. A wrapper would not do: a grid item laid out
    * with display:contents generates no box, and a box is what can be watched
    * for. */
-  ref?: Ref<HTMLButtonElement>;
+  ref?: Ref<HTMLDivElement>;
+  /** The background this tile picks, so it can be bound to a controller button.
+   * Null where the tile clears the background. */
+  target: BackgroundChoice | null;
+  /** Null where the caller has no MIDI surface, and the tile reads as it did. */
+  shortcuts: MidiShortcuts | null;
 }) {
   return (
-    <button
+    <div
       ref={ref}
-      type="button"
-      // Refused rather than disabled: a disabled button leaves the tab order,
-      // and the dialog's own trap skips it, so the one person who most needs
-      // to hear why a background is unavailable is the one who never reaches
-      // it. This stays focusable and says so.
-      onClick={disabled ? undefined : onSelect}
-      aria-disabled={disabled}
-      aria-pressed={selected}
-      className={`flex flex-col gap-2 rounded-xl border p-2.5 text-left transition-colors ${
+      className={`flex flex-col gap-2 rounded-xl border p-2.5 transition-colors ${
         disabled ? "cursor-not-allowed opacity-50" : ""
       } ${
         selected
@@ -168,21 +346,36 @@ export function Choice({
           : "border-line hover:border-line-strong"
       }`}
     >
-      {children}
-      <div className="flex items-start gap-2 px-0.5">
-        <span className="flex-1">
-          <span className="flex items-center gap-1.5 font-medium text-sm text-text">
-            {title}
-            {selected ? (
-              <Check className="size-3.5 text-accent" aria-hidden="true" />
-            ) : null}
+      <button
+        type="button"
+        // Refused rather than disabled: a disabled button leaves the tab order,
+        // and the dialog's own trap skips it, so the one person who most needs
+        // to hear why a background is unavailable is the one who never reaches
+        // it. This stays focusable and says so.
+        onClick={disabled ? undefined : onSelect}
+        aria-disabled={disabled}
+        aria-pressed={selected}
+        className="flex flex-col gap-2 text-left"
+      >
+        {children}
+        <div className="flex items-start gap-2 px-0.5">
+          <span className="flex-1">
+            <span className="flex items-center gap-1.5 font-medium text-sm text-text">
+              {title}
+              {selected ? (
+                <Check className="size-3.5 text-accent" aria-hidden="true" />
+              ) : null}
+            </span>
+            <span className="mt-0.5 block text-muted text-xs leading-relaxed">
+              {blurb}
+            </span>
           </span>
-          <span className="mt-0.5 block text-muted text-xs leading-relaxed">
-            {blurb}
-          </span>
-        </span>
-      </div>
-    </button>
+        </div>
+      </button>
+      {shortcuts !== null ? (
+        <MidiBinding target={target} shortcuts={shortcuts} />
+      ) : null}
+    </div>
   );
 }
 
@@ -197,6 +390,7 @@ function BuiltInTile({
   onUnsupported,
   onChoose,
   onClose,
+  shortcuts,
 }: {
   skin: Skin;
   chosen: BackgroundChoice | null;
@@ -204,8 +398,9 @@ function BuiltInTile({
   onUnsupported: () => void;
   onChoose: (next: BackgroundChoice) => void;
   onClose: () => void;
+  shortcuts: MidiShortcuts | null;
 }) {
-  const holder = useRef<HTMLButtonElement | null>(null);
+  const holder = useRef<HTMLDivElement | null>(null);
   const near = useNearby(holder);
 
   return (
@@ -219,6 +414,8 @@ function BuiltInTile({
         onChoose({ kind: "built-in", id: skin.id });
         onClose();
       }}
+      target={{ kind: "built-in", id: skin.id }}
+      shortcuts={shortcuts}
     >
       {near && !unsupported ? (
         <Preview source={skin} onUnsupported={onUnsupported} />
@@ -234,6 +431,7 @@ export function SkinPicker({
   available,
   onChoose,
   onClose,
+  shortcuts,
 }: SkinPickerProps) {
   const dialog = useRef<HTMLDivElement | null>(null);
   const [unsupported, setUnsupported] = useState<ReadonlySet<SkinId>>(
@@ -276,8 +474,19 @@ export function SkinPicker({
     };
   }, [onClose]);
 
+  // The learning state outlives this dialog, so closing it any way at all frees
+  // it: otherwise the next open would still be listening for an event.
+  const cancelLearn = shortcuts?.cancelLearn;
+  useEffect(
+    () => (cancelLearn === undefined ? undefined : () => cancelLearn()),
+    [cancelLearn],
+  );
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-void/70 p-4 backdrop-blur">
+    // The overlay scrolls rather than the dialog, so the dialog never clips a
+    // tooltip: a hint over a tile at the edge reads over the backdrop instead of
+    // being cut off, and the dialog itself can never grow a scrollbar.
+    <div className="fixed inset-0 z-[60] overflow-y-auto overflow-x-hidden bg-void/70 backdrop-blur">
       {/* The way out for anyone who opened this to look. Hidden from assistive
           technology, which has Escape and the close button already. */}
       <button
@@ -287,68 +496,77 @@ export function SkinPicker({
         onClick={onClose}
         className="absolute inset-0 cursor-default"
       />
-      <div
-        ref={dialog}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Background"
-        tabIndex={-1}
-        className="relative max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-line-strong bg-panel p-4 shadow-2xl outline-none"
-      >
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div>
-            <h2 className="font-semibold text-lg text-text">Background</h2>
-            <p className="mt-0.5 text-muted text-xs leading-relaxed">
-              Drawn behind the notes, never over them.
-            </p>
+      <div className="relative flex min-h-full items-center justify-center p-4 pointer-events-none">
+        <div
+          ref={dialog}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Background"
+          tabIndex={-1}
+          className="pointer-events-auto relative w-full max-w-3xl rounded-2xl border border-line-strong bg-panel p-4 shadow-2xl outline-none"
+        >
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-lg text-text">Background</h2>
+              <p className="mt-0.5 text-muted text-xs leading-relaxed">
+                Drawn behind the notes, never over them.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="rounded-lg p-1.5 text-faint transition-colors hover:bg-raised hover:text-text"
+            >
+              <X className="size-4" aria-hidden="true" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-lg p-1.5 text-faint transition-colors hover:bg-raised hover:text-text"
-          >
-            <X className="size-4" aria-hidden="true" />
-          </button>
+
+          <CustomBackgrounds chosen={chosen} onChoose={onChoose} />
+
+          <div className="mt-4 mb-2.5 flex items-center justify-between gap-2">
+            <h3 className="font-semibold text-sm text-text">Default skins</h3>
+            {shortcuts === null ? null : (
+              <SliderBinding shortcuts={shortcuts} />
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            <Choice
+              title="No background"
+              blurb="A flat dark backdrop. Nothing moves behind the notes."
+              selected={chosen === null}
+              onSelect={() => {
+                onChoose(null);
+                onClose();
+              }}
+              target={null}
+              shortcuts={shortcuts}
+            >
+              <Flat />
+            </Choice>
+            {available.map((skin) => (
+              <BuiltInTile
+                key={skin.id}
+                skin={skin}
+                chosen={chosen}
+                unsupported={unsupported.has(skin.id)}
+                onUnsupported={() =>
+                  setUnsupported((known) => new Set(known).add(skin.id))
+                }
+                onChoose={onChoose}
+                onClose={onClose}
+                shortcuts={shortcuts}
+              />
+            ))}
+          </div>
+
+          <AddedBackgrounds
+            chosen={chosen}
+            onChoose={onChoose}
+            onClose={onClose}
+            shortcuts={shortcuts}
+          />
         </div>
-
-        <CustomBackgrounds chosen={chosen} onChoose={onChoose} />
-
-        <h3 className="mt-4 mb-2.5 font-semibold text-sm text-text">
-          Built in
-        </h3>
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-          <Choice
-            title="No background"
-            blurb="A flat dark backdrop. Nothing moves behind the notes."
-            selected={chosen === null}
-            onSelect={() => {
-              onChoose(null);
-              onClose();
-            }}
-          >
-            <Flat />
-          </Choice>
-          {available.map((skin) => (
-            <BuiltInTile
-              key={skin.id}
-              skin={skin}
-              chosen={chosen}
-              unsupported={unsupported.has(skin.id)}
-              onUnsupported={() =>
-                setUnsupported((known) => new Set(known).add(skin.id))
-              }
-              onChoose={onChoose}
-              onClose={onClose}
-            />
-          ))}
-        </div>
-
-        <AddedBackgrounds
-          chosen={chosen}
-          onChoose={onChoose}
-          onClose={onClose}
-        />
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 /** Starfield, as a background script. Source rather than a module because it
  * is evaluated inside the worker, the same way one somebody wrote is. */
-export const starfieldScript = String.raw`
+export const starfieldScript = `
 /** Kept well under the roll's own brightness, so a note always reads against
  * it. The skin sits behind the notes, and this keeps it behind them in tone. */
 const nebulaGain = 0.66;

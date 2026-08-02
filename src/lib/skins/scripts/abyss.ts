@@ -1,6 +1,6 @@
 /** Abyss, as a background script. Source rather than a module because it is
  * evaluated inside the worker, the same way one somebody wrote is. */
-export const abyssScript = String.raw`
+export const abyssScript = `
 const moteCount = 80;
 /** Shafts of light coming down through the water. Slow, wide and barely there,
  * so they read as depth rather than as an effect. */

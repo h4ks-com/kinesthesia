@@ -40,12 +40,47 @@ export type MidiModulationEvent = {
   readonly depth: number;
 };
 
+/** Any control change the player does not already read on its own, passed
+ * through so a button the player bound to a background can reach it. */
+export type MidiControlEvent = {
+  readonly type: "control";
+  readonly channel: number;
+  readonly controller: number;
+  readonly value: number;
+};
+
+/** A Yamaha parameter-change SysEx, the form a Genos2 slider emits. The address
+ * is the slider's identity and the last data byte its position, 0 to 127. */
+export type MidiSysexEvent = {
+  readonly type: "sysex";
+  readonly key: readonly number[];
+  readonly value: number;
+};
+
+/** A control the player can bind a background to: a channel controller or a
+ * Yamaha SysEx address. The value is the position a slider reports or the press
+ * a button reports. */
+export type ControlInput =
+  | {
+      readonly kind: "cc";
+      readonly channel: number;
+      readonly controller: number;
+      readonly value: number;
+    }
+  | {
+      readonly kind: "sysex";
+      readonly key: readonly number[];
+      readonly value: number;
+    };
+
 export type MidiEvent =
   | MidiNoteEvent
   | MidiProgramEvent
   | MidiSustainEvent
   | MidiBendEvent
-  | MidiModulationEvent;
+  | MidiModulationEvent
+  | MidiControlEvent
+  | MidiSysexEvent;
 
 const noteOn = 0x90;
 const noteOff = 0x80;
@@ -66,6 +101,43 @@ export function decodeMidi(data: Uint8Array, at: number): MidiEvent | null {
   const status = data[0];
   if (status === undefined) {
     return null;
+  }
+
+  if (status === 0xf0) {
+    // Yamaha parameter-change: F0 43 1n <model> <a1> <a2> <a3> <value> F7.
+    // A Genos2 slider sweeps <value> 0-127 at a fixed address; the address is
+    // its identity. Anything else (other makers, other layouts) is ignored.
+    const manufacturer = data[1];
+    const sub = data[2];
+    const end = data[8];
+    if (
+      data.length !== 9 ||
+      manufacturer !== 0x43 ||
+      sub === undefined ||
+      (sub & 0xf0) !== 0x10 ||
+      end !== 0xf7
+    ) {
+      return null;
+    }
+    const model = data[3];
+    const a1 = data[4];
+    const a2 = data[5];
+    const a3 = data[6];
+    const value = data[7];
+    if (
+      model === undefined ||
+      a1 === undefined ||
+      a2 === undefined ||
+      a3 === undefined ||
+      value === undefined
+    ) {
+      return null;
+    }
+    return {
+      type: "sysex",
+      key: [manufacturer, sub, model, a1, a2, a3],
+      value,
+    };
   }
   const command = status & 0xf0;
   const channel = status & 0x0f;
@@ -88,7 +160,7 @@ export function decodeMidi(data: Uint8Array, at: number): MidiEvent | null {
   if (command === controlChange) {
     const controller = data[1];
     const value = data[2];
-    if (value === undefined) {
+    if (controller === undefined || value === undefined) {
       return null;
     }
     if (controller === sustainController) {
@@ -97,7 +169,7 @@ export function decodeMidi(data: Uint8Array, at: number): MidiEvent | null {
     if (controller === modulationController) {
       return { type: "modulation", channel, depth: value / 127 };
     }
-    return null;
+    return { type: "control", channel, controller, value };
   }
 
   const pitch = data[1];
@@ -135,7 +207,12 @@ export async function connectMidiInputs(
   if (!isWebMidiSupported()) {
     throw new Error("This browser has no Web MIDI support");
   }
-  const access = await navigator.requestMIDIAccess();
+  // SysEx is asked for so a Yamaha slider's parameter-change reaches the page;
+  // a visitor who refuses the stronger prompt still gets notes and CC, since the
+  // slider alone needs SysEx and the rest does not.
+  const access = await navigator
+    .requestMIDIAccess({ sysex: true })
+    .catch(() => navigator.requestMIDIAccess());
 
   const handleMessage = (event: MIDIMessageEvent) => {
     if (event.data === null) {

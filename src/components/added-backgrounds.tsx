@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Choice, Preview } from "@/components/skin-picker";
+import type { MidiShortcuts } from "@/lib/input/midi-shortcuts";
 import type { BackgroundChoice } from "@/lib/skins/backdrop";
 import { scriptBackdrop } from "@/lib/skins/runtime/host";
 import type { BackdropSource } from "@/lib/skins/types";
@@ -22,13 +23,15 @@ function AddedTile({
   chosen,
   onChoose,
   onClose,
+  shortcuts,
 }: {
   skin: Added;
   chosen: BackgroundChoice | null;
   onChoose: (next: BackgroundChoice) => void;
   onClose: () => void;
+  shortcuts: MidiShortcuts | null;
 }) {
-  const holder = useRef<HTMLButtonElement | null>(null);
+  const holder = useRef<HTMLDivElement | null>(null);
   const [source, setSource] = useState<BackdropSource | null>(null);
   const [broke, setBroke] = useState(false);
   const near = useNearby(holder);
@@ -76,6 +79,8 @@ function AddedTile({
         onChoose({ kind: "script", id: skin.id });
         onClose();
       }}
+      target={{ kind: "script", id: skin.id }}
+      shortcuts={shortcuts}
     >
       {source === null || broke ? (
         <span className="block h-24 w-full rounded-lg bg-void" />
@@ -93,10 +98,12 @@ export function AddedBackgrounds({
   chosen,
   onChoose,
   onClose,
+  shortcuts,
 }: {
   chosen: BackgroundChoice | null;
   onChoose: (next: BackgroundChoice) => void;
   onClose: () => void;
+  shortcuts: MidiShortcuts | null;
 }) {
   const [added, setAdded] = useState<readonly Added[]>([]);
 
@@ -132,6 +139,7 @@ export function AddedBackgrounds({
             chosen={chosen}
             onChoose={onChoose}
             onClose={onClose}
+            shortcuts={shortcuts}
           />
         ))}
       </div>

@@ -1,6 +1,6 @@
 /** Ember, as a background script. Source rather than a module because it is
  * evaluated inside the worker, the same way one somebody wrote is. */
-export const emberScript = String.raw`
+export const emberScript = `
 /** Warm at birth and cooling on the way up, which is the whole of what makes a
  * spark read as hot rather than orange. */
 function emberShade(life) {

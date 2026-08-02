@@ -22,6 +22,7 @@ import { judgedPosition, suggestedOffset } from "@/lib/audio/latency";
 import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
 import { useSongVoicing } from "@/lib/audio/use-song-voicing";
 import { keyLabelsFor, reachFor } from "@/lib/input/keyboard-map";
+import { useMidiShortcuts } from "@/lib/input/midi-shortcuts";
 import { useNoteInput } from "@/lib/input/use-note-input";
 import { reduceToMelody } from "@/lib/midi/melody";
 import {
@@ -162,6 +163,17 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
       viewRef.current = next;
       updateUrl({});
     },
+  });
+
+  const skinShortcuts = useMidiShortcuts({
+    onTrigger: background.choose,
+    targets: () => [
+      ...background.offered.map((skin) => ({
+        kind: "built-in" as const,
+        id: skin.id,
+      })),
+      null,
+    ],
   });
 
   const song = useMemo(
@@ -363,6 +375,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
         void playback.toggle();
       }
     }, [playback, matchActive]),
+    onControl: skinShortcuts.onControl,
   });
 
   /** Opening on the lowest keys hides the part on a phone, where only a slice
@@ -587,6 +600,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                 available={background.offered}
                 onChoose={background.choose}
                 onClose={() => setPickingSkin(false)}
+                shortcuts={skinShortcuts}
               />
             ) : null}
             <PianoRollView

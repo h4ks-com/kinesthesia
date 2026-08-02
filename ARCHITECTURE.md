@@ -156,6 +156,9 @@ src/lib/
   midi/harmony.ts             what is sounding, named, and read back by a cursor
   input/keyboard-map.ts       computer keyboard to pitch
   input/web-midi.ts           MIDI devices, including hot plug
+  input/midi-shortcuts.ts     controller buttons and sliders bound to backgrounds,
+                              one button each and one slider across all, on the
+                              device and fired in any mode
   scoring/judge.ts            hit windows, combo and accuracy
   scoring/gates.ts            chords the player owes, as one unit each
   scoring/use-gates.ts        waiting, judging and missing

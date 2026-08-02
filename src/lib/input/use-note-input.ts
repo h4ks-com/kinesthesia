@@ -8,6 +8,7 @@ import {
   octaveUpCodes,
   pitchForCode,
 } from "@/lib/input/keyboard-map";
+import type { ControlInput } from "@/lib/input/web-midi";
 import { connectMidiInputs, isWebMidiSupported } from "@/lib/input/web-midi";
 
 export type InputStatus = "midi" | "keyboard";
@@ -46,6 +47,9 @@ type Options = {
   /** The bend and modulation wheels, per channel. */
   onBend?: (channel: number, amount: number) => void;
   onModulation?: (channel: number, depth: number) => void;
+  /** Any other control change or a bound SysEx slider, so a controller bound to
+   * a background can reach it. */
+  onControl?: (control: ControlInput) => void;
   /** Absent in a mode with nothing to toggle, so space is left to activate the
    * focused control instead of being swallowed. */
   onToggle?: () => void;
@@ -85,6 +89,7 @@ export function useNoteInput({
   onSustain,
   onBend,
   onModulation,
+  onControl,
   onToggle,
 }: Options): NoteInput {
   const [octave, setOctave] = useState(defaultOctave);
@@ -109,6 +114,8 @@ export function useNoteInput({
   bendRef.current = onBend;
   const modulationRef = useRef(onModulation);
   modulationRef.current = onModulation;
+  const controlRef = useRef(onControl);
+  controlRef.current = onControl;
 
   const press = useCallback(
     (pitch: number, velocity: number, at?: number, channel?: number) => {
@@ -198,6 +205,19 @@ export function useNoteInput({
         bendRef.current?.(event.channel, event.amount);
       } else if (event.type === "modulation") {
         modulationRef.current?.(event.channel, event.depth);
+      } else if (event.type === "control") {
+        controlRef.current?.({
+          kind: "cc",
+          channel: event.channel,
+          controller: event.controller,
+          value: event.value,
+        });
+      } else if (event.type === "sysex") {
+        controlRef.current?.({
+          kind: "sysex",
+          key: event.key,
+          value: event.value,
+        });
       } else if (event.down) {
         press(event.pitch, event.velocity, event.at, event.channel);
       } else {

@@ -9,7 +9,7 @@ export type HarmonySpan = {
   readonly chord: Harmony | null;
 };
 
-const pitchClasses = [
+const pitchClasses: readonly string[] = [
   "C",
   "Db",
   "D",
@@ -22,7 +22,7 @@ const pitchClasses = [
   "A",
   "Bb",
   "B",
-] as const;
+];
 
 /** Tonal names a chord by its type, and the type is the part that says how it
  * sounds. Everything not plainly one of these is other, since a background
@@ -45,7 +45,7 @@ function qualityOf(type: string): ChordQuality {
 }
 
 export function rootOf(name: string): number {
-  const index = pitchClasses.findIndex((pitch) => pitch === name);
+  const index = pitchClasses.indexOf(name);
   if (index >= 0) {
     return index;
   }
@@ -65,7 +65,7 @@ export function rootOf(name: string): number {
     "A#",
     "B",
   ];
-  const found = sharps.findIndex((pitch) => pitch === name);
+  const found = sharps.indexOf(name);
   return found >= 0 ? found : 0;
 }
 

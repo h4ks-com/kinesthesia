@@ -10,6 +10,7 @@ import { TrackMenu } from "@/components/track-menu";
 import { PlaybackEngine } from "@/lib/audio/engine";
 import type { SongVoicing, Voicing } from "@/lib/audio/voicing";
 import { keyLabelsFor, reachFor } from "@/lib/input/keyboard-map";
+import { useMidiShortcuts } from "@/lib/input/midi-shortcuts";
 import { type InputChannel, useNoteInput } from "@/lib/input/use-note-input";
 import { ExpressionTrail } from "@/lib/midi/expression";
 import type { Song, SongNote } from "@/lib/midi/song";
@@ -259,6 +260,25 @@ export function PlayView({
     [partForChannel, commitParts],
   );
 
+  // Free roam always shoots notes out of the keys, so the direction is not the
+  // player's to choose and only the backgrounds that read that way are offered.
+  const background = useBackground({
+    fixed: "up",
+    plain: plainStyle,
+    fromLink: { skin: null, rise: false },
+  });
+
+  const skinShortcuts = useMidiShortcuts({
+    onTrigger: background.choose,
+    targets: () => [
+      ...background.offered.map((skin) => ({
+        kind: "built-in" as const,
+        id: skin.id,
+      })),
+      null,
+    ],
+  });
+
   const input = useNoteInput({
     active: true,
     onPress: handlePress,
@@ -269,6 +289,7 @@ export function PlayView({
       expression.setBend(trackFor(channel), getPosition(), amount),
     onModulation: (channel, depth) =>
       expression.setDepth(trackFor(channel), getPosition(), depth),
+    onControl: skinShortcuts.onControl,
   });
 
   // The computer keyboard has no pedal, so space stands in for one, but only
@@ -355,14 +376,6 @@ export function PlayView({
     },
     [settleGlobal],
   );
-  // Free roam always shoots notes out of the keys, so the direction is not the
-  // player's to choose and only the backgrounds that read that way are offered.
-  const background = useBackground({
-    fixed: "up",
-    plain: plainStyle,
-    fromLink: { skin: null, rise: false },
-  });
-
   const onPlainStyle = useCallback(
     (next: boolean) => {
       setPlainStyle(next);
@@ -433,6 +446,7 @@ export function PlayView({
             available={background.offered}
             onChoose={background.choose}
             onClose={() => setPickingSkin(false)}
+            shortcuts={skinShortcuts}
           />
         ) : null}
 

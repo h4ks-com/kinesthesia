@@ -20,6 +20,8 @@ import type {
  * however dense the screen is. */
 const maxSkinRatio = 1.5;
 
+const noHits: ReadonlySet<number> = new Set();
+
 /** Each pointer keeps its own gesture, so one finger panning the roll and
  * another walking the keys never read each other's start position. */
 type Gesture =
@@ -37,6 +39,9 @@ type PianoRollViewProps = {
   getPosition: () => number;
   getPressed: () => ReadonlySet<number>;
   getOwed: () => ReadonlySet<number>;
+  /** Pitches to bloom this frame from a remote player's judged hits, in place of
+   * a local key press. Absent on any side that plays its own keys. */
+  getHits?: () => ReadonlySet<number>;
   getYours: () => ReadonlySet<number> | null;
   /** Play mode's live notes, rising from the keys. Omitted everywhere notes
    * fall from a song instead. */
@@ -73,6 +78,7 @@ export function PianoRollView({
   getPosition,
   getPressed,
   getOwed,
+  getHits,
   getYours,
   getLive,
   getSustain,
@@ -89,6 +95,8 @@ export function PianoRollView({
 }: PianoRollViewProps) {
   const liveRef = useRef(getLive);
   liveRef.current = getLive;
+  const hitsRef = useRef(getHits);
+  hitsRef.current = getHits;
   const sustainRef = useRef(getSustain);
   sustainRef.current = getSustain;
   const expressionRef = useRef(expression);
@@ -167,6 +175,7 @@ export function PianoRollView({
         hiddenTracks: hiddenRef.current,
         pressed: getPressed(),
         owed: getOwed(),
+        hits: hitsRef.current?.() ?? noHits,
         yours: getYours(),
         follow: followRef.current,
         reach: reachRef.current,

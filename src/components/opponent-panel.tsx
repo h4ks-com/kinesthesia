@@ -1,6 +1,12 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { HitFlag } from "@/components/hit-flag";
 import { PartControls } from "@/components/part-controls";
 import { PianoRollView } from "@/components/piano-roll-view";
@@ -40,6 +46,7 @@ type OpponentPanelProps = {
 };
 
 const nothingHidden: ReadonlySet<number> = new Set();
+const noHits: ReadonlySet<number> = new Set();
 
 export function OpponentPanel({
   song,
@@ -56,6 +63,32 @@ export function OpponentPanel({
   const [hidden, setHidden] = useState<ReadonlySet<number>>(nothingHidden);
   // Their roll rides the shared timeline, so scrubbing reads ahead on both.
   const roll = usePartRoll(song, part, getPosition);
+  const getPressedRef = useRef(roll.getPressed);
+  getPressedRef.current = roll.getPressed;
+  /** A remote verdict lands after the note's local onset, so it cannot ride the
+   * pressed channel. Instead the pitches sounding now are held for a beat and
+   * bloom on their own; a miss leaves them dark, so their half stays mute on
+   * what they got wrong. */
+  const bloomRef = useRef<{ pitches: ReadonlySet<number>; until: number }>({
+    pitches: noHits,
+    until: 0,
+  });
+  useEffect(() => {
+    if (hit === null || hit.judgement === "miss") {
+      return;
+    }
+    bloomRef.current = {
+      pitches: getPressedRef.current(),
+      until: performance.now() + 150,
+    };
+  }, [hit]);
+  const getHits = useCallback(
+    () =>
+      performance.now() < bloomRef.current.until
+        ? bloomRef.current.pitches
+        : noHits,
+    [],
+  );
   const [plain, setPlain] = useState(false);
   useEffect(() => {
     void loadGlobalSettings().then((stored) =>
@@ -163,6 +196,7 @@ export function OpponentPanel({
           getPressed={roll.getPressed}
           getOwed={roll.getOwed}
           getYours={roll.getYours}
+          getHits={getHits}
           plain={plain}
         />
         <HitFlag hit={state === "playing" ? hit : null} />

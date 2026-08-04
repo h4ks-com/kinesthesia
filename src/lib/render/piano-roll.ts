@@ -92,6 +92,10 @@ export type Frame = {
   /** The pitches the player still owes at the current gate, so a strike that
    * lands on one can be celebrated differently from a wrong one. */
   readonly owed: ReadonlySet<number>;
+  /** Pitches to bloom this frame without a local key press: the other side of a
+   * match's judged hits, which arrive after the note's local onset and so
+   * cannot ride the pressed channel. Empty everywhere but that side. */
+  readonly hits: ReadonlySet<number>;
   /** Note ids the player has to play. Everything else is drawn faintly, so a
    * reduced part still shows the song it came from. Null draws them all. */
   readonly yours: ReadonlySet<number> | null;
@@ -161,6 +165,7 @@ export class PianoRollRenderer {
   >();
   private previouslyActive = new Set<number>();
   private previouslyPressed = new Set<number>();
+  private previousHits = new Set<number>();
   /** Pitches whose note began since the last frame. A key the pedal is already
    * holding stays lit, so a note landing on it has no lighting change to spark
    * from and needs its own onset. */
@@ -908,6 +913,19 @@ export class PianoRollRenderer {
         "note",
       );
     }
+    for (const pitch of frame.hits) {
+      if (this.previousHits.has(pitch) || sparked.has(pitch)) {
+        continue;
+      }
+      sparked.add(pitch);
+      this.sparks.spawn(
+        keyCenter(pitch, whiteWidth),
+        keyboardTop,
+        active.get(pitch) ?? trackColor(frame.playTrack),
+        "bloom",
+      );
+    }
+    this.previousHits = new Set(frame.hits);
     this.previouslyActive = new Set(active.keys());
     this.previouslyPressed = new Set(frame.pressed);
   }

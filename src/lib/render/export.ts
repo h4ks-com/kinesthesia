@@ -46,6 +46,7 @@ export function watchFrame(
     hiddenTracks: config.hiddenTracks,
     pressed: noPitches,
     owed: noPitches,
+    hits: noPitches,
     yours: null,
     reach: null,
     keyLabels: null,

@@ -250,8 +250,9 @@ export class PianoRollRenderer {
     this.setPan(keyCenter(pitch, whiteWidth) - this.viewWidth / 2);
   }
 
-  /** Eases the view toward the note the player is next asked for. Only ever
-   * moves where the keyboard is wider than the screen, which is a phone. */
+  /** Eases the view toward the next note only once it has left the window:
+   * re-centring a visible note drifts for no reason, which a split-screen half
+   * feels on every hit. Only moves where the keyboard is wider than the screen. */
   private followNote(frame: Frame, whiteWidth: number, maxPan: number): void {
     if (!frame.follow || maxPan <= 0 || performance.now() < this.panHeldUntil) {
       return;
@@ -266,11 +267,19 @@ export class PianoRollRenderer {
     if (pitch === null) {
       return;
     }
-    const want = Math.min(
-      maxPan,
-      Math.max(0, keyCenter(pitch, whiteWidth) - this.viewWidth / 2),
-    );
-    this.pan += (want - this.pan) * followEase;
+    const target = keyCenter(pitch, whiteWidth);
+    const margin = Math.min(whiteWidth, this.viewWidth / 3);
+    if (
+      target >= this.pan + margin &&
+      target <= this.pan + this.viewWidth - margin
+    ) {
+      return;
+    }
+    const want =
+      target < this.pan + margin
+        ? target - margin
+        : target - this.viewWidth + margin;
+    this.pan += (Math.min(maxPan, Math.max(0, want)) - this.pan) * followEase;
   }
 
   pitchAt(x: number, y: number): number | null {

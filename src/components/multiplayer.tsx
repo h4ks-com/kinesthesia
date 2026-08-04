@@ -652,6 +652,7 @@ export function Multiplayer({
               opponentDone={opponentFinished}
               opponentGone={opponentGone}
               myRematch={myRematch}
+              theirRematch={theirRematch}
               onReady={() => void ready()}
               onRematch={rematch}
             />
@@ -694,6 +695,7 @@ type MatchOverlayProps = {
   opponentDone: boolean;
   opponentGone: boolean;
   myRematch: boolean;
+  theirRematch: boolean;
   onReady: () => void;
   onRematch: () => void;
 };
@@ -709,6 +711,7 @@ function MatchOverlay({
   opponentDone,
   opponentGone,
   myRematch,
+  theirRematch,
   onReady,
   onRematch,
 }: MatchOverlayProps) {
@@ -782,6 +785,9 @@ function MatchOverlay({
         <p className="font-mono text-muted text-sm tabular-nums">
           you {myPoints} · them {theirPoints}
         </p>
+        {theirRematch && !myRematch ? (
+          <p className="text-muted text-sm">They asked for a rematch</p>
+        ) : null}
         <div className="flex items-center gap-3">
           <button
             type="button"

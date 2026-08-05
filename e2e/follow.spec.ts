@@ -38,6 +38,21 @@ async function keyboardPattern(page: Page): Promise<string> {
   });
 }
 
+/** The pattern once it has stopped changing, so nothing is read while the keys
+ * are still going out. */
+async function settledPattern(page: Page): Promise<string> {
+  let last = await keyboardPattern(page);
+  await expect
+    .poll(async () => {
+      const now = await keyboardPattern(page);
+      const steady = now === last;
+      last = now;
+      return steady;
+    })
+    .toBe(true);
+  return last;
+}
+
 async function walkTheSong(
   page: Page,
   mode: "watch" | "learn",
@@ -52,10 +67,13 @@ async function walkTheSong(
     }`,
   );
   await page.locator("canvas").first().waitFor({ state: "visible" });
+  // Both readings are taken with nothing sounding, since a lit key is pale
+  // wherever it sits and would otherwise read as the keyboard having moved.
+  const opening = await settledPattern(page);
   await page.getByRole("button", { name: "Play", exact: true }).click();
-  const opening = await keyboardPattern(page);
   await page.waitForTimeout(9000);
-  return { opening, later: await keyboardPattern(page) };
+  await page.getByRole("button", { name: "Pause" }).click();
+  return { opening, later: await settledPattern(page) };
 }
 
 test("one note at a time brings the keyboard to the note", async ({ page }) => {

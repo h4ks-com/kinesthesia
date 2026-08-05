@@ -45,6 +45,7 @@ frame, reused every frame, so read it and keep none of it:
             through the scene. Full only when notes leave the keys.
   strikes   [{ x, color, pitch, velocity }] that landed since the last frame.
             This is the moment worth reacting to in every mode.
+            velocity is 0..1 on both, not 0..127. pitch is a MIDI number.
   pressed   [60, 64] MIDI numbers held down right now
   chord     { name, root, quality } sounding now, or null. quality is one of
             major, minor, diminished, augmented, other. root is 0 for C.

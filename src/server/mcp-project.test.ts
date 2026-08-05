@@ -55,7 +55,7 @@ beforeEach(() => {
 describe("project editing over MCP", () => {
   it("creates, adds a progression, and reads it back with channel and harmony", async () => {
     const created = await json(call("create_project", { name: "t", bpm: 90 }));
-    expect(created.body.url).toContain("/api/p/");
+    expect(created.body.playUrl).toContain("/api/p/");
     const id = created.body.id;
 
     await json(
@@ -83,7 +83,7 @@ describe("project editing over MCP", () => {
     const after = await json(
       call("add_chords", { id, track: "new", chords: ["C"] }),
     );
-    expect(after.body.url).toBe(created.body.url);
+    expect(after.body.playUrl).toBe(created.body.playUrl);
   });
 
   it("duplicates a section to extend the piece", async () => {

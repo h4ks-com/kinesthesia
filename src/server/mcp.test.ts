@@ -137,6 +137,20 @@ describe("player_link", () => {
     expect(tools.map((entry) => entry.name)).toContain("player_link");
   });
 
+  it("builds a link from a project id, so nothing has to be written by hand", async () => {
+    const id = "pj_12345678-1234-1234-1234-1234567890ab";
+    const { text, isError } = await build({ project: id, mode: "learn" });
+    expect(isError).toBe(false);
+    expect(text).toContain("/learn?");
+    expect(text).toContain(encodeURIComponent(`/api/p/${id}`));
+  });
+
+  it("refuses a project id that is not one", async () => {
+    const { isError, text } = await build({ project: "87216" });
+    expect(isError).toBe(true);
+    expect(text).toContain("not a project id");
+  });
+
   it("carries every setting the player reads", async () => {
     const { text } = await build({
       source: "bitmidi",

@@ -45,4 +45,15 @@ describe("short player links", () => {
   it("404s an id that is not a valid key", async () => {
     expect((await api.request("/api/g/not-a-uuid")).status).toBe(404);
   });
+
+  // A project id in a source's id names nothing, and answering that with a 502
+  // reads as a server fault worth retrying rather than a caller's mistake.
+  it("sends a project id passed as a source id back to the project link", async () => {
+    const id = "pj_12345678-1234-1234-1234-1234567890ab";
+    const response = await api.request(
+      `/api/midi/file?source=bitmidi&id=${id}`,
+    );
+    expect(response.status).toBe(404);
+    expect(await response.text()).toContain(`/api/p/${id}`);
+  });
 });

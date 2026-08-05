@@ -82,6 +82,12 @@ const playerLinkShape = {
     .describe(
       "A direct .mid url from a trusted origin, in place of source and id",
     ),
+  project: z
+    .string()
+    .optional()
+    .describe(
+      "A project id from create_project or import_project, in place of source and id",
+    ),
   name: z.string().default("").describe("Song name to show in the player"),
   mode: z
     .enum(playerModes)
@@ -148,6 +154,7 @@ type PlayerLinkInput = {
   readonly source: (typeof midiSourceIds)[number] | undefined;
   readonly id: string | undefined;
   readonly url: string | undefined;
+  readonly project: string | undefined;
   readonly name: string;
   readonly mode: PlayerMode;
   readonly speed: number | undefined;
@@ -168,7 +175,13 @@ type PlayerLink = { ok: true; url: string } | { ok: false; why: string };
 function playerLink(input: PlayerLinkInput): PlayerLink {
   let file: string;
   let source: string | null;
-  if (input.url !== undefined) {
+  if (input.project !== undefined) {
+    if (!projectIdPattern.test(input.project)) {
+      return { ok: false, why: `not a project id: ${input.project}` };
+    }
+    file = projectUrl(input.project);
+    source = null;
+  } else if (input.url !== undefined) {
     if (!isPlayableUrl(input.url, config.trustedMidiOrigins)) {
       return { ok: false, why: "the url must be a .mid from a trusted origin" };
     }
@@ -183,7 +196,7 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
   } else {
     return {
       ok: false,
-      why: "pass a source and id from search_midi, or a url",
+      why: "pass a source and id from search_midi, a url, or a project id",
     };
   }
   if (
@@ -285,7 +298,14 @@ function midiFetchUrl(input: {
   source: string | undefined;
   id: string | undefined;
   url: string | undefined;
+  project?: string | undefined;
 }): { url: string } | { error: string } {
+  if (input.project !== undefined) {
+    if (!projectIdPattern.test(input.project)) {
+      return { error: `not a project id: ${input.project}` };
+    }
+    return { url: projectUrl(input.project) };
+  }
   if (input.url !== undefined) {
     if (!isPlayableUrl(input.url, config.trustedMidiOrigins)) {
       return { error: "the url must be a .mid from a trusted origin" };
@@ -299,7 +319,17 @@ function midiFetchUrl(input: {
     }
     return { url };
   }
-  return { error: "pass a source and id from search_midi, or a url" };
+  return {
+    error: "pass a source and id from search_midi, a url, or a project",
+  };
+}
+
+/** Projects are named by id everywhere; this is the one address that turns one
+ * back into something a browser or a fetch can follow. */
+const projectIdPattern = /^pj_[0-9a-f-]{36}$/;
+
+function projectUrl(id: string): string {
+  return `${config.appBaseUrl}/api/p/${id}`;
 }
 
 /** Stores a generated .mid in the public bucket and hands back both the raw
@@ -336,6 +366,10 @@ const analyzeInputShape = {
     .url()
     .optional()
     .describe("A direct .mid url from a trusted origin, in place of source+id"),
+  project: z
+    .string()
+    .optional()
+    .describe("A project id, in place of source and id"),
   name: z.string().default("").describe("Name to report it under"),
 };
 
@@ -376,7 +410,7 @@ async function loadProject(id: string): Promise<Project> {
  * the player link a caller already has keeps resolving to the latest edit. */
 async function saveProject(
   project: Project,
-): Promise<{ id: string; url: string; digest: unknown }> {
+): Promise<{ id: string; playUrl: string; digest: unknown }> {
   const keys = projectKeys(project.id);
   // The .mid lands before the spec, so a failed render leaves the spec (which
   // loadProject reads) unchanged and a retry re-applies the edit exactly once.
@@ -384,7 +418,7 @@ async function saveProject(
   await putJson(keys.spec, project);
   return {
     id: project.id,
-    url: `${config.appBaseUrl}/api/p/${project.id}`,
+    playUrl: projectUrl(project.id),
     digest: projectDigest(project),
   };
 }
@@ -594,6 +628,11 @@ player_link also accepts a direct .mid url in place of source and id, as long as
 the url is on an origin the deployment trusts. That is how a file from elsewhere,
 such as a paste service the deployment allows, is opened in the player.
 
+A project is named the third way: pass its id as project. Never put a project id
+in the id argument of a source, since a project belongs to no source and the two
+together name nothing. The playUrl a project tool returns is already the link to
+post; build one with player_link only to ask for a mode or a speed.
+
 analyze_midi goes deeper than midi_info: it reads a file and reports its tempo
 (and whether that is written down or a default), time signature, estimated key
 with a confidence, and a bar-by-bar chord timeline. Use it to answer what key a
@@ -606,8 +645,8 @@ arpeggiate turns a list of chord symbols, one per bar, into a rolling arpeggio.
 Both refuse input the file cannot represent rather than writing a broken file.
 
 For anything beyond a one-shot file, work in a project. create_project opens an
-empty one and returns an id and a player link; import_project opens an existing
-file the same way. Then build it up: add_chords lays a progression on a track or
+empty one and returns an id and a playUrl; import_project opens an existing file
+the same way. Then build it up: add_chords lays a progression on a track or
 a new one, add_text writes a caption, add_notes places individual notes, and
 duplicate, transpose, set_tempo and set_instrument reshape what is there. Every
 edit takes the project id, targets a track and channel, and returns the updated

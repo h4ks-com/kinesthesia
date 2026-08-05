@@ -201,15 +201,23 @@ api.openapi(sourcesRoute, (c) =>
  * cross origin headers still plays in a browser. Binary, so it is a plain route
  * rather than a documented JSON one. */
 api.get("/midi/file", async (c) => {
-  const fileUrl = sourceFileUrl(
-    c.req.query("source") ?? "",
-    c.req.query("id") ?? "",
-  );
+  const id = c.req.query("id") ?? "";
+  if (id.startsWith("pj_")) {
+    return c.json(
+      { error: `That is a project id. Open it at /api/p/${id}` },
+      404,
+    );
+  }
+  const fileUrl = sourceFileUrl(c.req.query("source") ?? "", id);
   if (fileUrl === null) {
     return c.json({ error: "Unknown source or id" }, 400);
   }
   try {
     const upstream = await sourceFetch(fileUrl);
+    // Told apart so a caller knows whether to fix the id or try again later.
+    if (upstream.status === 404 || upstream.status === 410) {
+      return c.json({ error: "That source has no file with that id" }, 404);
+    }
     if (!upstream.ok) {
       return c.json({ error: "The file could not be fetched" }, 502);
     }

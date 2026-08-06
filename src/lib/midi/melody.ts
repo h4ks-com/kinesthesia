@@ -39,20 +39,7 @@ export function reduceToMelody(song: Song, options: MelodyOptions): SongNote[] {
     return [];
   }
   const top = topOfEachChord(rightHand(source));
-  return clipToMonophonic(
-    thin(top, clampMelodyRate(options.maxNotesPerSecond)),
-  );
-}
-
-/** The song as the roll should draw it once a part has been reduced. Reducing
- * shortens the notes it keeps so only one is ever held, and a roll drawing the
- * written lengths would show two to hold at once while the gate asks for one. */
-export function asReduced(song: Song, reduced: readonly SongNote[]): Song {
-  const held = new Map(reduced.map((note) => [note.id, note]));
-  return {
-    ...song,
-    notes: song.notes.map((note) => held.get(note.id) ?? note),
-  };
+  return thin(top, clampMelodyRate(options.maxNotesPerSecond));
 }
 
 function playable(song: Song, tracks: ReadonlySet<number>): SongNote[] {
@@ -137,13 +124,24 @@ function topOfEachChord(notes: readonly SongNote[]): SongNote[] {
 
 /** Keeps the line under the rate the player asked for by taking the highest
  * note of each window. An arpeggio spells its tune across time rather than in
- * one chord, so a slower rate walks its peaks instead of its inner voices. */
+ * one chord, so a slower rate walks its peaks instead of its inner voices.
+ *
+ * A note is asked for whole. One that lands while the last is still sounding is
+ * left out however fast a rate allows it, because the hand is still on the last
+ * one: a note is never shortened to make room for the next. */
 function thin(notes: readonly SongNote[], rate: number): SongNote[] {
   const gap = 1 / rate;
   const kept: SongNote[] = [];
   for (const note of notes) {
     const previous = kept[kept.length - 1];
-    if (previous === undefined || note.start - previous.start >= gap) {
+    if (previous === undefined) {
+      kept.push(note);
+      continue;
+    }
+    if (note.start < previous.end) {
+      continue;
+    }
+    if (note.start - previous.start >= gap) {
       kept.push(note);
       continue;
     }
@@ -159,14 +157,4 @@ function thin(notes: readonly SongNote[], rate: number): SongNote[] {
 
 function duration(note: SongNote): number {
   return note.end - note.start;
-}
-
-function clipToMonophonic(notes: readonly SongNote[]): SongNote[] {
-  return notes.map((note, index) => {
-    const next = notes[index + 1];
-    if (next === undefined || next.start >= note.end) {
-      return note;
-    }
-    return { ...note, end: next.start, release: next.start };
-  });
 }

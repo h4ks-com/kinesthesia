@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ExpressionTrail } from "@/lib/midi/expression";
 import {
-  asReduced,
   clampMelodyRate,
   type MelodyOptions,
   melodyRateRange,
@@ -100,10 +99,9 @@ describe("reduceToMelody", () => {
       generous,
     );
     expect(overlaps(line)).toBe(false);
-    expect(line).toHaveLength(4);
   });
 
-  it("keeps the tune playing under a held pedal note", () => {
+  it("asks for a held note whole and nothing else under it", () => {
     const line = reduceToMelody(
       song([
         note(84, 0, 4),
@@ -114,16 +112,27 @@ describe("reduceToMelody", () => {
       ]),
       generous,
     );
-    expect(line.map((each) => each.pitch)).toEqual([84, 72, 74, 76, 77]);
+    expect(line.map((each) => each.pitch)).toEqual([84]);
+    expect(line[0]?.end).toBe(4);
   });
 
-  it("keeps every note of a legato descending line", () => {
+  it("leaves every note the length it was written", () => {
+    const written = song([note(72, 0, 0.6), note(71, 1, 0.6)]);
+    const line = reduceToMelody(written, generous);
+    for (const kept of line) {
+      const source = written.notes.find((each) => each.id === kept.id);
+      expect(kept.end).toBe(source?.end);
+      expect(kept.release).toBe(source?.release);
+    }
+  });
+
+  it("keeps a descending line whose notes do not run into each other", () => {
     const line = reduceToMelody(
       song([
-        note(72, 0, 0.6),
-        note(71, 0.5, 0.6),
-        note(69, 1, 0.6),
-        note(67, 1.5, 0.6),
+        note(72, 0, 0.5),
+        note(71, 0.5, 0.5),
+        note(69, 1, 0.5),
+        note(67, 1.5, 0.5),
       ]),
       generous,
     );
@@ -250,29 +259,5 @@ describe("reduceToMelody", () => {
     expect(clampMelodyRate(0)).toBe(melodyRateRange.min);
     expect(clampMelodyRate(-5)).toBe(melodyRateRange.min);
     expect(clampMelodyRate(3.4)).toBe(3);
-  });
-});
-
-describe("asReduced", () => {
-  it("draws an owed note the length it is asked for, not the length it was written", () => {
-    const held = note(72, 0, 4);
-    const after = note(70, 1, 1);
-    const whole = song([held, after]);
-    const line = reduceToMelody(whole, generous);
-
-    const shown = asReduced(whole, line);
-    const owed = shown.notes.filter((each) =>
-      line.some((kept) => kept.id === each.id),
-    );
-    expect(overlaps(owed)).toBe(false);
-    expect(shown.notes.find((each) => each.id === held.id)?.end).toBe(1);
-  });
-
-  it("leaves everything the part does not owe exactly as it was", () => {
-    const mine = note(72, 0, 4);
-    const theirs = note(48, 0, 4, 1);
-    const whole = song([mine, theirs]);
-    const shown = asReduced(whole, [{ ...mine, end: 1, release: 1 }]);
-    expect(shown.notes.find((each) => each.id === theirs.id)).toEqual(theirs);
   });
 });

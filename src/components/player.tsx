@@ -24,7 +24,7 @@ import { useSongVoicing } from "@/lib/audio/use-song-voicing";
 import { keyLabelsFor, reachFor } from "@/lib/input/keyboard-map";
 import { useMidiShortcuts } from "@/lib/input/midi-shortcuts";
 import { useNoteInput } from "@/lib/input/use-note-input";
-import { reduceToMelody } from "@/lib/midi/melody";
+import { asReduced, reduceToMelody } from "@/lib/midi/melody";
 import {
   medianPitch,
   type Part,
@@ -261,6 +261,11 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   }, [song, playerTracks, interactive, simplified, melodyRate]);
 
   const owedIds = useMemo(() => new Set(owed.map((note) => note.id)), [owed]);
+
+  const shown = useMemo(
+    () => (song === null || !simplified ? song : asReduced(song, owed)),
+    [song, simplified, owed],
+  );
 
   // Learning shows only the part you owe while the rest keeps playing, so
   // hiding a track is a view choice there rather than a mute.
@@ -600,7 +605,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             <PianoRollView
               skin={background.source}
               direction={background.direction}
-              song={song}
+              song={shown ?? song}
               hiddenTracks={hiddenTracks}
               keyWidth={keyWidth}
               focusPitch={focusPitch}

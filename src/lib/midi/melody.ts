@@ -44,6 +44,17 @@ export function reduceToMelody(song: Song, options: MelodyOptions): SongNote[] {
   );
 }
 
+/** The song as the roll should draw it once a part has been reduced. Reducing
+ * shortens the notes it keeps so only one is ever held, and a roll drawing the
+ * written lengths would show two to hold at once while the gate asks for one. */
+export function asReduced(song: Song, reduced: readonly SongNote[]): Song {
+  const held = new Map(reduced.map((note) => [note.id, note]));
+  return {
+    ...song,
+    notes: song.notes.map((note) => held.get(note.id) ?? note),
+  };
+}
+
 function playable(song: Song, tracks: ReadonlySet<number>): SongNote[] {
   const percussion = new Set(
     song.tracks.filter((each) => each.percussion).map((each) => each.index),

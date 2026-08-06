@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ExpressionTrail } from "@/lib/midi/expression";
 import {
+  asReduced,
   clampMelodyRate,
   type MelodyOptions,
   melodyRateRange,
@@ -249,5 +250,29 @@ describe("reduceToMelody", () => {
     expect(clampMelodyRate(0)).toBe(melodyRateRange.min);
     expect(clampMelodyRate(-5)).toBe(melodyRateRange.min);
     expect(clampMelodyRate(3.4)).toBe(3);
+  });
+});
+
+describe("asReduced", () => {
+  it("draws an owed note the length it is asked for, not the length it was written", () => {
+    const held = note(72, 0, 4);
+    const after = note(70, 1, 1);
+    const whole = song([held, after]);
+    const line = reduceToMelody(whole, generous);
+
+    const shown = asReduced(whole, line);
+    const owed = shown.notes.filter((each) =>
+      line.some((kept) => kept.id === each.id),
+    );
+    expect(overlaps(owed)).toBe(false);
+    expect(shown.notes.find((each) => each.id === held.id)?.end).toBe(1);
+  });
+
+  it("leaves everything the part does not owe exactly as it was", () => {
+    const mine = note(72, 0, 4);
+    const theirs = note(48, 0, 4, 1);
+    const whole = song([mine, theirs]);
+    const shown = asReduced(whole, [{ ...mine, end: 1, release: 1 }]);
+    expect(shown.notes.find((each) => each.id === theirs.id)).toEqual(theirs);
   });
 });

@@ -145,6 +145,19 @@ describe("readStoredChoice", () => {
     });
   });
 
+  it("reads an added background, which is remembered by id like any other", () => {
+    const choice = {
+      kind: "script",
+      id: "11111111-1111-4111-8111-111111111111",
+    } as const;
+    expect(readStoredChoice(choice)).toEqual(choice);
+  });
+
+  it("drops an added id that is not one we mint", () => {
+    expect(readStoredChoice({ kind: "script", id: "../etc" })).toBeNull();
+    expect(readStoredChoice({ kind: "script" })).toBeNull();
+  });
+
   it("drops a background this build no longer ships", () => {
     expect(readStoredChoice("moonbase")).toBeNull();
   });

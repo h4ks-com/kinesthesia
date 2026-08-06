@@ -270,13 +270,7 @@ export function PlayView({
 
   const skinShortcuts = useMidiShortcuts({
     onTrigger: background.choose,
-    targets: () => [
-      ...background.offered.map((skin) => ({
-        kind: "built-in" as const,
-        id: skin.id,
-      })),
-      null,
-    ],
+    targets: () => background.cycle,
   });
 
   const input = useNoteInput({

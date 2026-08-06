@@ -132,6 +132,11 @@ export function readStoredChoice(value: unknown): BackgroundChoice | null {
     const built = skinIds.find((id) => id === held.id);
     return built === undefined ? null : { kind: "built-in", id: built };
   }
+  if (held.kind === "script") {
+    return typeof held.id === "string" && isAddedSkinId(held.id)
+      ? { kind: "script", id: held.id }
+      : null;
+  }
   const image = held.image as Partial<Backdrop> | undefined;
   // Only a picture this device kept: a remote address saved by an older build
   // was never held to the allowlist, and this is not where that is checked.

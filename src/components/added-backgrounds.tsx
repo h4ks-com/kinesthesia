@@ -6,13 +6,8 @@ import type { MidiShortcuts } from "@/lib/input/midi-shortcuts";
 import type { BackgroundChoice } from "@/lib/skins/backdrop";
 import { scriptBackdrop } from "@/lib/skins/runtime/host";
 import type { BackdropSource } from "@/lib/skins/types";
+import { type AddedSkin, useAddedSkins } from "@/lib/skins/use-added-skins";
 import { useNearby } from "@/lib/use-nearby";
-
-type Added = {
-  readonly id: string;
-  readonly name: string;
-  readonly blurb: string;
-};
 
 /** One tile, which fetches and runs its script only once it is near enough to
  * be looked at. Every preview is a worker of its own, and there may be a great
@@ -25,7 +20,7 @@ function AddedTile({
   onClose,
   shortcuts,
 }: {
-  skin: Added;
+  skin: AddedSkin;
   chosen: BackgroundChoice | null;
   onChoose: (next: BackgroundChoice) => void;
   onClose: () => void;
@@ -105,24 +100,7 @@ export function AddedBackgrounds({
   onClose: () => void;
   shortcuts: MidiShortcuts | null;
 }) {
-  const [added, setAdded] = useState<readonly Added[]>([]);
-
-  useEffect(() => {
-    let wanted = true;
-    fetch("/api/skins")
-      .then((answer) => (answer.ok ? answer.json() : null))
-      .then((listing: { custom?: readonly Added[] } | null) => {
-        if (wanted) {
-          setAdded(listing?.custom ?? []);
-        }
-      })
-      // Silent: the ones this build ships are the important half of the picker,
-      // and a store that cannot be reached should cost the reader nothing.
-      .catch(() => {});
-    return () => {
-      wanted = false;
-    };
-  }, []);
+  const added = useAddedSkins();
 
   if (added.length === 0) {
     return null;

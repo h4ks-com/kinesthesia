@@ -12,6 +12,7 @@ import {
 import { scriptBackdrop } from "@/lib/skins/runtime/host";
 import type { BackdropSource, NoteDirection, Skin } from "@/lib/skins/types";
 import { skinReads } from "@/lib/skins/types";
+import { useAddedSkins } from "@/lib/skins/use-added-skins";
 import { pictureHref } from "@/lib/storage/pictures";
 import {
   loadGlobalSettings,
@@ -34,6 +35,10 @@ export type Background = {
   readonly direction: NoteDirection;
   /** Which backgrounds are worth offering here. */
   readonly offered: readonly Skin[];
+  /** Everything a controller can step through: what this build ships, then
+   * what has been added, then plain so a full throw clears the roll. Built
+   * from the live listing, so one taken away leaves the cycle by itself. */
+  readonly cycle: readonly (BackgroundChoice | null)[];
   /** True where the player may turn the notes around at all. */
   readonly canTurn: boolean;
   /** The background deciding the direction on its own, so the control can say
@@ -79,6 +84,7 @@ export function useBackground({
 }: Options): Background {
   const [chosen, setChosen] = useState<BackgroundChoice | null>(fromLink.skin);
   const [rising, setRising] = useState(fromLink.rise);
+  const addedSkins = useAddedSkins();
   /** What the address named when the page opened, which is the only moment it
    * can. */
   const linkAsked = useRef({
@@ -132,16 +138,29 @@ export function useBackground({
     readonly id: string;
     readonly source: string;
   } | null>(null);
+  /** Says so rather than falling quietly back to the plain roll, the way a
+   * picture that has gone does. */
+  const [missing, setMissing] = useState(false);
   useEffect(() => {
     if (added === null) {
       setAddedSource(null);
       return;
     }
     let live = true;
+    setMissing(false);
     void fetch(`/api/skins/${added}`)
-      .then((answer) => (answer.ok ? answer.text() : null))
+      .then(async (answer) => (answer.ok ? await answer.text() : null))
       .then((source) => {
-        if (live && source !== null) {
+        if (!live) {
+          return;
+        }
+        if (source === null) {
+          // Dropped for this visit only. The store answers the same way for a
+          // background that was taken away and for one it cannot reach just
+          // now, so what is written down has to survive a bad moment.
+          setMissing(true);
+          setChosen(null);
+        } else {
           setAddedSource({ id: added, source });
         }
       })
@@ -279,11 +298,19 @@ export function useBackground({
     report.current?.({ skin: chosenNow.current, rise: next });
   }, []);
 
+  const offered = fixed === null ? everySkin : skinsFor(fixed);
+  const cycle: readonly (BackgroundChoice | null)[] = [
+    ...offered.map((skin) => ({ kind: "built-in" as const, id: skin.id })),
+    ...addedSkins.map((skin) => ({ kind: "script" as const, id: skin.id })),
+    null,
+  ];
+
   return {
     chosen,
     skin: wanted !== null && suitsDirection(wanted, direction) ? wanted : null,
     direction,
-    offered: fixed === null ? everySkin : skinsFor(fixed),
+    offered,
+    cycle,
     canTurn: fixed === null,
     heldBy,
     source: source_ ?? addedSource_ ?? wanted,
@@ -292,9 +319,13 @@ export function useBackground({
         ? "your picture"
         : source_ !== null
           ? "picture missing"
-          : addedSource_ !== null
-            ? "an added background"
-            : (wanted?.name.toLowerCase() ?? "plain"),
+          : missing
+            ? "background missing"
+            : addedSource_ !== null
+              ? (addedSkins
+                  .find((skin) => skin.id === added)
+                  ?.name.toLowerCase() ?? "an added background")
+              : (wanted?.name.toLowerCase() ?? "plain"),
     choose,
     turn,
   };

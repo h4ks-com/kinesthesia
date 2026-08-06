@@ -135,6 +135,8 @@ src/lib/
                               down the roll and travelling with the notes
   skins/registry.ts           the backgrounds on offer, which suit a direction,
                               and which way notes travel under one
+  skins/use-added-skins.ts    the backgrounds somebody added, read from the
+                              listing wherever they are offered
   use-nearby.ts               whether an element has come near enough to be
                               looked at, for work worth putting off until then
   render/export.ts            the watch view as a render job: size, frame, files

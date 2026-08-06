@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ControlInput } from "@/lib/input/web-midi";
-import type { BackgroundChoice } from "@/lib/skins/backdrop";
+import { type BackgroundChoice, readStoredChoice } from "@/lib/skins/backdrop";
 import {
   loadGlobalSettings,
   updateGlobalSettings,
@@ -186,29 +186,31 @@ function normalize(raw: unknown): MidiShortcut[] {
     const control = normalizeControl(e.control);
     if (typeof e.kind === "string" && control !== null) {
       if (e.kind === "button") {
-        return [
-          {
-            kind: "button",
-            control,
-            target: (e.target ?? null) as BackgroundChoice | null,
-          },
-        ];
+        return buttonFor(control, e.target);
       }
       if (e.kind === "slider") {
         return [{ kind: "slider", control }];
       }
     }
     if (typeof e.channel === "number" && typeof e.controller === "number") {
-      return [
-        {
-          kind: "button",
-          control: { kind: "cc", channel: e.channel, controller: e.controller },
-          target: (e.target ?? null) as BackgroundChoice | null,
-        },
-      ];
+      return buttonFor(
+        { kind: "cc", channel: e.channel, controller: e.controller },
+        e.target,
+      );
     }
     return [];
   });
+}
+
+/** A saved button, or nothing where its background cannot be read. Absent is
+ * plain, which is a target like any other. A button left bound to something
+ * unreadable would fire and land somewhere else, so it goes instead. */
+function buttonFor(control: ControlRef, raw: unknown): MidiShortcut[] {
+  if (raw === undefined || raw === null) {
+    return [{ kind: "button", control, target: null }];
+  }
+  const target = readStoredChoice(raw);
+  return target === null ? [] : [{ kind: "button", control, target }];
 }
 
 export type MidiShortcuts = {

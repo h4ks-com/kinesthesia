@@ -52,6 +52,29 @@ async function serveAdded(page: Page): Promise<void> {
   }
 }
 
+async function storedSkinKind(page: Page): Promise<string | null> {
+  return page.evaluate(
+    () =>
+      new Promise<string | null>((resolve) => {
+        const request = indexedDB.open("kinesthesia");
+        request.onerror = () => resolve(null);
+        request.onsuccess = () => {
+          const row = request.result
+            .transaction("settings", "readonly")
+            .objectStore("settings")
+            .get("global");
+          row.onerror = () => resolve(null);
+          row.onsuccess = () => {
+            const skin = (
+              row.result as { skin?: { kind?: string } } | undefined
+            )?.skin;
+            resolve(skin?.kind ?? null);
+          };
+        };
+      }),
+  );
+}
+
 async function openPicker(page: Page): Promise<void> {
   await seenTour(page);
   await serveAdded(page);
@@ -101,6 +124,24 @@ test("one that will not run is shown as one that cannot be chosen", async ({
   // Refused rather than removed from the tab order, so the reason is reachable.
   await broken.focus();
   await expect(broken).toBeFocused();
+});
+
+test("one that was chosen is still chosen on the next visit", async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  await openPicker(page);
+  await page.getByRole("button", { name: /Magenta/ }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  // Waited for rather than assumed: the choice is written to the database after
+  // the dialog closes, and a reload that beats the write proves nothing.
+  await expect.poll(() => storedSkinKind(page)).toBe("script");
+  await page.reload();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByRole("button", { name: /background/i })).toContainText(
+    "magenta",
+  );
 });
 
 test("choosing one draws it behind the keys", async ({ page }) => {

@@ -167,13 +167,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
 
   const skinShortcuts = useMidiShortcuts({
     onTrigger: background.choose,
-    targets: () => [
-      ...background.offered.map((skin) => ({
-        kind: "built-in" as const,
-        id: skin.id,
-      })),
-      null,
-    ],
+    targets: () => background.cycle,
   });
 
   const song = useMemo(

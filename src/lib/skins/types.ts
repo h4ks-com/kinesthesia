@@ -24,6 +24,8 @@ export const skinDirections = {
   ink: ["up", "down"],
   /** A meadow reads the same whichever way the notes go. */
   flower: ["up", "down"],
+  /** Smoke leaves the keys whichever way the notes are going. */
+  smoke: ["up", "down"],
 } as const satisfies Record<string, readonly NoteDirection[]>;
 
 export type SkinId = keyof typeof skinDirections;

@@ -7,6 +7,7 @@ import { flowerScript } from "@/lib/skins/scripts/flower";
 import { horizonScript } from "@/lib/skins/scripts/horizon";
 import { inkScript } from "@/lib/skins/scripts/ink";
 import { rainfallScript } from "@/lib/skins/scripts/rainfall";
+import { smokeScript } from "@/lib/skins/scripts/smoke";
 import { starfieldScript } from "@/lib/skins/scripts/starfield";
 import type { NoteDirection, Skin, SkinId } from "@/lib/skins/types";
 import { skinDirections, skinIds, skinReads } from "@/lib/skins/types";
@@ -76,6 +77,12 @@ const catalogue: Record<SkinId, Listing> = {
     blurb:
       "A grey meadow that colours as the music turns major and fades back when it turns minor. Struck keys open flowers; the wind carries their petals off.",
     source: flowerScript,
+  },
+  smoke: {
+    name: "Smoke",
+    blurb:
+      "Total darkness, and coloured smoke off every key struck. It gathers and drifts as you play, and notes climbing away from the keys push it aside.",
+    source: smokeScript,
   },
 };
 

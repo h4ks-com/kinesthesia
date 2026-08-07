@@ -11,6 +11,7 @@ const ids = [
   "ember",
   "ink",
   "flower",
+  "smoke",
 ];
 
 for (const id of ids) {

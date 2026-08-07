@@ -54,6 +54,7 @@ test("the plain roll still works and every built-in is still listed", async ({
     "ember",
     "ink",
     "flower",
+    "smoke",
   ]) {
     expect(ids).toContain(id);
   }

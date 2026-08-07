@@ -988,9 +988,8 @@ export class PianoRollRenderer {
       // A key hinges at its far end, which is the top of the screen, so a
       // pressed one dips at the near end and comes up short of where it stood.
       const sink = active.has(pitch) || held.has(pitch) ? pressSink : 0;
-      this.setKeyPaint(frame, active, pitch, this.whiteFace ?? "#dfe4ec", 20);
+      this.setKeyPaint(frame, active, pitch, this.whiteFace ?? "#dfe4ec");
       ctx.fillRect(x + 0.5, keyboardTop, whiteWidth - 1, keyboardHeight - sink);
-      ctx.shadowBlur = 0;
       // The bed the near end drops toward, at the front where it went down.
       if (sink > 0) {
         if (this.whiteTilt !== null) {
@@ -1028,6 +1027,27 @@ export class PianoRollRenderer {
       }
     }
 
+    if (!frame.plain) {
+      // Between the two runs of keys, because a white key's light and shadow
+      // spread across its whole face and the black keys sit over the top of
+      // that. Laid after them they would cut the black keys in half.
+      this.paintKeyBloom(
+        frame,
+        active,
+        keyboardTop,
+        keyboardHeight,
+        whiteWidth,
+        false,
+      );
+      this.paintKeyRecess(
+        active,
+        held,
+        keyboardTop,
+        keyboardHeight,
+        whiteWidth,
+      );
+    }
+
     for (let pitch = lowestPitch; pitch <= highestPitch; pitch += 1) {
       if (!isBlackKey(pitch)) {
         continue;
@@ -1045,10 +1065,9 @@ export class PianoRollRenderer {
         blackWidth + 2,
         sink > 0 ? 1 : 4,
       );
-      this.setKeyPaint(frame, active, pitch, this.blackFace ?? "#0b0e15", 16);
+      this.setKeyPaint(frame, active, pitch, this.blackFace ?? "#0b0e15");
       const blackFill = ctx.fillStyle;
       ctx.fillRect(x, keyboardTop, blackWidth, blackHeight - sink);
-      ctx.shadowBlur = 0;
       if (sink > 0) {
         // The front of the key, turned down and away. Painted from the key's
         // own face rather than left as bare bed, or a lit key ends in a black
@@ -1077,6 +1096,17 @@ export class PianoRollRenderer {
           blackHeight - sink,
         );
       }
+    }
+
+    if (!frame.plain) {
+      this.paintKeyBloom(
+        frame,
+        active,
+        keyboardTop,
+        blackHeight,
+        whiteWidth,
+        true,
+      );
     }
 
     ctx.fillStyle = "#161c26";
@@ -1229,35 +1259,126 @@ export class PianoRollRenderer {
 
   /** A pressed key goes white so the player can tell their own hit from a note
    * the song is already playing, and blooms when the hit is one they owe. */
+  /** The wedge of shadow a sunk white key opens beside itself. A key hinges at
+   * its far end and drops at the near one, so the gap is nothing at the hinge
+   * and widest at the front. Two neighbours that went down together are level
+   * with each other and open no gap at all, so the edge they share stays clear.
+   * Black keys ride on top of the whites with nothing beside them at their own
+   * height, so they get none of this. */
+  private paintKeyRecess(
+    active: ReadonlyMap<number, NoteColor>,
+    held: ReadonlySet<number>,
+    keyboardTop: number,
+    keyboardHeight: number,
+    whiteWidth: number,
+  ): void {
+    const ctx = this.context;
+    const foot = keyboardTop + keyboardHeight - pressSink;
+    const wall = Math.max(2, whiteWidth * 0.26);
+    const sunk = (pitch: number | undefined): boolean =>
+      pitch !== undefined && (active.has(pitch) || held.has(pitch));
+
+    for (let index = 0; index < whiteKeys.length; index += 1) {
+      const pitch = whiteKeys[index];
+      if (pitch === undefined || !sunk(pitch)) {
+        continue;
+      }
+      const left = whiteKeyLeft(pitch, whiteWidth) + 0.5;
+      const wide = whiteWidth - 1;
+      for (const edge of [-1, 1]) {
+        if (sunk(whiteKeys[index + edge])) {
+          continue;
+        }
+        const at = edge === -1 ? left : left + wide;
+        const inward = at - wall * edge;
+        const face = ctx.createLinearGradient(at, 0, inward, 0);
+        face.addColorStop(0, "rgba(0,0,0,0.5)");
+        face.addColorStop(0.5, "rgba(0,0,0,0.16)");
+        face.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = face;
+        ctx.beginPath();
+        ctx.moveTo(at, keyboardTop);
+        ctx.lineTo(at, foot);
+        ctx.lineTo(inward, foot);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+  }
+
+  /** The colour a lit key carries, kept inside its own face. Run once for each
+   * run of keys, since a white key's light spreads under the black keys and has
+   * to be down before they are. */
+  private paintKeyBloom(
+    frame: Frame,
+    active: ReadonlyMap<number, NoteColor>,
+    keyboardTop: number,
+    deepest: number,
+    whiteWidth: number,
+    wantBlack: boolean,
+  ): void {
+    const ctx = this.context;
+    ctx.globalCompositeOperation = "lighter";
+    for (const [pitch, color] of active) {
+      if (isBlackKey(pitch) !== wantBlack) {
+        continue;
+      }
+      const struck = frame.pressed.has(pitch);
+      const wide = wantBlack ? blackKeyWidth(whiteWidth) : whiteWidth - 1;
+      const left = wantBlack
+        ? blackKeyLeft(pitch, whiteWidth)
+        : whiteKeyLeft(pitch, whiteWidth) + 0.5;
+      // Every key here is lit, and a lit key is a sunk one.
+      const deep = deepest - pressSink;
+      const centre = left + wide / 2;
+      const along = keyboardTop + deep * 0.62;
+      const reach = Math.max(wide, deep * 0.5);
+      const lit = ctx.createRadialGradient(
+        centre,
+        along,
+        0,
+        centre,
+        along,
+        reach,
+      );
+      // A hit answering what was owed flashes white. Anything else keeps a
+      // lighter core of its own colour, so a key reads as lit from within
+      // rather than merely filled.
+      const heart = struck
+        ? frame.owed.has(pitch)
+          ? "#ffffff"
+          : color.core
+        : color.glow;
+      lit.addColorStop(0, heart);
+      lit.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.globalAlpha = struck ? 0.34 : 0.2;
+      ctx.fillStyle = lit;
+      ctx.fillRect(left, keyboardTop, wide, deep);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+  }
+
   private setKeyPaint(
     frame: Frame,
     active: ReadonlyMap<number, NoteColor>,
     pitch: number,
     restingFill: string | CanvasGradient,
-    blur: number,
   ): void {
     const ctx = this.context;
     const color = active.get(pitch);
     if (color === undefined) {
-      ctx.shadowBlur = 0;
       ctx.fillStyle = restingFill;
       return;
     }
     if (frame.plain) {
-      ctx.shadowBlur = 0;
       ctx.fillStyle = frame.pressed.has(pitch) ? "#ffffff" : color.flat;
       return;
     }
-    if (!frame.pressed.has(pitch)) {
-      ctx.shadowColor = color.glow;
-      ctx.shadowBlur = blur;
-      ctx.fillStyle = color.core;
-      return;
-    }
-    const right = frame.owed.has(pitch);
-    ctx.shadowColor = right ? "#ffffff" : color.glow;
-    ctx.shadowBlur = right ? blur * 2 : blur * 1.4;
-    ctx.fillStyle = "#ffffff";
+    // A key under a hand takes the part's own colour at full strength, and one
+    // the song is only sounding takes the pale tint. White says nothing about
+    // which part is playing, which is what the colour is for.
+    ctx.fillStyle = frame.pressed.has(pitch) ? color.glow : color.core;
   }
 }
 

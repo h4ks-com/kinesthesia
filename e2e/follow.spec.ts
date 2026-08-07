@@ -32,7 +32,15 @@ async function keyboardPattern(page: Page): Promise<string> {
     const data = ctx.getImageData(0, row, canvas.width, 1).data;
     let out = "";
     for (let x = 0; x < canvas.width; x += Math.round(4 * ratio)) {
-      out += (data[x * 4] ?? 0) > 120 ? "1" : "0";
+      // Read by brightness rather than by one channel: a lit key wears its
+      // part's colour, and a colour with little red in it is no darker than one
+      // full of it. The cut sits well under the dimmest key face and well over
+      // a black one, which is the only distinction this pattern needs.
+      const bright =
+        (data[x * 4] ?? 0) * 0.299 +
+        (data[x * 4 + 1] ?? 0) * 0.587 +
+        (data[x * 4 + 2] ?? 0) * 0.114;
+      out += bright > 35 ? "1" : "0";
     }
     return out;
   });

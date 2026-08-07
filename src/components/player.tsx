@@ -336,6 +336,12 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const offsetRef = useRef(latencyOffset);
   offsetRef.current = latencyOffset;
   const ownedTrack = [...playerTracks][0] ?? 0;
+
+  useEffect(() => {
+    if (interactive && song !== null) {
+      playback.warmPlayed([ownedTrack]);
+    }
+  }, [interactive, ownedTrack, playback.warmPlayed, song]);
   const input = useNoteInput({
     active: interactive,
     onPress: useCallback(

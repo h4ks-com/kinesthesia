@@ -19,6 +19,9 @@ export type Playback = {
   seek: (position: number) => void;
   strike: (pitch: number, velocity: number, track: number) => void;
   release: (pitch: number, track: number) => void;
+  /** Builds the voices the given parts sound through, so their first press is
+   * not the one that builds them. */
+  warmPlayed: (tracks: readonly number[]) => void;
   prepare: () => Promise<void>;
   restart: () => Promise<void>;
   latency: () => number;
@@ -174,6 +177,10 @@ export function usePlaybackEngine({
     engineRef.current?.release(pitch, track);
   }, []);
 
+  const warmPlayed = useCallback((tracks: readonly number[]) => {
+    void engineRef.current?.warmPlayed(tracks);
+  }, []);
+
   // Unlocks audio inside a user gesture and preloads the instruments, so a
   // countdown can then start the sound without a click of its own.
   const prepare = useCallback(async () => {
@@ -208,6 +215,7 @@ export function usePlaybackEngine({
     setVoicing,
     strike,
     release,
+    warmPlayed,
     prepare,
     restart,
     latency: useCallback(() => engineRef.current?.outputLatency ?? 0, []),

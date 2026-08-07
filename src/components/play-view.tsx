@@ -101,11 +101,13 @@ export function PlayView({
     // to have it ready by the time it is hit.
     engineRef.current?.setTracks(song);
     void engineRef.current?.warmInstruments(song);
+    void engineRef.current?.warmPlayed(song.tracks.map((track) => track.index));
   }, [song]);
 
   useEffect(() => {
     engineRef.current?.setVoicing(voicing);
-  }, [voicing]);
+    void engineRef.current?.warmPlayed(song.tracks.map((track) => track.index));
+  }, [voicing, song]);
 
   useEffect(() => {
     setHasKeyboard(window.matchMedia("(any-pointer: fine)").matches);

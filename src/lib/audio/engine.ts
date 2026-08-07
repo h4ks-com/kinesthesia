@@ -223,6 +223,29 @@ export class PlaybackEngine {
   // fetch and decode a second copy of every instrument the voice player is about
   // to own, so those are left to its own lazy path, which only runs if the
   // recordings never arrive.
+  /** Builds the voices a live key sounds through. A voice asked for before it
+   * is built answers with nothing and starts building, so the first press of
+   * every part would make no sound. Only the parts the player strikes are
+   * brought in, since the sampler owns the rest. */
+  async warmPlayed(tracks: readonly number[]): Promise<void> {
+    if (this.disposed) {
+      return;
+    }
+    const stage = this.stage ?? buildStage();
+    const wanted = this.song?.tracks.filter((track) =>
+      tracks.includes(track.index),
+    );
+    await stage.bank.warm(
+      (wanted ?? []).map((track) => ({
+        program: programFor(
+          this.voicing.get(track.index) ?? null,
+          track.program,
+        ),
+        percussion: track.percussion,
+      })),
+    );
+  }
+
   /** Builds the device without starting it: recordings decode into a suspended
    * context, and there may be no gesture to start one with. */
   async warmInstruments(song: Song): Promise<void> {

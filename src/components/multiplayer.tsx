@@ -2,6 +2,7 @@
 
 import type { DataConnection } from "peerjs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MatchSummary } from "@/components/match-summary";
 import { MultiplayerInvite } from "@/components/multiplayer-invite";
 import { OpponentPanel } from "@/components/opponent-panel";
 import { Player, type PlayerHandle } from "@/components/player";
@@ -37,6 +38,7 @@ import {
   scorePoints,
 } from "@/lib/scoring/judge";
 import { scoreSubmission } from "@/lib/scoring/submission";
+import type { Summary } from "@/lib/scoring/summary";
 import type { Hit } from "@/lib/scoring/use-gates";
 
 type Connection =
@@ -119,6 +121,8 @@ export function Multiplayer({
   );
   const [opponent, setOpponent] = useState<Opponent | null>(null);
   const [agreed, setAgreed] = useState<PlayerParams | null>(null);
+  const [mySummary, setMySummary] = useState<Summary | null>(null);
+  const [theirSummary, setTheirSummary] = useState<Summary | null>(null);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "denied">(
     "idle",
   );
@@ -268,6 +272,7 @@ export function Multiplayer({
           });
         }
         if (raw.kind === "finished") {
+          setTheirSummary(raw.summary ?? null);
           setOpponent((current) => ({
             ...(current ?? noOpponent),
             points: raw.points,
@@ -374,14 +379,14 @@ export function Multiplayer({
   }, [setupDone]);
 
   const onEnd = useCallback(
-    (score: Score): void => {
-      const points = scorePoints(score);
-      setMyPoints(points);
+    (summary: Summary): void => {
+      setMyPoints(summary.points);
+      setMySummary(summary);
       myStats.current = {
-        accuracy: accuracy(score),
-        bestCombo: score.bestCombo,
+        accuracy: summary.notes,
+        bestCombo: summary.streak,
       };
-      send({ kind: "finished", points });
+      send({ kind: "finished", points: summary.points, summary });
       setPhase("result");
     },
     [send],
@@ -654,6 +659,10 @@ export function Multiplayer({
               myReady={myReady}
               myPoints={myPoints}
               theirPoints={theirPoints}
+              mySummary={mySummary}
+              theirSummary={theirSummary}
+              opponentName={opponent?.name ?? "them"}
+              coop={coop}
               opponentReady={theirReady}
               opponentDone={opponentFinished}
               opponentGone={opponentGone}
@@ -697,6 +706,12 @@ type MatchOverlayProps = {
   myReady: boolean;
   myPoints: number;
   theirPoints: number;
+  /** Null where the run has not ended, and on the other side where an older
+   * build finished without sending one. */
+  mySummary: Summary | null;
+  theirSummary: Summary | null;
+  opponentName: string;
+  coop: boolean;
   opponentReady: boolean;
   opponentDone: boolean;
   opponentGone: boolean;
@@ -713,6 +728,10 @@ function MatchOverlay({
   myReady,
   myPoints,
   theirPoints,
+  mySummary,
+  theirSummary,
+  opponentName,
+  coop,
   opponentReady,
   opponentDone,
   opponentGone,
@@ -788,9 +807,19 @@ function MatchOverlay({
             Waiting for the other player to finish
           </p>
         )}
-        <p className="font-mono text-muted text-sm tabular-nums">
-          you {myPoints} · them {theirPoints}
-        </p>
+        {mySummary === null ? (
+          <p className="font-mono text-muted text-sm tabular-nums">
+            you {myPoints} · them {theirPoints}
+          </p>
+        ) : (
+          <MatchSummary
+            mine={mySummary}
+            theirs={theirSummary}
+            myName="you"
+            theirName={opponentName}
+            coop={coop}
+          />
+        )}
         {theirRematch && !myRematch ? (
           <p className="text-muted text-sm">They asked for a rematch</p>
         ) : null}

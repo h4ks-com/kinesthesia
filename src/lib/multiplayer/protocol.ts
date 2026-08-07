@@ -1,4 +1,5 @@
 import type { Judgement, Score } from "@/lib/scoring/judge";
+import type { Summary } from "@/lib/scoring/summary";
 
 export type MatchMessage =
   | {
@@ -26,7 +27,14 @@ export type MatchMessage =
     }
   /** One per judged note, so the other side can flash the same hit or miss. */
   | { readonly kind: "hit"; readonly judgement: Judgement }
-  | { readonly kind: "finished"; readonly points: number }
+  /** The stats ride along optionally: a build from before they existed sends a
+   * finish without them, and its side of the card is simply left unread rather
+   * than showing zeroes it never claimed. */
+  | {
+      readonly kind: "finished";
+      readonly points: number;
+      readonly summary?: Summary;
+    }
   | { readonly kind: "rematch" }
   /** A closed tab fires no clean disconnect, so each side beats steadily and a
    * silence longer than a few beats is read as the other player gone. */

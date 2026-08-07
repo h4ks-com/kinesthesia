@@ -372,8 +372,24 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     onRelease: useCallback(
       (pitch: number) => {
         playback.release(pitch, ownedTrack);
+        if (interactive && (mode !== "multiplayer" || startedRef.current)) {
+          // Read off the clock here rather than carried from the event: a hold
+          // is judged against a slack of a whole sixth of the note, so the
+          // handful of milliseconds between the two cannot reach the verdict.
+          const now = performance.now();
+          gatesRef.current.judgeRelease(
+            pitch,
+            judgedPosition(
+              playback.getPosition(),
+              now,
+              now,
+              playback.latency(),
+              offsetRef.current,
+            ),
+          );
+        }
       },
-      [playback, ownedTrack],
+      [playback, ownedTrack, interactive, mode],
     ),
     onToggle: useCallback(() => {
       if (!matchActive) {
@@ -438,7 +454,11 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
       return;
     }
     hitRef.current = hit.seq;
-    onHit?.(hit.judgement);
+    // Only what the other side scores: letting a held note go is this player's
+    // own business, and the peer has no verdict of that name to show.
+    if (hit.judgement !== "letGo") {
+      onHit?.(hit.judgement);
+    }
   }, [gates.lastHit, onHit]);
 
   useImperativeHandle(

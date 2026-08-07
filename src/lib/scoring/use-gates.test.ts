@@ -4,13 +4,13 @@ import type { SongNote } from "@/lib/midi/song";
 import { lateWindow } from "@/lib/scoring/judge";
 import { useGates } from "@/lib/scoring/use-gates";
 
-function note(pitch: number, start: number, id = pitch): SongNote {
+function note(pitch: number, start: number, id = pitch, length = 1): SongNote {
   return {
     id,
     pitch,
     start,
-    end: start + 1,
-    release: start + 1,
+    end: start + length,
+    release: start + length,
     velocity: 0.8,
     track: 0,
   };
@@ -180,5 +180,69 @@ describe("useGates", () => {
       view.result.current.judgeStrike(64, 1.06);
     });
     expect(view.result.current.owed().size).toBe(0);
+  });
+
+  describe("holding", () => {
+    it("counts a long note the player saw out", () => {
+      const { view, settle } = bench([note(60, 1, 60, 2)], false);
+      settle(1);
+      act(() => {
+        view.result.current.judgeStrike(60, 1);
+      });
+      act(() => {
+        view.result.current.judgeRelease(60, 3);
+      });
+      expect(view.result.current.holds).toEqual({ kept: 1, letGo: 0 });
+    });
+
+    it("calls out one dropped well before its end", () => {
+      const { view, settle } = bench([note(60, 1, 60, 2)], false);
+      settle(1);
+      act(() => {
+        view.result.current.judgeStrike(60, 1);
+      });
+      act(() => {
+        view.result.current.judgeRelease(60, 1.4);
+      });
+      expect(view.result.current.holds).toEqual({ kept: 0, letGo: 1 });
+      expect(view.result.current.lastHit?.judgement).toBe("letGo");
+    });
+
+    // The whole point: today letting go at once scores the same as holding.
+    it("asks nothing of a note too short to hold", () => {
+      const { view, settle } = bench([note(60, 1, 60, 0.2)], false);
+      settle(1);
+      act(() => {
+        view.result.current.judgeStrike(60, 1);
+      });
+      act(() => {
+        view.result.current.judgeRelease(60, 1.01);
+      });
+      expect(view.result.current.holds).toEqual({ kept: 0, letGo: 0 });
+    });
+
+    it("passes over a key coming up that nothing was holding", () => {
+      const { view, settle } = bench([note(60, 1, 60, 2)], false);
+      settle(1);
+      act(() => {
+        view.result.current.judgeRelease(64, 2);
+      });
+      expect(view.result.current.holds).toEqual({ kept: 0, letGo: 0 });
+    });
+
+    it("forgets what was being held when the score is reset", () => {
+      const { view, settle } = bench([note(60, 1, 60, 2)], false);
+      settle(1);
+      act(() => {
+        view.result.current.judgeStrike(60, 1);
+      });
+      act(() => {
+        view.result.current.reset();
+      });
+      act(() => {
+        view.result.current.judgeRelease(60, 1.2);
+      });
+      expect(view.result.current.holds).toEqual({ kept: 0, letGo: 0 });
+    });
   });
 });

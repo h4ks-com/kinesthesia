@@ -80,10 +80,11 @@ describe("buildGates", () => {
 });
 
 describe("gateIndexAt", () => {
+  const holds = new Map<number, number>();
   const gates = [
-    { start: 0, pitches: [60] },
-    { start: 1, pitches: [62] },
-    { start: 2, pitches: [64] },
+    { start: 0, pitches: [60], holds },
+    { start: 1, pitches: [62], holds },
+    { start: 2, pitches: [64], holds },
   ];
 
   it("starts at the beginning", () => {

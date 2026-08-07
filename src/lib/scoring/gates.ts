@@ -1,4 +1,5 @@
 import type { Song, SongNote } from "@/lib/midi/song";
+import { isHold } from "@/lib/scoring/hold";
 import { lateWindow } from "@/lib/scoring/judge";
 
 const chordWindow = 0.03;
@@ -15,6 +16,10 @@ export function gateDeadline(start: number, nextStart: number | null): number {
 export type Gate = {
   readonly start: number;
   readonly pitches: readonly number[];
+  /** How long each pitch of this gate is meant to sound for, carried only for
+   * the ones long enough to be held. A pitch missing from here is struck and
+   * let go, and nothing is asked of the release. */
+  readonly holds: ReadonlyMap<number, number>;
 };
 
 /** Notes struck together become one gate, so a chord is judged as a unit
@@ -22,15 +27,25 @@ export type Gate = {
 export function buildGates(notes: readonly SongNote[]): Gate[] {
   const gates: Gate[] = [];
   for (const note of notes) {
+    const length = note.end - note.start;
     const last = gates[gates.length - 1];
     if (last !== undefined && note.start - last.start <= chordWindow) {
+      const holds = new Map(last.holds);
+      if (isHold(length)) {
+        holds.set(note.pitch, length);
+      }
       gates[gates.length - 1] = {
         start: last.start,
         pitches: [...last.pitches, note.pitch],
+        holds,
       };
       continue;
     }
-    gates.push({ start: note.start, pitches: [note.pitch] });
+    gates.push({
+      start: note.start,
+      pitches: [note.pitch],
+      holds: isHold(length) ? new Map([[note.pitch, length]]) : new Map(),
+    });
   }
   return gates;
 }

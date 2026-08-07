@@ -9,6 +9,12 @@ import {
   gateIndexAt,
 } from "@/lib/scoring/gates";
 import {
+  emptyHolds,
+  type HoldTally,
+  judgeHold,
+  tallyHold,
+} from "@/lib/scoring/hold";
+import {
   applyJudgement,
   emptyScore,
   type Judgement,
@@ -21,7 +27,12 @@ import {
  * `away` is how far from the beat the strike landed, negative early, and null
  * where there was no beat to measure against: a note struck that nothing asked
  * for, or one nobody struck at all. */
-export type Hit = { judgement: Judgement; away: number | null; seq: number };
+export type Hit = { judgement: Verdict; away: number | null; seq: number };
+
+/** What a flag can say. Wider than a judgement because letting a held note go
+ * early is worth telling the player without being worth a place in the score:
+ * the note itself was already judged when it was struck. */
+export type Verdict = Judgement | "letGo";
 
 export type Gates = {
   score: Score;
@@ -31,6 +42,10 @@ export type Gates = {
   judgeStrike: (pitch: number, position: number) => void;
   /** How far each recent hit landed from the note it answered, in seconds. */
   timing: () => readonly number[];
+  /** Judges a key coming up, so a note asked to be held can be seen through or
+   * dropped. A pitch nothing is holding is passed over. */
+  judgeRelease: (pitch: number, position: number) => void;
+  holds: HoldTally;
   moveTo: (position: number) => void;
   reset: () => void;
 };
@@ -61,6 +76,12 @@ export function useGates({
   const [score, setScore] = useState<Score>(emptyScore);
   const [waiting, setWaiting] = useState(false);
   const [lastHit, setLastHit] = useState<Hit | null>(null);
+  const [holds, setHolds] = useState<HoldTally>(emptyHolds);
+  /** What is under a hand right now that the song asked to be held, and when it
+   * was struck, so the release has something to measure against. */
+  const holdingRef = useRef<Map<number, { at: number; length: number }>>(
+    new Map(),
+  );
   const gatesRef = useRef<Gate[]>([]);
   const indexRef = useRef(0);
   const pendingRef = useRef<Set<number>>(new Set());
@@ -73,7 +94,7 @@ export function useGates({
   const timingRef = useRef<number[]>([]);
   const seqRef = useRef(0);
 
-  const flag = useCallback((judgement: Judgement, away: number | null) => {
+  const flag = useCallback((judgement: Verdict, away: number | null) => {
     seqRef.current += 1;
     setLastHit({ judgement, away, seq: seqRef.current });
   }, []);
@@ -145,6 +166,10 @@ export function useGates({
         return;
       }
       pendingRef.current.delete(pitch);
+      const wants = gate.holds.get(pitch);
+      if (wants !== undefined) {
+        holdingRef.current.set(pitch, { at: position, length: wants });
+      }
       const stopped = waitingRef.current;
       const late = position - gate.start;
       const judgement = judge(late);
@@ -169,6 +194,22 @@ export function useGates({
     [openAt, resume, flag],
   );
 
+  const judgeRelease = useCallback(
+    (pitch: number, position: number) => {
+      const holding = holdingRef.current.get(pitch);
+      if (holding === undefined) {
+        return;
+      }
+      holdingRef.current.delete(pitch);
+      const verdict = judgeHold(holding.length, position - holding.at);
+      setHolds((current) => tallyHold(current, verdict));
+      if (verdict === "letGo") {
+        flag("letGo", null);
+      }
+    },
+    [flag],
+  );
+
   return {
     score,
     waiting,
@@ -176,12 +217,16 @@ export function useGates({
     owed: useCallback(() => pendingRef.current as ReadonlySet<number>, []),
     judgeStrike,
     timing: useCallback(() => timingRef.current as readonly number[], []),
+    judgeRelease,
+    holds,
     moveTo: useCallback(
       (position: number) => openAt(gateIndexAt(gatesRef.current, position)),
       [openAt],
     ),
     reset: useCallback(() => {
       openAt(0);
+      holdingRef.current.clear();
+      setHolds(emptyHolds);
       setScore(emptyScore);
       setLastHit(null);
       timingRef.current.length = 0;

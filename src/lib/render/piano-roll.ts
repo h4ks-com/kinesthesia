@@ -136,9 +136,10 @@ function reportTraveller(
   top: number,
   whiteWidth: number,
   color: NoteColor,
+  pan: number,
 ): void {
   report?.travellers.push({
-    x: keyCenter(pitch, whiteWidth),
+    x: keyCenter(pitch, whiteWidth) - pan,
     y: top,
     radius: whiteWidth * 0.5,
     color: color.glow,
@@ -565,7 +566,7 @@ export class PianoRollRenderer {
       if (!ghost && started && since !== null && note.start > since) {
         this.onsets.add(note.pitch);
         frame.report?.strikes.push({
-          x: keyCenter(note.pitch, whiteWidth),
+          x: keyCenter(note.pitch, whiteWidth) - this.pan,
           color: color.glow,
           pitch: note.pitch,
           velocity: note.velocity,
@@ -668,6 +669,7 @@ export class PianoRollRenderer {
           top,
           whiteWidth,
           color,
+          this.pan,
         );
       }
 
@@ -793,7 +795,7 @@ export class PianoRollRenderer {
       if (since !== null && note.start > since) {
         this.onsets.add(note.pitch);
         frame.report?.strikes.push({
-          x: keyCenter(note.pitch, whiteWidth),
+          x: keyCenter(note.pitch, whiteWidth) - this.pan,
           color: color.glow,
           pitch: note.pitch,
           velocity: note.velocity,
@@ -808,6 +810,7 @@ export class PianoRollRenderer {
         top,
         whiteWidth,
         color,
+        this.pan,
       );
       const noteWidth = isBlackKey(note.pitch) ? blackNote : whiteNote;
       const x = keyCenter(note.pitch, whiteWidth) - noteWidth / 2;

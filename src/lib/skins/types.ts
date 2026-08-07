@@ -51,8 +51,7 @@ export type Traveller = {
   readonly velocity: number;
 };
 
-/** Where a note landed on the keys this frame. Falling notes never travel
- * through the scene, so this is all a background gets to react to there. */
+/** Where a note landed on the keys this frame. */
 export type Strike = {
   readonly x: number;
   readonly color: string;
@@ -91,7 +90,9 @@ export type SkinFrame = {
   /** Where the song is. Anything that should hold still while playback does
    * reads this instead, since it stops when the song stops. */
   readonly position: number;
-  /** Note heads climbing away from the keys. Empty while notes fall. */
+  /** Every note head on screen, climbing away from the keys or falling onto
+   * them. A background reads where the notes are, so which way they are going
+   * is the scene's business and not this list's. */
   readonly travellers: readonly Traveller[];
   /** Notes that landed since the last frame, whichever way they travel. */
   readonly strikes: readonly Strike[];

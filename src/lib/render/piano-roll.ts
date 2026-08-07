@@ -655,9 +655,10 @@ export class PianoRollRenderer {
       const y = Math.min(top, bottom);
       const noteHeight = Math.max(2, bottom - y);
 
-      // Only a note climbing away from the keys travels through the scene; a
-      // falling one is heading for the line and never reaches anything.
-      if (rising && !ghost) {
+      // A note is reported whichever way it is going: a background answers to
+      // where the notes are on screen, and one coming down crosses just as
+      // much of the scene as one climbing out.
+      if (!ghost) {
         reportTraveller(
           frame.report,
           note.pitch,

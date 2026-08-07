@@ -53,6 +53,16 @@ const containers: readonly Container[] = [
     audioCodec: "opus",
   },
 ];
+/** A burst long enough to survive the encoder and short enough to place, and
+ * the level that counts as having found it again. */
+const probeFrames = 8192;
+const probeBurst = 64;
+const probeFloor = 0.1;
+/** The most priming any AAC encoder is worth believing. The runway a song opens
+ * on is seconds long, so a probe that came back wrong would otherwise be free
+ * to eat it and move the sound further than the delay it is cancelling. */
+const primingCeiling = 4096;
+
 const recorderMimes = [
   { type: "video/mp4", extension: "mp4" },
   { type: "video/webm;codecs=vp9,opus", extension: "webm" },
@@ -198,7 +208,11 @@ async function withWebCodecs(
   audioEncoder.configure(encoders.audio);
 
   try {
-    await encodeAudio(audioEncoder, audio, signal);
+    // Opus states its own delay in the container, so only AAC has any to cancel.
+    const priming = encoders.audio.codec.startsWith("mp4a")
+      ? await primingOf(encoders.audio)
+      : 0;
+    await encodeAudio(audioEncoder, audio, signal, silentHead(audio, priming));
     for (let index = 0; index < totalFrames; index += 1) {
       abortIfNeeded(signal);
       if (failure !== null) {
@@ -437,10 +451,103 @@ function renderScene(
   };
 }
 
+/** Samples this browser's AAC encoder lays down in front of the first real one.
+ * Measured rather than assumed: the count belongs to whichever platform encoder
+ * sits behind WebCodecs, no API reports it, and mp4 carries it in an edit list
+ * the muxer has no way to write. A burst encoded and decoded back comes out as
+ * far in as the priming is long. Zero where the probe cannot run, which leaves
+ * the sound where it already was. */
+async function primingOf(config: AudioEncoderConfig): Promise<number> {
+  if (typeof AudioDecoder === "undefined") {
+    return 0;
+  }
+  const { sampleRate, numberOfChannels } = config;
+  try {
+    const chunks: EncodedAudioChunk[] = [];
+    let spoken: AudioDecoderConfig | null = null;
+    const encoder = new AudioEncoder({
+      output: (chunk, meta) => {
+        spoken ??= meta?.decoderConfig ?? null;
+        chunks.push(chunk);
+      },
+      error: () => {},
+    });
+    encoder.configure(config);
+    const data = new Float32Array(probeFrames * numberOfChannels);
+    for (let channel = 0; channel < numberOfChannels; channel += 1) {
+      for (let index = 0; index < probeBurst; index += 1) {
+        data[channel * probeFrames + index] = index % 2 === 0 ? 0.9 : -0.9;
+      }
+    }
+    const probe = new AudioData({
+      format: "f32-planar",
+      sampleRate,
+      numberOfFrames: probeFrames,
+      numberOfChannels,
+      timestamp: 0,
+      data,
+    });
+    encoder.encode(probe);
+    probe.close();
+    await encoder.flush();
+    encoder.close();
+    if (spoken === null) {
+      return 0;
+    }
+
+    let found = -1;
+    let seen = 0;
+    const decoder = new AudioDecoder({
+      output: (audio) => {
+        if (found < 0) {
+          const out = new Float32Array(audio.numberOfFrames);
+          audio.copyTo(out, { planeIndex: 0, format: "f32-planar" });
+          for (let index = 0; index < out.length; index += 1) {
+            if (Math.abs(out[index] ?? 0) > probeFloor) {
+              found = seen + index;
+              break;
+            }
+          }
+        }
+        seen += audio.numberOfFrames;
+        audio.close();
+      },
+      error: () => {},
+    });
+    decoder.configure(spoken);
+    for (const chunk of chunks) {
+      decoder.decode(chunk);
+    }
+    await decoder.flush();
+    decoder.close();
+    return found < 0 ? 0 : Math.min(found, primingCeiling);
+  } catch {
+    return 0;
+  }
+}
+
+/** How much of the head is provably silent, up to what was asked for, so a song
+ * that opens on its very first sample is never clipped to fix a delay. */
+function silentHead(buffer: AudioBuffer, want: number): number {
+  if (want <= 0 || buffer.length <= want) {
+    return 0;
+  }
+  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+    const data = buffer.getChannelData(channel);
+    for (let index = 0; index < want; index += 1) {
+      if (data[index] !== 0) {
+        return 0;
+      }
+    }
+  }
+  return want;
+}
+
 async function encodeAudio(
   encoder: AudioEncoder,
   buffer: AudioBuffer,
   signal: AbortSignal,
+  skip: number,
 ): Promise<void> {
   const { numberOfChannels, sampleRate, length } = buffer;
   const block = 4096;
@@ -448,7 +555,7 @@ async function encodeAudio(
   for (let channel = 0; channel < numberOfChannels; channel += 1) {
     channels.push(buffer.getChannelData(channel));
   }
-  for (let start = 0; start < length; start += block) {
+  for (let start = skip; start < length; start += block) {
     const frames = Math.min(block, length - start);
     const data = new Float32Array(frames * numberOfChannels);
     for (let channel = 0; channel < numberOfChannels; channel += 1) {
@@ -462,7 +569,7 @@ async function encodeAudio(
       sampleRate,
       numberOfFrames: frames,
       numberOfChannels,
-      timestamp: Math.round((start / sampleRate) * 1_000_000),
+      timestamp: Math.round(((start - skip) / sampleRate) * 1_000_000),
       data,
     });
     encoder.encode(audioData);

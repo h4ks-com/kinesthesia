@@ -57,6 +57,7 @@ export type PlayerSettings = {
   latencyOffset: number;
   keyWidth: number;
   showKeyLabels: boolean;
+  showNoteNames: boolean;
   plainStyle: boolean;
   hasKeyboard: boolean;
   simplified: boolean;
@@ -70,6 +71,7 @@ export type PlayerSettings = {
   changeKeyWidth: (next: number) => void;
   changeLatency: (next: number) => void;
   changeKeyLabels: (next: boolean) => void;
+  changeNoteNames: (next: boolean) => void;
   changePlainStyle: (next: boolean) => void;
   changeSimplified: (next: boolean) => void;
   changeMelodyRate: (next: number) => void;
@@ -95,6 +97,7 @@ export function usePlayerSettings({
   const [latencyOffset, setLatencyOffset] = useState(0);
   const [keyWidth, setKeyWidth] = useState(defaultKeyWidth);
   const [showKeyLabels, setShowKeyLabels] = useState(true);
+  const [showNoteNames, setShowNoteNames] = useState(true);
   const [plainStyle, setPlainStyle] = useState(false);
   // A device with no fine pointer has no keyboard to letter the keys for.
   const [hasKeyboard, setHasKeyboard] = useState(false);
@@ -192,6 +195,7 @@ export function usePlayerSettings({
         setKeyWidth(clampKeyWidth(stored.keyWidth));
         setLatencyOffset(clampLatency(stored.latencyOffset));
         setShowKeyLabels(stored.showKeyLabels ?? true);
+        setShowNoteNames(stored.showNoteNames ?? true);
         setPlainStyle(stored.plainStyle ?? false);
       }
     });
@@ -285,6 +289,11 @@ export function usePlayerSettings({
     settleGlobal({ showKeyLabels: next });
   }
 
+  function changeNoteNames(next: boolean) {
+    setShowNoteNames(next);
+    settleGlobal({ showNoteNames: next });
+  }
+
   function changePlainStyle(next: boolean) {
     setPlainStyle(next);
     settleGlobal({ plainStyle: next });
@@ -330,6 +339,7 @@ export function usePlayerSettings({
     latencyOffset,
     keyWidth,
     showKeyLabels,
+    showNoteNames,
     plainStyle,
     hasKeyboard,
     simplified,
@@ -341,6 +351,7 @@ export function usePlayerSettings({
     changeKeyWidth,
     changeLatency,
     changeKeyLabels,
+    changeNoteNames,
     changePlainStyle,
     changeSimplified,
     changeMelodyRate,

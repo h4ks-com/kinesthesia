@@ -37,6 +37,8 @@ type RenderMenuProps = {
   voicing: SongVoicing;
   hiddenTracks: ReadonlySet<number>;
   plain: boolean;
+  /** Carried into the file so it matches what was on screen. */
+  noteNames: boolean;
   speed: number;
   direction: NoteDirection;
   /** The background on screen, so the file carries it too. */
@@ -75,6 +77,7 @@ export function RenderMenu({
   voicing,
   hiddenTracks,
   plain,
+  noteNames,
   speed,
   direction,
   skin,
@@ -124,6 +127,7 @@ export function RenderMenu({
       voicing,
       hiddenTracks,
       plain,
+      noteNames,
       rate: speed,
       direction,
       skin,

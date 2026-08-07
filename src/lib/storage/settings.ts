@@ -23,6 +23,8 @@ export type GlobalSettings = {
   readonly latencyOffset: number;
   /** Absent on rows written before the keys could be lettered. */
   readonly showKeyLabels?: boolean;
+  /** Absent on rows written before the notes carried their name. */
+  readonly showNoteNames?: boolean;
   /** Absent on rows written before the plain style existed. */
   readonly plainStyle?: boolean;
   /** Which cosmetic layer is drawn behind the roll. Genuinely three states:

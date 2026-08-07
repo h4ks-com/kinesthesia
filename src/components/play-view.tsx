@@ -74,6 +74,7 @@ export function PlayView({
   const [voicing, setVoicing] = useState<SongVoicing>(new Map());
   const [keyWidth, setKeyWidth] = useState(defaultKeyWidth);
   const [showKeyLabels, setShowKeyLabels] = useState(true);
+  const [showNoteNames, setShowNoteNames] = useState(true);
   const [plainStyle, setPlainStyle] = useState(false);
   const [pickingSkin, setPickingSkin] = useState(false);
   const [hasKeyboard, setHasKeyboard] = useState(false);
@@ -115,6 +116,7 @@ export function PlayView({
       if (stored !== null) {
         setKeyWidth(clampKeyWidth(stored.keyWidth));
         setShowKeyLabels(stored.showKeyLabels ?? true);
+        setShowNoteNames(stored.showNoteNames ?? true);
         setPlainStyle(stored.plainStyle ?? false);
       }
     });
@@ -372,6 +374,13 @@ export function PlayView({
     },
     [settleGlobal],
   );
+  const onNoteNames = useCallback(
+    (next: boolean) => {
+      setShowNoteNames(next);
+      settleGlobal({ showNoteNames: next });
+    },
+    [settleGlobal],
+  );
   const onPlainStyle = useCallback(
     (next: boolean) => {
       setPlainStyle(next);
@@ -465,6 +474,7 @@ export function PlayView({
           keyLabels={
             hasKeyboard && showKeyLabels ? keyLabelsFor(input.octave) : null
           }
+          noteNames={showNoteNames}
           plain={plainStyle}
           onStrike={(pitch) => handlePress(pitch, 0.8, performance.now(), null)}
           onRelease={(pitch) => handleRelease(pitch, null)}
@@ -505,6 +515,8 @@ export function PlayView({
             showLatency={false}
             keyLabels={hasKeyboard ? showKeyLabels : null}
             onKeyLabels={onKeyLabels}
+            noteNames={showNoteNames}
+            onNoteNames={onNoteNames}
             plainStyle={plainStyle}
             onPlainStyle={onPlainStyle}
             onPickSkin={() => setPickingSkin(true)}

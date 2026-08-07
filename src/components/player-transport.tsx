@@ -35,6 +35,8 @@ type PlayerTransportProps = {
   showLatency: boolean;
   keyLabels: boolean | null;
   onKeyLabels: (show: boolean) => void;
+  noteNames: boolean;
+  onNoteNames: (show: boolean) => void;
   plainStyle: boolean;
   onPickSkin: (() => void) | null;
   skinName: string | null;
@@ -66,6 +68,8 @@ export function PlayerTransport({
   showLatency,
   keyLabels,
   onKeyLabels,
+  noteNames,
+  onNoteNames,
   plainStyle,
   onPickSkin,
   skinName,
@@ -236,6 +240,8 @@ export function PlayerTransport({
           showLatency={showLatency}
           keyLabels={keyLabels}
           onKeyLabels={onKeyLabels}
+          noteNames={noteNames}
+          onNoteNames={onNoteNames}
           plainStyle={plainStyle}
           onPickSkin={onPickSkin}
           skinName={skinName}

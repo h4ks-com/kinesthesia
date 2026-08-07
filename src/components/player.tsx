@@ -134,6 +134,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     latencyOffset,
     keyWidth,
     showKeyLabels,
+    showNoteNames,
     plainStyle,
     hasKeyboard,
     simplified,
@@ -145,6 +146,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     changeKeyWidth,
     changeLatency,
     changeKeyLabels,
+    changeNoteNames,
     changePlainStyle,
     changeSimplified,
     changeMelodyRate,
@@ -577,6 +579,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                     voicing={sound.voicing}
                     hiddenTracks={hiddenTracks}
                     plain={plainStyle}
+                    noteNames={showNoteNames}
                     speed={speed}
                     direction={background.direction}
                     skin={background.source}
@@ -626,6 +629,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                   ? keyLabelsFor(input.octave)
                   : null
               }
+              noteNames={showNoteNames}
               plain={plainStyle}
               onStrike={(pitch) => input.press(pitch, 0.8)}
               onRelease={input.release}
@@ -667,6 +671,8 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             showLatency={interactive}
             keyLabels={interactive && hasKeyboard ? showKeyLabels : null}
             onKeyLabels={changeKeyLabels}
+            noteNames={showNoteNames}
+            onNoteNames={changeNoteNames}
             plainStyle={plainStyle}
             onPlainStyle={changePlainStyle}
             onPickSkin={

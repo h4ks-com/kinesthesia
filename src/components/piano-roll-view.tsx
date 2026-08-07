@@ -64,6 +64,7 @@ type PianoRollViewProps = {
    * there is nothing to play. */
   reach?: Reach | null;
   keyLabels?: ReadonlyMap<number, string> | null;
+  noteNames?: boolean;
   plain?: boolean;
   onStrike?: (pitch: number) => void;
   onRelease?: (pitch: number) => void;
@@ -86,6 +87,7 @@ export function PianoRollView({
   playTrack = 0,
   reach = null,
   keyLabels = null,
+  noteNames = true,
   plain = false,
   expression,
   skin,
@@ -135,6 +137,8 @@ export function PianoRollView({
   reachRef.current = reach;
   const labelsRef = useRef(keyLabels);
   labelsRef.current = keyLabels;
+  const noteNamesRef = useRef(noteNames);
+  noteNamesRef.current = noteNames;
   const plainRef = useRef(plain);
   plainRef.current = plain;
   const gestures = useRef(new Map<number, Gesture>());
@@ -180,6 +184,7 @@ export function PianoRollView({
         follow: followRef.current,
         reach: reachRef.current,
         keyLabels: labelsRef.current,
+        noteNames: noteNamesRef.current,
         plain: plainRef.current,
       });
       // Drawn after the roll, which is what fills the report for this frame, so

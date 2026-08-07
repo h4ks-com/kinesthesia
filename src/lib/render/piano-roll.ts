@@ -106,6 +106,8 @@ export type Frame = {
   /** Which computer key plays each pitch, printed on the keys themselves.
    * Null leaves them bare. */
   readonly keyLabels: ReadonlyMap<number, string> | null;
+  /** Whether a falling note carries its own name. */
+  readonly noteNames: boolean;
   /** Fills flat and drops the glow, the sparks and the ramps, for anyone who
    * would rather read the notes than watch them. */
   readonly plain: boolean;
@@ -723,7 +725,13 @@ export class PianoRollRenderer {
         17,
         Math.max(9, Math.min(noteWidth * 0.42, (noteHeight - 4) / 2)),
       );
-      if (!ghost && !sounding && noteWidth >= 17 && noteHeight >= 20) {
+      if (
+        frame.noteNames &&
+        !ghost &&
+        !sounding &&
+        noteWidth >= 17 &&
+        noteHeight >= 20
+      ) {
         const centerX = x + noteWidth / 2;
         const centerY = y + noteHeight - (chip + 4);
         const label = noteName(note.pitch);

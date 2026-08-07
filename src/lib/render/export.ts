@@ -20,6 +20,8 @@ export type RenderConfig = {
   readonly skin: BackdropSource | null;
   /** How large and how finely the picture is laid down. Audio ignores it. */
   readonly quality: RenderQuality;
+  /** Whether the notes carry their names, as they do on screen. */
+  readonly noteNames: boolean;
 };
 
 export type RenderQuality = "720p" | "1080p";
@@ -72,6 +74,7 @@ export function watchFrame(
     yours: null,
     reach: null,
     keyLabels: null,
+    noteNames: config.noteNames,
     follow: false,
     plain: config.plain,
   };

@@ -28,6 +28,8 @@ type SettingsMenuProps = {
    * lettering the keys would only be clutter. */
   keyLabels: boolean | null;
   onKeyLabels: (show: boolean) => void;
+  noteNames: boolean;
+  onNoteNames: (show: boolean) => void;
   plainStyle: boolean;
   /** Null where a mode has no skin to offer. */
   onPickSkin: (() => void) | null;
@@ -54,6 +56,8 @@ export function SettingsMenu({
   showLatency,
   keyLabels,
   onKeyLabels,
+  noteNames,
+  onNoteNames,
   plainStyle,
   onPickSkin,
   skinName,
@@ -117,6 +121,12 @@ export function SettingsMenu({
                 }
               />
             )}
+            <Toggle
+              label="letters on notes"
+              checked={noteNames}
+              onChange={onNoteNames}
+              tip="Prints each note's name on it as it falls. They grow with the key size."
+            />
             {onPickSkin === null ? null : (
               <button
                 type="button"

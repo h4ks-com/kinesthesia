@@ -18,9 +18,31 @@ export type RenderConfig = {
   /** The background behind the roll, drawn into the video the same way it is
    * drawn on screen. Null leaves the roll on its own dark backdrop. */
   readonly skin: BackdropSource | null;
+  /** How large and how finely the picture is laid down. Audio ignores it. */
+  readonly quality: RenderQuality;
 };
 
-export const renderSize = { width: 1280, height: 720 } as const;
+export type RenderQuality = "720p" | "1080p";
+
+/** What each quality lays down. The bitrates are set against a roll rather than
+ * against film: flat colour and hard edges compress far better, and the number
+ * that matters is the one that keeps a file postable where a chat caps an
+ * attachment at tens of megabytes. A moving background spends the most. */
+export const renderQualities = {
+  "720p": { width: 1280, height: 720, bitrate: 2_000_000 },
+  "1080p": { width: 1920, height: 1080, bitrate: 5_000_000 },
+} as const satisfies Record<
+  RenderQuality,
+  { width: number; height: number; bitrate: number }
+>;
+
+export const renderQualityIds = Object.keys(
+  renderQualities,
+) as readonly RenderQuality[];
+
+export const defaultQuality: RenderQuality = "720p";
+
+export const renderSize = renderQualities[defaultQuality];
 /** Falling notes carry their motion in long straight travel, which reads fine
  * at half the rate a game needs, and every frame here is one the encoder has to
  * pay for twice: once drawn, once compressed. */

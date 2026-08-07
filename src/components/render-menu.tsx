@@ -15,10 +15,13 @@ import { Popover } from "@/components/ui/popover";
 import type { SongVoicing } from "@/lib/audio/voicing";
 import type { Song } from "@/lib/midi/song";
 import {
+  defaultQuality,
   downloadBlob,
   exportFilename,
   type RenderConfig,
+  type RenderQuality,
   renderDuration,
+  renderQualityIds,
 } from "@/lib/render/export";
 import {
   handBack,
@@ -78,6 +81,7 @@ export function RenderMenu({
   title,
 }: RenderMenuProps) {
   const [job, setJob] = useState<Job | null>(null);
+  const [quality, setQuality] = useState<RenderQuality>(defaultQuality);
   const abort = useRef<AbortController | null>(null);
   const lastShown = useRef(0);
 
@@ -123,6 +127,7 @@ export function RenderMenu({
       rate: speed,
       direction,
       skin,
+      quality,
     };
     const controller = new AbortController();
     abort.current = controller;
@@ -264,6 +269,25 @@ export function RenderMenu({
             disabled={!canRenderVideo()}
             onClick={() => void run("video")}
           />
+          <fieldset className="flex gap-1 px-1">
+            <legend className="sr-only">Video size</legend>
+            {renderQualityIds.map((id) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={id === quality}
+                disabled={!canRenderVideo()}
+                onClick={() => setQuality(id)}
+                className={`flex-1 rounded-lg border px-2 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                  id === quality
+                    ? "border-accent text-accent"
+                    : "border-line-strong text-muted hover:border-accent hover:text-accent"
+                }`}
+              >
+                {id}
+              </button>
+            ))}
+          </fieldset>
           <Choice
             icon={<AudioLines className="size-4" aria-hidden="true" />}
             title="Audio"

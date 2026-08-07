@@ -5,10 +5,12 @@ import {
 } from "webm-muxer";
 import { chordAt } from "@/lib/midi/harmony";
 import {
+  defaultQuality,
   type RenderConfig,
+  type RenderQuality,
   renderDuration,
   renderFps,
-  renderSize,
+  renderQualities,
   watchFrame,
 } from "@/lib/render/export";
 import { keyWidthRange } from "@/lib/render/keyboard";
@@ -63,7 +65,9 @@ export async function renderSongVideo(
   onProgress: VideoProgress,
   signal: AbortSignal,
 ): Promise<RenderedVideo> {
-  const encoders = hasWebCodecs() ? await supportedEncoders(audio) : null;
+  const encoders = hasWebCodecs()
+    ? await supportedEncoders(audio, config.quality)
+    : null;
   if (encoders !== null) {
     return withWebCodecs(config, audio, encoders, onProgress, signal);
   }
@@ -82,9 +86,12 @@ type Encoders = {
   readonly audio: AudioEncoderConfig;
 };
 
-async function supportedEncoders(audio: AudioBuffer): Promise<Encoders | null> {
+async function supportedEncoders(
+  audio: AudioBuffer,
+  quality: RenderQuality,
+): Promise<Encoders | null> {
   for (const container of containers) {
-    const video = await supportedVideoConfig(container);
+    const video = await supportedVideoConfig(container, quality);
     if (video === null) {
       continue;
     }
@@ -106,24 +113,30 @@ async function supportedEncoders(audio: AudioBuffer): Promise<Encoders | null> {
 
 async function supportedVideoConfig(
   container: Container,
+  quality: RenderQuality,
 ): Promise<VideoEncoderConfig | null> {
-  const { width, height } = renderSize;
-  for (const codec of container.videoCodecs) {
-    const config: VideoEncoderConfig = {
-      codec,
-      width,
-      height,
-      // A roll is flat colour, hard edges and a mostly still keyboard, which
-      // compresses far better than film. Enough that the file stays postable
-      // where a chat caps an attachment at tens of megabytes.
-      bitrate: 2_000_000,
-      framerate: renderFps,
-    };
-    const support = await VideoEncoder.isConfigSupported(config).catch(
-      () => null,
-    );
-    if (support?.supported === true) {
-      return config;
+  // Asked for at the size wanted and then at the smaller one, because a profile
+  // can be present and still not reach 1080p: avc1.42e01f is Baseline 3.1 and
+  // stops at 720p. Falling back by size keeps the file in the container that
+  // plays everywhere, where falling back by codec would quietly hand back webm.
+  const wanted: readonly RenderQuality[] =
+    quality === defaultQuality ? [quality] : [quality, defaultQuality];
+  for (const step of wanted) {
+    const { width, height, bitrate } = renderQualities[step];
+    for (const codec of container.videoCodecs) {
+      const config: VideoEncoderConfig = {
+        codec,
+        width,
+        height,
+        bitrate,
+        framerate: renderFps,
+      };
+      const support = await VideoEncoder.isConfigSupported(config).catch(
+        () => null,
+      );
+      if (support?.supported === true) {
+        return config;
+      }
     }
   }
   return null;
@@ -136,12 +149,15 @@ async function withWebCodecs(
   onProgress: VideoProgress,
   signal: AbortSignal,
 ): Promise<RenderedVideo> {
-  const { width, height } = renderSize;
+  // Read back off the encoder rather than off the request: it settles the size
+  // once a profile has accepted it, and the canvas, the muxer and the frames
+  // all have to agree with whatever it settled on.
+  const { width, height } = encoders.video;
   const totalFrames = Math.max(
     1,
     Math.ceil(renderDuration(config) * renderFps),
   );
-  const scene = renderScene(config);
+  const scene = renderScene(config, width, height);
   // Nothing is encoded until the background has what it needs, or the opening
   // seconds come out without it.
   await scene.ready;
@@ -242,7 +258,11 @@ async function withMediaRecorder(
   onProgress: VideoProgress,
   signal: AbortSignal,
 ): Promise<RenderedVideo> {
-  const scene = renderScene(config);
+  // The recorder exists because this browser cannot encode faster than real
+  // time, so it is given the smaller picture whatever was asked for: handing it
+  // more pixels than it can keep up with drops frames instead of adding detail.
+  const { width, height } = renderQualities[defaultQuality];
+  const scene = renderScene(config, width, height);
   await scene.ready;
   const audioContext = new AudioContext({ sampleRate: audio.sampleRate });
   const destination = audioContext.createMediaStreamDestination();
@@ -329,24 +349,27 @@ const noPressed: readonly number[] = [];
 
 const ground = "#060709";
 
-function surface(): HTMLCanvasElement {
+function surface(width: number, height: number): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
-  canvas.width = renderSize.width;
-  canvas.height = renderSize.height;
+  canvas.width = width;
+  canvas.height = height;
   return canvas;
 }
 
-function renderScene(config: RenderConfig): Scene {
-  const { width, height } = renderSize;
-  const roll = surface();
+function renderScene(
+  config: RenderConfig,
+  width: number,
+  height: number,
+): Scene {
+  const roll = surface(width, height);
   const renderer = new PianoRollRenderer(roll, keyWidthRange.min, {
     width,
     height,
     ratio: 1,
   });
 
-  const base = surface();
-  const overlay = surface();
+  const base = surface(width, height);
+  const overlay = surface(width, height);
   const skin = config.skin?.create({ base, overlay }) ?? null;
   if (skin === null) {
     return {
@@ -360,7 +383,7 @@ function renderScene(config: RenderConfig): Scene {
   }
   skin.resize(width, height, 1);
 
-  const output = surface();
+  const output = surface(width, height);
   const ctx = output.getContext("2d");
   if (ctx === null) {
     skin.dispose();

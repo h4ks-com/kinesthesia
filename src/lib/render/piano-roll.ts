@@ -26,6 +26,7 @@ import {
   whiteKeys,
 } from "@/lib/render/keyboard";
 import { SparkField } from "@/lib/render/sparks";
+import { lateWindow } from "@/lib/scoring/judge";
 import type { NoteDirection, Strike, Traveller } from "@/lib/skins/types";
 
 /** Seconds of song between the top of the roll and the keys. Anything drawn
@@ -262,13 +263,25 @@ export class PianoRollRenderer {
     if (!frame.follow || maxPan <= 0 || performance.now() < this.panHeldUntil) {
       return;
     }
-    const pitch = nextToPlay(
-      frame.song,
-      frame.position,
-      frame.hiddenTracks,
-      frame.yours,
-      firstFrom(frame.song.notes, frame.position - this.maxNoteDuration),
-    );
+    // What is still owed comes first: the song runs on past a note so it can be
+    // played late, so the note being waited for may already have ended and the
+    // song alone would point at the one after it. Walked rather than spread,
+    // since this runs every frame.
+    let owedLow: number | null = null;
+    for (const owedPitch of frame.owed) {
+      if (owedLow === null || owedPitch < owedLow) {
+        owedLow = owedPitch;
+      }
+    }
+    const pitch =
+      owedLow ??
+      nextToPlay(
+        frame.song,
+        frame.position,
+        frame.hiddenTracks,
+        frame.yours,
+        firstFrom(frame.song.notes, frame.position - this.maxNoteDuration),
+      );
     if (pitch === null) {
       return;
     }
@@ -513,15 +526,17 @@ export class PianoRollRenderer {
     const whiteNote = whiteWidth * 0.86;
 
     // Notes are sorted by start, so every note still on screen starts within
-    // [position - longest note, position + lookAhead]. Anything earlier ended
-    // before now, so the scan begins at the first note that could still sound
-    // and a long song's played history is skipped.
+    // [position - longest note - the late window, position + lookAhead]. The
+    // late window is in there because a note stays owed for it after ending,
+    // and a scan that had passed it would leave its key dark while the song
+    // stood waiting for it.
     const notes = frame.song.notes;
     const horizon = position + lookAhead;
     const first = firstFrom(
       notes,
       position -
         this.maxNoteDuration -
+        lateWindow -
         (frame.direction === "up" ? lookAhead : 0),
     );
     const since = this.onsetSince;
@@ -557,6 +572,11 @@ export class PianoRollRenderer {
       // A rising note is only starting its climb when its end passes, so this
       // is the moment it leaves the keys rather than the moment it is spent.
       if (note.end < position && !rising) {
+        // A note still owed once the song is past it is one being waited for,
+        // and its key is the only thing telling the player what to press.
+        if (!ghost && frame.owed.has(note.pitch)) {
+          active.set(note.pitch, color);
+        }
         // A drum key decays on its own, so the pedal has no say over it. The
         // key stays down while the pedal holds it, but unlit.
         if (!ghost && !drums.has(note.track) && pedalled) {

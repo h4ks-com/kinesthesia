@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { ExpressionTrail } from "@/lib/midi/expression";
 import type { Song, SongNote } from "@/lib/midi/song";
-import { buildGates, busiestTrack, gateIndexAt } from "@/lib/scoring/gates";
+import {
+  buildGates,
+  busiestTrack,
+  gateDeadline,
+  gateIndexAt,
+} from "@/lib/scoring/gates";
+import { lateWindow } from "@/lib/scoring/judge";
 
 function note(pitch: number, start: number, track: number): SongNote {
   return {
@@ -102,5 +108,20 @@ describe("busiestTrack", () => {
       note(65, 3, 1),
     ];
     expect(busiestTrack(song(notes))).toBe(1);
+  });
+});
+
+describe("gateDeadline", () => {
+  it("gives a note the whole late window when nothing follows it", () => {
+    expect(gateDeadline(1, null)).toBe(1 + lateWindow);
+  });
+
+  it("gives a note the whole window when the next one is further off", () => {
+    expect(gateDeadline(1, 5)).toBe(1 + lateWindow);
+  });
+
+  it("closes a gate as the next one arrives, however soon that is", () => {
+    expect(gateDeadline(1, 1.1)).toBe(1.1);
+    expect(gateDeadline(1, 1.02)).toBe(1.02);
   });
 });

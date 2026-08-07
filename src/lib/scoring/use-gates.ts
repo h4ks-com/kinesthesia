@@ -2,11 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SongNote } from "@/lib/midi/song";
-import { buildGates, type Gate, gateIndexAt } from "@/lib/scoring/gates";
+import {
+  buildGates,
+  type Gate,
+  gateDeadline,
+  gateIndexAt,
+} from "@/lib/scoring/gates";
 import {
   applyJudgement,
   emptyScore,
-  goodWindow,
   type Judgement,
   judge,
   type Score,
@@ -57,6 +61,11 @@ export function useGates({
   const gatesRef = useRef<Gate[]>([]);
   const indexRef = useRef(0);
   const pendingRef = useRef<Set<number>>(new Set());
+  /** Whether the song is stopped for this gate. Held beside the state because a
+   * strike arriving between the pause and the render that carries it would
+   * otherwise read as a hit made while playing, and the resume that ends the
+   * wait would never be called. */
+  const waitingRef = useRef(false);
   /** How far each recent hit landed from the note it answered. */
   const timingRef = useRef<number[]>([]);
   const seqRef = useRef(0);
@@ -69,6 +78,7 @@ export function useGates({
   const openAt = useCallback((index: number) => {
     indexRef.current = index;
     pendingRef.current = new Set(gatesRef.current[index]?.pitches ?? []);
+    waitingRef.current = false;
     setWaiting(false);
   }, []);
 
@@ -94,27 +104,28 @@ export function useGates({
         return;
       }
       const position = getPosition();
-      if (position < gate.start || pendingRef.current.size === 0) {
+      const after = gatesRef.current[indexRef.current + 1];
+      const deadline = gateDeadline(gate.start, after?.start ?? null);
+      if (pendingRef.current.size === 0 || position <= deadline) {
         return;
       }
       if (waitsForYou) {
         pause();
+        waitingRef.current = true;
         setWaiting(true);
         return;
       }
       // The band never stops in a battle, so an unplayed note is simply missed.
-      if (position > gate.start + goodWindow) {
-        const missed = pendingRef.current.size;
-        setScore((current) => {
-          let next = current;
-          for (let count = 0; count < missed; count += 1) {
-            next = applyJudgement(next, "miss");
-          }
-          return next;
-        });
-        flag("miss");
-        openAt(indexRef.current + 1);
-      }
+      const missed = pendingRef.current.size;
+      setScore((current) => {
+        let next = current;
+        for (let count = 0; count < missed; count += 1) {
+          next = applyJudgement(next, "miss");
+        }
+        return next;
+      });
+      flag("miss");
+      openAt(indexRef.current + 1);
     }, 16);
     return () => clearInterval(timer);
   }, [active, waitsForYou, getPosition, isPlaying, pause, openAt, flag]);
@@ -131,25 +142,28 @@ export function useGates({
         return;
       }
       pendingRef.current.delete(pitch);
-      const delta = position - gate.start;
-      // Kept so a player who is consistently behind can be told what their
-      // offset should be. The device's own delay cannot be asked for.
-      timingRef.current.push(delta);
-      if (timingRef.current.length > timedHitsKept) {
-        timingRef.current.shift();
+      const stopped = waitingRef.current;
+      const late = position - gate.start;
+      const judgement = judge(late);
+      if (!stopped) {
+        // Kept so a player who is consistently behind can be told what their
+        // offset should be. A gate the song stopped for holds the clock still,
+        // so its delay belongs to the pause and would teach the wrong offset.
+        timingRef.current.push(late);
+        if (timingRef.current.length > timedHitsKept) {
+          timingRef.current.shift();
+        }
       }
-      const judgement = judge(delta);
       setScore((current) => applyJudgement(current, judgement));
       flag(judgement);
       if (pendingRef.current.size === 0) {
-        const wasWaiting = waiting;
         openAt(indexRef.current + 1);
-        if (wasWaiting) {
+        if (stopped) {
           resume();
         }
       }
     },
-    [openAt, resume, waiting, flag],
+    [openAt, resume, flag],
   );
 
   return {

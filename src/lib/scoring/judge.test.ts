@@ -5,6 +5,7 @@ import {
   emptyScore,
   goodWindow,
   judge,
+  lateWindow,
   perfectWindow,
   type Score,
   scorePoints,
@@ -22,6 +23,12 @@ describe("judge", () => {
     expect(judge(perfectWindow + 0.001)).toBe("good");
     expect(judge(goodWindow)).toBe("good");
     expect(judge(goodWindow + 0.001)).toBe("miss");
+  });
+});
+
+describe("lateWindow", () => {
+  it("gives a note longer than it scores for, so being late costs only a grade", () => {
+    expect(lateWindow).toBeGreaterThan(goodWindow);
   });
 });
 

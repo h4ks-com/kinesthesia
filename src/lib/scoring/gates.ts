@@ -1,6 +1,16 @@
 import type { Song, SongNote } from "@/lib/midi/song";
+import { lateWindow } from "@/lib/scoring/judge";
 
 const chordWindow = 0.03;
+
+/** When a gate stops being the one being played: the song carries on past it so
+ * it can still be answered, but never past the gate behind it. Two gates open at
+ * once would judge a note struck on time against the one before it, and would
+ * leave learn resuming from a point the next note had already gone by. */
+export function gateDeadline(start: number, nextStart: number | null): number {
+  const late = start + lateWindow;
+  return nextStart === null ? late : Math.min(late, nextStart);
+}
 
 export type Gate = {
   readonly start: number;

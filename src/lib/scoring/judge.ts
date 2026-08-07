@@ -1,5 +1,9 @@
 export const perfectWindow = 0.05;
 export const goodWindow = 0.15;
+/** How far past a note the song carries on before it counts as gone by: the
+ * point where learn stops to wait and a match writes the note off. Wider than
+ * the window that still scores, so being a little late costs only a grade. */
+export const lateWindow = 0.3;
 
 export const judgements = ["perfect", "good", "miss"] as const;
 export type Judgement = (typeof judgements)[number];

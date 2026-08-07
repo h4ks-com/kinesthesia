@@ -17,6 +17,7 @@ import { PlayerHeader } from "@/components/player-header";
 import { PlayerTransport, TransportBar } from "@/components/player-transport";
 import { RenderMenu } from "@/components/render-menu";
 import { SkinPicker } from "@/components/skin-picker";
+import { TimingRail } from "@/components/timing-rail";
 import { Walkthrough } from "@/components/walkthrough";
 import { judgedPosition, suggestedOffset } from "@/lib/audio/latency";
 import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
@@ -43,6 +44,7 @@ import { tourFor } from "@/lib/tour/steps";
 import { useWalkthrough } from "@/lib/tour/use-walkthrough";
 import { useBackground } from "@/lib/use-background";
 import { usePlayerSettings } from "@/lib/use-player-settings";
+import { useSideBySide } from "@/lib/use-side-by-side";
 
 type PlayerProps = {
   mode: PlayerMode;
@@ -106,6 +108,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const load = useSong(params);
   const original = load.status === "ready" ? load.song : null;
   const [pickingSkin, setPickingSkin] = useState(false);
+  const sideBySide = useSideBySide();
 
   const interactive = mode !== "watch";
   // Notes may only leave the keys where nobody has to read them coming: in
@@ -635,6 +638,12 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
               onRelease={input.release}
             />
             {interactive ? <HitFlag hit={gates.lastHit} /> : null}
+            {interactive ? (
+              <TimingRail
+                hit={gates.lastHit}
+                lie={sideBySide ? "upright" : "flat"}
+              />
+            ) : null}
             {gates.waiting ? (
               <p className="rise -translate-x-1/2 absolute top-6 left-1/2 rounded-full border border-accent/40 bg-panel/90 px-4 py-1.5 font-mono text-accent text-xs backdrop-blur">
                 waiting for you

@@ -259,7 +259,13 @@ export function Multiplayer({
         }
         if (raw.kind === "hit") {
           hitSeqRef.current += 1;
-          setTheirHit({ judgement: raw.judgement, seq: hitSeqRef.current });
+          // Their verdict crosses the wire, not how near the beat they were:
+          // the rail reads this side's own habit.
+          setTheirHit({
+            judgement: raw.judgement,
+            away: null,
+            seq: hitSeqRef.current,
+          });
         }
         if (raw.kind === "finished") {
           setOpponent((current) => ({

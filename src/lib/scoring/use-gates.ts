@@ -17,8 +17,11 @@ import {
 } from "@/lib/scoring/judge";
 
 /** Bumped on every judged note so a flag re-triggers even when the verdict
- * repeats; the verdict alone would not change and the flag would sit still. */
-export type Hit = { judgement: Judgement; seq: number };
+ * repeats; the verdict alone would not change and the flag would sit still.
+ * `away` is how far from the beat the strike landed, negative early, and null
+ * where there was no beat to measure against: a note struck that nothing asked
+ * for, or one nobody struck at all. */
+export type Hit = { judgement: Judgement; away: number | null; seq: number };
 
 export type Gates = {
   score: Score;
@@ -70,9 +73,9 @@ export function useGates({
   const timingRef = useRef<number[]>([]);
   const seqRef = useRef(0);
 
-  const flag = useCallback((judgement: Judgement) => {
+  const flag = useCallback((judgement: Judgement, away: number | null) => {
     seqRef.current += 1;
-    setLastHit({ judgement, seq: seqRef.current });
+    setLastHit({ judgement, away, seq: seqRef.current });
   }, []);
 
   const openAt = useCallback((index: number) => {
@@ -124,7 +127,7 @@ export function useGates({
         }
         return next;
       });
-      flag("miss");
+      flag("miss", null);
       openAt(indexRef.current + 1);
     }, 16);
     return () => clearInterval(timer);
@@ -138,7 +141,7 @@ export function useGates({
       }
       if (!pendingRef.current.has(pitch)) {
         setScore((current) => applyJudgement(current, "miss"));
-        flag("miss");
+        flag("miss", null);
         return;
       }
       pendingRef.current.delete(pitch);
@@ -155,7 +158,7 @@ export function useGates({
         }
       }
       setScore((current) => applyJudgement(current, judgement));
-      flag(judgement);
+      flag(judgement, late);
       if (pendingRef.current.size === 0) {
         openAt(indexRef.current + 1);
         if (stopped) {

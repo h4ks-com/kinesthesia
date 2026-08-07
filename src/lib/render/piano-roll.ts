@@ -716,20 +716,28 @@ export class PianoRollRenderer {
       }
       ctx.globalAlpha = 1;
 
+      // Sized off the note it sits on, so widening the keys reads the pitch
+      // out larger too. A chip held at one size is the smaller the wider the
+      // keys are set, which is backwards.
+      const chip = Math.min(
+        17,
+        Math.max(9, Math.min(noteWidth * 0.42, (noteHeight - 4) / 2)),
+      );
       if (!ghost && !sounding && noteWidth >= 17 && noteHeight >= 20) {
         const centerX = x + noteWidth / 2;
-        const centerY = y + noteHeight - 13;
+        const centerY = y + noteHeight - (chip + 4);
         const label = noteName(note.pitch);
         // The chip reads against the note rather than competing with it: the
         // pitch keeps its colour, but only as the ring.
         ctx.beginPath();
-        ctx.arc(centerX, centerY, 9, 0, Math.PI * 2);
+        ctx.arc(centerX, centerY, chip, 0, Math.PI * 2);
         ctx.fillStyle = "rgba(6,8,13,0.82)";
         ctx.fill();
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = Math.max(1.5, chip * 0.17);
         ctx.strokeStyle = pitchColor(note.pitch);
         ctx.stroke();
-        ctx.font = `${label.length > 1 ? "700 9px" : "700 11px"} system-ui, sans-serif`;
+        const size = Math.round(chip * (label.length > 1 ? 1 : 1.22));
+        ctx.font = `700 ${size}px system-ui, sans-serif`;
         ctx.fillStyle = "#ffffff";
         ctx.fillText(label, centerX, centerY);
       }

@@ -63,6 +63,13 @@ export function accuracy(score: Score): number {
   return (score.perfect + score.good * 0.5) / total;
 }
 
+/** The share of the whole part that has been answered, which climbs through a
+ * run where accuracy only reads the notes reached so far. Nothing is owed back
+ * for a note struck that the song never asked for, so a run cannot pass 100. */
+export function gotShare(score: Score, owed: number): number {
+  return owed === 0 ? 0 : Math.min(1, (score.perfect + score.good) / owed);
+}
+
 export function scorePoints(score: Score): number {
   return score.perfect * 100 + score.good * 50 + score.bestCombo * 10;
 }

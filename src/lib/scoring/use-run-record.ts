@@ -3,18 +3,17 @@
 import { useEffect, useRef } from "react";
 import type { MelodyRate } from "@/lib/midi/melody";
 import type { PlayerMode, PlayerParams, Speed } from "@/lib/player-url";
-import {
-  accuracy,
-  type Score,
-  scorePoints,
-  totalJudged,
-} from "@/lib/scoring/judge";
+import { type Score, totalJudged } from "@/lib/scoring/judge";
 import { scoreSubmission } from "@/lib/scoring/submission";
+import type { Summary } from "@/lib/scoring/summary";
 
 type Options = {
   mode: PlayerMode;
   params: PlayerParams;
   score: Score;
+  /** What the run was worth, settled against where the song ended, so a solo
+   * run and a match are recorded on one scale. */
+  summary: (at: number) => Summary;
   elapsed: number;
   duration: number;
   active: boolean;
@@ -29,6 +28,7 @@ export function useRunRecord({
   mode,
   params,
   score,
+  summary,
   elapsed,
   duration,
   active,
@@ -37,8 +37,24 @@ export function useRunRecord({
   melodyRate,
 }: Options): void {
   const recorded = useRef<string | null>(null);
-  const latest = useRef({ score, speed, simplified, melodyRate, params, mode });
-  latest.current = { score, speed, simplified, melodyRate, params, mode };
+  const latest = useRef({
+    score,
+    summary,
+    speed,
+    simplified,
+    melodyRate,
+    params,
+    mode,
+  });
+  latest.current = {
+    score,
+    summary,
+    speed,
+    simplified,
+    melodyRate,
+    params,
+    mode,
+  };
 
   useEffect(() => {
     if (!active || duration <= 0 || elapsed < duration) {
@@ -54,6 +70,7 @@ export function useRunRecord({
       return;
     }
     recorded.current = run.params.url;
+    const settled = run.summary(duration);
     void fetch("/api/scores", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -68,8 +85,8 @@ export function useRunRecord({
           },
           "learn",
           {
-            points: scorePoints(run.score),
-            accuracy: accuracy(run.score),
+            points: settled.points,
+            accuracy: settled.accuracy,
             bestCombo: run.score.bestCombo,
           },
         ),

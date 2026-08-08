@@ -24,7 +24,7 @@ import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
 import { useSongVoicing } from "@/lib/audio/use-song-voicing";
 import { keyLabelsFor, reachFor } from "@/lib/input/keyboard-map";
 import { useMidiShortcuts } from "@/lib/input/midi-shortcuts";
-import { useNoteInput } from "@/lib/input/use-note-input";
+import { type NoteInput, useNoteInput } from "@/lib/input/use-note-input";
 import { reduceToMelody } from "@/lib/midi/melody";
 import {
   medianPitch,
@@ -56,6 +56,9 @@ type PlayerProps = {
   tourAuto?: boolean;
   onScore?: (score: Score) => void;
   onHit?: (judgement: Judgement, away: number | null) => void;
+  /** Everything under this player's hands, on every change, so the other half
+   * of a match draws the keys they are really holding. */
+  onKeys?: (pitches: readonly number[]) => void;
   /** Reports the part being played, so a match can mirror it on the other side
    * without reading it back out of the address bar. */
   onConfig?: (part: Part) => void;
@@ -93,6 +96,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     tourAuto = true,
     onScore,
     onHit,
+    onKeys,
     onConfig,
     opponent = null,
     locked = false,
@@ -346,6 +350,12 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
       playback.warmPlayed([ownedTrack]);
     }
   }, [interactive, ownedTrack, playback.warmPlayed, song]);
+  // Read back off the input rather than tallied here: it holds what is down,
+  // and it has already taken this key in by the time these are called.
+  const inputRef = useRef<NoteInput | null>(null);
+  const sendKeys = useCallback(() => {
+    onKeys?.([...(inputRef.current?.pressed() ?? [])]);
+  }, [onKeys]);
   const input = useNoteInput({
     active: interactive,
     onPress: useCallback(
@@ -365,8 +375,9 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             ),
           );
         }
+        sendKeys();
       },
-      [playback, ownedTrack, interactive, mode],
+      [playback, ownedTrack, interactive, mode, sendKeys],
     ),
     onRelease: useCallback(
       (pitch: number) => {
@@ -387,8 +398,9 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             ),
           );
         }
+        sendKeys();
       },
-      [playback, ownedTrack, interactive, mode],
+      [playback, ownedTrack, interactive, mode, sendKeys],
     ),
     onToggle: useCallback(() => {
       if (!matchActive) {
@@ -397,6 +409,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     }, [playback, matchActive]),
     onControl: skinShortcuts.onControl,
   });
+  inputRef.current = input;
 
   /** Opening on the lowest keys hides the part on a phone, where only a slice
    * of the keyboard fits, so the roll starts where the notes are. */
@@ -424,6 +437,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     mode,
     params,
     score: gates.score,
+    summary: gates.summary,
     elapsed: playback.elapsed,
     duration: song?.duration ?? 0,
     active: interactive,
@@ -576,6 +590,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
               onMelodyRate={changeMelodyRate}
               editable={!locked}
               score={gates.score}
+              owedNotes={owed.length}
               opponent={opponent}
               onToggleVisible={toggleTrack}
               onToggleMine={togglePlayerTrack}

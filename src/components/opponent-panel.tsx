@@ -23,6 +23,7 @@ import type { Song } from "@/lib/midi/song";
 import { usePartRoll } from "@/lib/midi/use-part-roll";
 import type { Opponent } from "@/lib/multiplayer/protocol";
 import { defaultKeyWidth } from "@/lib/render/keyboard";
+import { gotShare } from "@/lib/scoring/judge";
 import type { Hit } from "@/lib/scoring/use-gates";
 import { loadGlobalSettings } from "@/lib/storage/settings";
 
@@ -42,6 +43,10 @@ type OpponentPanelProps = {
   /** The local round clock: both sides roll from the same start, so their roll
    * scrolls off our own position and stays smooth without any note events. */
   getPosition: () => number;
+  /** What they are actually holding, straight off the wire. The falling notes
+   * are the part they were asked for; this is what their hands are doing with
+   * it, which is the whole reason their keyboard is on screen. */
+  theirKeys: () => ReadonlySet<number>;
   hit: Hit | null;
   state: "waiting" | "playing" | "gone";
 };
@@ -58,14 +63,13 @@ export function OpponentPanel({
   locked,
   opponent,
   getPosition,
+  theirKeys,
   hit,
   state,
 }: OpponentPanelProps) {
   const [hidden, setHidden] = useState<ReadonlySet<number>>(nothingHidden);
   // Their roll rides the shared timeline, so scrubbing reads ahead on both.
-  const roll = usePartRoll(song, part, getPosition);
-  const getPressedRef = useRef(roll.getPressed);
-  getPressedRef.current = roll.getPressed;
+  const roll = usePartRoll(song, part);
   /** A remote verdict lands after the note's local onset, so it cannot ride the
    * pressed channel. Instead the pitches sounding now are held for a beat and
    * bloom on their own; a miss leaves them dark, so their half stays mute on
@@ -79,10 +83,10 @@ export function OpponentPanel({
       return;
     }
     bloomRef.current = {
-      pitches: getPressedRef.current(),
+      pitches: theirKeys(),
       until: performance.now() + 150,
     };
-  }, [hit]);
+  }, [hit, theirKeys]);
   const getHits = useCallback(
     () =>
       performance.now() < bloomRef.current.until
@@ -133,8 +137,8 @@ export function OpponentPanel({
 
         <ScoreReadout
           points={opponent.points}
-          accuracy={opponent.accuracy}
-          combo={opponent.combo}
+          got={gotShare(opponent.score, roll.owedNotes)}
+          combo={opponent.score.combo}
         />
 
         <PartControls
@@ -194,7 +198,7 @@ export function OpponentPanel({
           focusPitch={roll.focusPitch}
           follow={false}
           getPosition={getPosition}
-          getPressed={roll.getPressed}
+          getPressed={theirKeys}
           getOwed={roll.getOwed}
           getYours={roll.getYours}
           getHits={getHits}

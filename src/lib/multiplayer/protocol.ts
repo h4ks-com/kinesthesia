@@ -1,4 +1,4 @@
-import type { Judgement, Score } from "@/lib/scoring/judge";
+import { emptyScore, type Judgement, type Score } from "@/lib/scoring/judge";
 import type { Summary } from "@/lib/scoring/summary";
 
 export type MatchMessage =
@@ -25,13 +25,18 @@ export type MatchMessage =
       readonly points: number;
       readonly accuracy: number;
     }
+  /** Everything under their hands right now, sent whole on every change rather
+   * than as presses and releases: a message that never arrives would otherwise
+   * leave a key down for the rest of the round. */
+  | { readonly kind: "keys"; readonly pitches: readonly number[] }
   /** One per judged note, so the other side can flash the same hit or miss and
-   * mark where it landed. `away` rides along optionally, since a build from
-   * before the rail existed sends a hit without one. */
+   * mark where it landed. `away` is null where there was no beat to measure
+   * against, and a build from before the rail existed leaves it off the wire
+   * entirely, which the reader takes as the same thing. */
   | {
       readonly kind: "hit";
       readonly judgement: Judgement;
-      readonly away?: number | null;
+      readonly away: number | null;
     }
   /** The stats ride along optionally: a build from before they existed sends a
    * finish without them, and its side of the card is simply left unread rather
@@ -58,16 +63,16 @@ export function battleOutcome(mine: number, theirs: number): Outcome {
 export type Opponent = {
   readonly name: string;
   readonly points: number;
-  readonly accuracy: number;
-  readonly combo: number;
+  /** Their tally as they count it, so their share of the song is worked out
+   * against the part they were given rather than against ours. */
+  readonly score: Score;
   readonly finished: boolean;
 };
 
 export const noOpponent: Opponent = {
   name: "Opponent",
   points: 0,
-  accuracy: 1,
-  combo: 0,
+  score: emptyScore,
   finished: false,
 };
 
@@ -76,6 +81,7 @@ const kinds = [
   "ready",
   "begin",
   "score",
+  "keys",
   "hit",
   "finished",
   "rematch",

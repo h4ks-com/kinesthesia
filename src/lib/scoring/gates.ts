@@ -29,11 +29,14 @@ export function buildGates(notes: readonly SongNote[]): Gate[] {
   for (const note of notes) {
     const length = note.end - note.start;
     const last = gates[gates.length - 1];
-    if (last !== undefined && note.start - last.start <= chordWindow) {
-      const holds = new Map(last.holds);
-      if (length >= holdFrom) {
-        holds.set(note.pitch, length);
-      }
+    const joins = last !== undefined && note.start - last.start <= chordWindow;
+    const holds = new Map(joins && last !== undefined ? last.holds : []);
+    // Longer than where holding starts paying, so what is watched for a release
+    // is exactly what a release can earn.
+    if (length > holdFrom) {
+      holds.set(note.pitch, length);
+    }
+    if (joins && last !== undefined) {
       gates[gates.length - 1] = {
         start: last.start,
         pitches: [...last.pitches, note.pitch],
@@ -41,11 +44,7 @@ export function buildGates(notes: readonly SongNote[]): Gate[] {
       };
       continue;
     }
-    gates.push({
-      start: note.start,
-      pitches: [note.pitch],
-      holds: length >= holdFrom ? new Map([[note.pitch, length]]) : new Map(),
-    });
+    gates.push({ start: note.start, pitches: [note.pitch], holds });
   }
   return gates;
 }

@@ -21,7 +21,7 @@ import {
   type PlayerParams,
   playerPath,
 } from "@/lib/player-url";
-import { accuracy, type Score, scorePoints } from "@/lib/scoring/judge";
+import { gotShare, type Score, scorePoints } from "@/lib/scoring/judge";
 import { isDeviceLocal } from "@/lib/trusted-url";
 
 const modeCatalog = [
@@ -49,6 +49,9 @@ type PlayerHeaderProps = {
   onMelodyRate: (rate: number) => void;
   editable: boolean;
   score: Score;
+  /** How many notes the part asks for, so the tally can read as a share of the
+   * song rather than of the notes reached so far. */
+  owedNotes: number;
   opponent: { name: string; points: number; accuracy: number } | null;
   onToggleVisible: (index: number) => void;
   onToggleMine: (index: number) => void;
@@ -78,6 +81,7 @@ export function PlayerHeader({
   onMelodyRate,
   editable,
   score,
+  owedNotes,
   opponent,
   voicing,
   onVoicing,
@@ -115,7 +119,7 @@ export function PlayerHeader({
         <div className="hidden shrink-0 sm:flex">
           <ScoreReadout
             points={scorePoints(score)}
-            accuracy={accuracy(score)}
+            got={gotShare(score, owedNotes)}
             combo={score.combo}
           />
         </div>

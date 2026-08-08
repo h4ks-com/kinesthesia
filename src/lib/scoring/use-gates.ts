@@ -50,8 +50,6 @@ export type Gates = {
   /** Judges a key coming up, so a note asked to be held can be seen through or
    * dropped. A pitch nothing is holding is passed over. */
   judgeRelease: (pitch: number, position: number) => void;
-  /** Points earned so far for keeping notes down. */
-  bonus: number;
   moveTo: (position: number) => void;
   reset: () => void;
 };
@@ -78,7 +76,10 @@ export function useGates({
   const [score, setScore] = useState<Score>(emptyScore);
   const [waiting, setWaiting] = useState(false);
   const [lastHit, setLastHit] = useState<Hit | null>(null);
-  const [bonus, setBonus] = useState(0);
+  /** Points earned so far for keeping notes down. Held beside the state because
+   * a key comes up on nearly every note, and nothing on screen reads it until
+   * the run is over. */
+  const bonusRef = useRef(0);
   /** What is under a hand right now that the song asked to be held, and when it
    * was struck, so the release has something to measure against. */
   const holdingRef = useRef<Map<number, { at: number; length: number }>>(
@@ -220,7 +221,7 @@ export function useGates({
       }
       holdingRef.current.delete(pitch);
       const kept = position - holding.at;
-      setBonus((current) => current + holdBonus(holding.length, kept));
+      bonusRef.current += holdBonus(holding.length, kept);
       if (droppedEarly(holding.length, kept)) {
         flag("letGo", null);
       }
@@ -239,8 +240,8 @@ export function useGates({
       (at: number) => {
         const { total, count } = spreadRef.current;
         // A song ends with the last chord still down, so what is still under a
-        // hand is paid for against the end rather than left unearned.
-        let earned = bonus;
+        // hand is paid for against the end.
+        let earned = bonusRef.current;
         for (const holding of holdingRef.current.values()) {
           earned += holdBonus(holding.length, at - holding.at);
         }
@@ -251,10 +252,9 @@ export function useGates({
           shape: shapeRef.current,
         });
       },
-      [score, bonus],
+      [score],
     ),
     judgeRelease,
-    bonus,
     moveTo: useCallback(
       (position: number) => {
         // Whatever was under a hand belongs to where the song was, so a hold
@@ -267,7 +267,7 @@ export function useGates({
     reset: useCallback(() => {
       openAt(0);
       holdingRef.current.clear();
-      setBonus(0);
+      bonusRef.current = 0;
       spreadRef.current = { total: 0, count: 0 };
       shapeRef.current = [...emptyShape];
       setScore(emptyScore);

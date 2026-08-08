@@ -7,6 +7,7 @@ import {
   holdSlack,
   worthSaying,
 } from "@/lib/scoring/hold";
+import { lateWindow } from "@/lib/scoring/judge";
 
 describe("holdBonus", () => {
   it("pays nothing for a note let go before holding starts", () => {
@@ -47,7 +48,6 @@ describe("droppedEarly", () => {
     expect(droppedEarly(worthSaying - 0.01, 0)).toBe(false);
   });
 
-  // The complaint this exists to answer: it fired on nearly every note.
   it("stays quiet across a run of ordinary notes let go a shade early", () => {
     const ordinary = [0.3, 0.45, 0.5, 0.6, 0.8, 1.0];
     for (const length of ordinary) {
@@ -65,5 +65,13 @@ describe("droppedEarly", () => {
 
   it("stays quiet when a long note is held past its end", () => {
     expect(droppedEarly(3, 9)).toBe(false);
+  });
+
+  // A hold is timed from the strike, so a note struck as late as one still can
+  // be is the worst case the reminder has to stay quiet through.
+  it("stays quiet for a note struck at the deadline and held to its end", () => {
+    for (const length of [worthSaying, 2, 5]) {
+      expect(droppedEarly(length, length - lateWindow)).toBe(false);
+    }
   });
 });

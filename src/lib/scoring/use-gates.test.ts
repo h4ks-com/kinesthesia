@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SongNote } from "@/lib/midi/song";
+import { holdFrom } from "@/lib/scoring/hold";
 import { lateWindow } from "@/lib/scoring/judge";
 import { useGates } from "@/lib/scoring/use-gates";
 
@@ -259,92 +260,64 @@ describe("useGates", () => {
   });
 
   describe("holding", () => {
-    it("pays for a note kept down past where holding starts", () => {
-      const { view, settle } = bench([note(60, 1, 60, 2)], false);
+    /** A run of one long note struck on the beat and let go where the test
+     * says, read out as points. What a hold is worth is the difference from a
+     * run that let the same note go at once. */
+    function pointsFor(release: number | null, length = 3): number {
+      const { view, settle } = bench([note(60, 1, 60, length)], false);
       settle(1);
       act(() => {
         view.result.current.judgeStrike(60, 1);
       });
-      act(() => {
-        view.result.current.judgeRelease(60, 2.5);
-      });
-      expect(view.result.current.bonus).toBeGreaterThan(0);
+      if (release !== null) {
+        act(() => {
+          view.result.current.judgeRelease(60, release);
+        });
+      }
+      return view.result.current.summary(1 + length).points;
+    }
+
+    /** Let go the instant it was struck, so only the strike itself is paid
+     * for. */
+    const atOnce = 1.001;
+
+    it("pays for a note kept down past where holding starts", () => {
+      expect(pointsFor(2.5)).toBeGreaterThan(pointsFor(atOnce));
     });
 
-    // The bug the model replaces: a player who never touched a key was handed
-    // a full hold score.
+    it("pays for the strike whether or not anything was held", () => {
+      expect(pointsFor(atOnce)).toBeGreaterThan(0);
+    });
+
     it("pays nothing to a player who struck nothing", () => {
       const { view, settle } = bench([note(60, 1, 60, 3)], false);
       settle(1);
       expect(view.result.current.summary(9).points).toBe(0);
     });
 
-    it("pays nothing for a note let go at once", () => {
-      const { view, settle } = bench([note(60, 1, 60, 3)], false);
-      settle(1);
-      act(() => {
-        view.result.current.judgeStrike(60, 1);
-      });
-      act(() => {
-        view.result.current.judgeRelease(60, 1.05);
-      });
-      expect(view.result.current.bonus).toBe(0);
+    it("pays nothing for a note let go before holding starts", () => {
+      expect(pointsFor(1 + holdFrom / 2)).toBe(pointsFor(atOnce));
     });
 
     it("pays more the longer a note is kept down", () => {
-      const brief = bench([note(60, 1, 60, 4)], false);
-      brief.settle(1);
-      act(() => {
-        brief.view.result.current.judgeStrike(60, 1);
-      });
-      act(() => {
-        brief.view.result.current.judgeRelease(60, 1.6);
-      });
-
-      const long = bench([note(60, 1, 60, 4)], false);
-      long.settle(1);
-      act(() => {
-        long.view.result.current.judgeStrike(60, 1);
-      });
-      act(() => {
-        long.view.result.current.judgeRelease(60, 4);
-      });
-      expect(long.view.result.current.bonus).toBeGreaterThan(
-        brief.view.result.current.bonus,
-      );
-    });
-
-    it("keeps the bonus inside the score the card reads out", () => {
-      const { view, settle } = bench([note(60, 1, 60, 3)], false);
-      settle(1);
-      act(() => {
-        view.result.current.judgeStrike(60, 1);
-      });
-      act(() => {
-        view.result.current.judgeRelease(60, 4);
-      });
-      const bare = view.result.current.summary(9).points;
-      expect(bare).toBeGreaterThan(view.result.current.bonus);
+      expect(pointsFor(4)).toBeGreaterThan(pointsFor(1.6));
     });
 
     it("pays for a note still down when the run ends", () => {
-      const { view, settle } = bench([note(60, 1, 60, 3)], false);
-      settle(1);
-      act(() => {
-        view.result.current.judgeStrike(60, 1);
-      });
-      expect(view.result.current.summary(4).points).toBeGreaterThan(
-        view.result.current.summary(1.1).points,
-      );
+      expect(pointsFor(null)).toBeGreaterThan(pointsFor(atOnce));
     });
 
     it("passes over a key coming up that nothing was holding", () => {
       const { view, settle } = bench([note(60, 1, 60, 2)], false);
       settle(1);
       act(() => {
-        view.result.current.judgeRelease(64, 2);
+        view.result.current.judgeStrike(60, 1);
       });
-      expect(view.result.current.bonus).toBe(0);
+      const before = view.result.current.summary(1.05).points;
+      act(() => {
+        view.result.current.judgeRelease(64, 9);
+      });
+      expect(view.result.current.summary(1.05).points).toBe(before);
     });
 
     it("forgets what was being held when the song is moved", () => {
@@ -359,7 +332,7 @@ describe("useGates", () => {
       act(() => {
         view.result.current.judgeRelease(60, 41);
       });
-      expect(view.result.current.bonus).toBe(0);
+      expect(view.result.current.summary(41).points).toBe(pointsFor(atOnce, 2));
     });
   });
 });

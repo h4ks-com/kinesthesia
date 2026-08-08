@@ -26,6 +26,7 @@ describe("isMatchMessage", () => {
       { kind: "begin", round: 1 },
       { kind: "rematch" },
       { kind: "finished", points: 10 },
+      { kind: "keys", pitches: [60, 64] },
       { kind: "ping" },
     ];
     for (const message of messages) {

@@ -4,6 +4,7 @@ import {
   applyJudgement,
   emptyScore,
   goodWindow,
+  gotShare,
   judge,
   lateWindow,
   perfectWindow,
@@ -78,5 +79,41 @@ describe("scorePoints", () => {
   it("rewards perfects over goods and adds a combo bonus", () => {
     const score: Score = { ...emptyScore, perfect: 2, good: 2, bestCombo: 4 };
     expect(scorePoints(score)).toBe(2 * 100 + 2 * 50 + 4 * 10);
+  });
+});
+
+// The header reads this live, where accuracy only ever describes the notes
+// already reached: a player two bars into a song is not 100% through it.
+describe("gotShare", () => {
+  it("is nothing before a note is answered", () => {
+    expect(gotShare(emptyScore, 40)).toBe(0);
+  });
+
+  it("climbs with the notes answered, not with how near the beat they were", () => {
+    const early: Score = { ...emptyScore, perfect: 10 };
+    const late: Score = { ...emptyScore, perfect: 5, good: 5 };
+    expect(gotShare(early, 40)).toBeCloseTo(0.25);
+    expect(gotShare(late, 40)).toBeCloseTo(0.25);
+  });
+
+  it("counts a missed note as one not got", () => {
+    const score: Score = { ...emptyScore, perfect: 10, missed: 10 };
+    expect(gotShare(score, 40)).toBeCloseTo(0.25);
+  });
+
+  it("reads a whole song played as all of it", () => {
+    const score: Score = { ...emptyScore, perfect: 30, good: 10 };
+    expect(gotShare(score, 40)).toBe(1);
+  });
+
+  // Striking keys nothing asked for is judged, so a masher answers more notes
+  // than the part holds.
+  it("never passes the whole song, however many keys were struck", () => {
+    const score: Score = { ...emptyScore, perfect: 90 };
+    expect(gotShare(score, 40)).toBe(1);
+  });
+
+  it("is nothing when no part is owed", () => {
+    expect(gotShare({ ...emptyScore, perfect: 3 }, 0)).toBe(0);
   });
 });

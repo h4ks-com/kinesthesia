@@ -147,6 +147,10 @@ export function Multiplayer({
   const [opponentGone, setOpponentGone] = useState(false);
   const [theirHit, setTheirHit] = useState<Hit | null>(null);
   const hitSeqRef = useRef(0);
+  /** What the other player is holding right now. Off the state, since their
+   * roll reads it every frame and a key change must not re-render the match. */
+  const theirKeysRef = useRef<ReadonlySet<number>>(new Set());
+  const theirKeys = useCallback(() => theirKeysRef.current, []);
 
   const match = agreed ?? params;
   const theirPoints = opponent?.points ?? 0;
@@ -198,6 +202,7 @@ export function Multiplayer({
     setMyRematch(false);
     setTheirRematch(false);
     setTheirHit(null);
+    theirKeysRef.current = new Set();
     // A round reads only itself: a card left standing from the last one would
     // set this run against whatever the other player did before it.
     setMySummary(null);
@@ -261,9 +266,11 @@ export function Multiplayer({
           setOpponent((current) => ({
             ...(current ?? noOpponent),
             points: raw.points,
-            accuracy: raw.accuracy,
-            combo: raw.score.combo,
+            score: raw.score,
           }));
+        }
+        if (raw.kind === "keys") {
+          theirKeysRef.current = new Set(raw.pitches);
         }
         if (raw.kind === "hit") {
           hitSeqRef.current += 1;
@@ -576,6 +583,10 @@ export function Multiplayer({
     } satisfies MatchMessage);
   }, []);
 
+  const onKeys = useCallback((pitches: readonly number[]) => {
+    linkRef.current?.send({ kind: "keys", pitches } satisfies MatchMessage);
+  }, []);
+
   const onHit = useCallback((judgement: Judgement, away: number | null) => {
     linkRef.current?.send({
       kind: "hit",
@@ -651,6 +662,7 @@ export function Multiplayer({
         tourAuto={isHost}
         onScore={onScore}
         onHit={onHit}
+        onKeys={onKeys}
         onConfig={setHostPart}
         opponent={null}
         locked={settled}
@@ -667,8 +679,6 @@ export function Multiplayer({
               theirPoints={theirPoints}
               mySummary={mySummary}
               theirSummary={theirSummary}
-              // Named by role: an account name reads as ambiguous beside "you", and
-              // which side is which is the only thing the card needs to say.
               opponentName="opponent"
               coop={coop}
               opponentReady={theirReady}
@@ -692,6 +702,7 @@ export function Multiplayer({
               locked={setupDone}
               opponent={opponent ?? noOpponent}
               getPosition={opponentPosition}
+              theirKeys={theirKeys}
               hit={theirHit}
               state={live ? "playing" : opponent !== null ? "gone" : "waiting"}
             />

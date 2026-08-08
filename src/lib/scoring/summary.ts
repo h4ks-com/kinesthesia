@@ -1,5 +1,10 @@
 import { type HoldTally, holdShare } from "@/lib/scoring/hold";
-import { accuracy, type Score, totalJudged } from "@/lib/scoring/judge";
+import {
+  accuracy,
+  type Score,
+  scorePoints,
+  totalJudged,
+} from "@/lib/scoring/judge";
 
 /** What a finished run is worth saying, in the five numbers a player can act
  * on. Counts of each verdict are left out on purpose: they say the same thing
@@ -32,31 +37,19 @@ const ranks = [
 
 export const lowestRank = "D";
 
-export function spreadOf(timing: readonly number[]): number {
-  if (timing.length === 0) {
-    return 0;
-  }
-  let total = 0;
-  for (const away of timing) {
-    total += Math.abs(away);
-  }
-  return total / timing.length;
-}
-
 export function summarise(
   score: Score,
-  points: number,
   holds: HoldTally,
-  timing: readonly number[],
+  spread: number,
 ): Summary {
   const judged = totalJudged(score);
   return {
-    points,
+    points: scorePoints(score),
     notes: judged === 0 ? 0 : (judged - score.missed) / judged,
     streak: score.bestCombo,
     accuracy: accuracy(score),
     hold: holdShare(holds),
-    spread: spreadOf(timing),
+    spread,
   };
 }
 

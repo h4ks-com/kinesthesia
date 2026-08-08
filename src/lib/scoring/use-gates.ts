@@ -42,6 +42,9 @@ export type Gates = {
   judgeStrike: (pitch: number, position: number) => void;
   /** How far each recent hit landed from the note it answered, in seconds. */
   timing: () => readonly number[];
+  /** How far from its note a hit landed on average across the whole run,
+   * whichever side of it. */
+  spread: () => number;
   /** Judges a key coming up, so a note asked to be held can be seen through or
    * dropped. A pitch nothing is holding is passed over. */
   judgeRelease: (pitch: number, position: number) => void;
@@ -90,6 +93,9 @@ export function useGates({
    * otherwise read as a hit made while playing, and the resume that ends the
    * wait would never be called. */
   const waitingRef = useRef(false);
+  /** Every hit's distance from its note, added up across the whole run, so the
+   * card reads out the run rather than the tail of it. */
+  const spreadRef = useRef({ total: 0, count: 0 });
   /** How far each recent hit landed from the note it answered. */
   const timingRef = useRef<number[]>([]);
   const seqRef = useRef(0);
@@ -181,6 +187,8 @@ export function useGates({
         if (timingRef.current.length > timedHitsKept) {
           timingRef.current.shift();
         }
+        spreadRef.current.total += Math.abs(late);
+        spreadRef.current.count += 1;
       }
       setScore((current) => applyJudgement(current, judgement));
       flag(judgement, late);
@@ -217,6 +225,10 @@ export function useGates({
     owed: useCallback(() => pendingRef.current as ReadonlySet<number>, []),
     judgeStrike,
     timing: useCallback(() => timingRef.current as readonly number[], []),
+    spread: useCallback(() => {
+      const { total, count } = spreadRef.current;
+      return count === 0 ? 0 : total / count;
+    }, []),
     judgeRelease,
     holds,
     moveTo: useCallback(
@@ -232,6 +244,7 @@ export function useGates({
       openAt(0);
       holdingRef.current.clear();
       setHolds(emptyHolds);
+      spreadRef.current = { total: 0, count: 0 };
       setScore(emptyScore);
       setLastHit(null);
       timingRef.current.length = 0;

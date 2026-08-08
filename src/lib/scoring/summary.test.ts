@@ -5,7 +5,6 @@ import {
   lowestRank,
   rankOf,
   type Summary,
-  spreadOf,
   summarise,
 } from "@/lib/scoring/summary";
 
@@ -25,33 +24,12 @@ function summary(over: Partial<Summary> = {}): Summary {
   };
 }
 
-describe("spreadOf", () => {
-  it("is nothing before anything has been struck", () => {
-    expect(spreadOf([])).toBe(0);
-  });
-
-  it("ignores which side of the beat a strike fell", () => {
-    expect(spreadOf([-0.04, 0.04])).toBeCloseTo(0.04, 10);
-  });
-
-  // A player who is always 40ms late is tidy, just offset, and the spread has
-  // to say so rather than reading as scatter.
-  it("reads a steady lateness as its own size", () => {
-    expect(spreadOf([0.04, 0.04, 0.04])).toBeCloseTo(0.04, 10);
-  });
-
-  it("grows as the strikes scatter", () => {
-    expect(spreadOf([-0.12, 0.12])).toBeGreaterThan(spreadOf([-0.02, 0.02]));
-  });
-});
-
 describe("summarise", () => {
   it("counts everything not missed as got through", () => {
     const got = summarise(
       score({ perfect: 6, good: 2, missed: 2, bestCombo: 5 }),
-      100,
       emptyHolds,
-      [],
+      0,
     );
     expect(got.notes).toBeCloseTo(0.8, 10);
     expect(got.streak).toBe(5);
@@ -60,21 +38,21 @@ describe("summarise", () => {
   // The scores column has always held the weighted share, so a run of goods
   // must not post as a run of perfects just because none were missed.
   it("keeps the weighted share apart from the share not missed", () => {
-    const got = summarise(score({ good: 4 }), 0, emptyHolds, []);
+    const got = summarise(score({ good: 4 }), emptyHolds, 0);
     expect(got.notes).toBe(1);
     expect(got.accuracy).toBe(0.5);
   });
 
   it("says nothing was got through before a note is judged", () => {
-    expect(summarise(emptyScore, 0, emptyHolds, []).notes).toBe(0);
+    expect(summarise(emptyScore, emptyHolds, 0).notes).toBe(0);
   });
 
   it("treats a song asking for no holds as nothing dropped", () => {
-    expect(summarise(score({ perfect: 4 }), 0, emptyHolds, []).hold).toBe(1);
+    expect(summarise(score({ perfect: 4 }), emptyHolds, 0).hold).toBe(1);
   });
 
   it("carries the holds that were let go", () => {
-    const got = summarise(score({ perfect: 4 }), 0, { kept: 3, letGo: 1 }, []);
+    const got = summarise(score({ perfect: 4 }), { kept: 3, letGo: 1 }, 0);
     expect(got.hold).toBe(0.75);
   });
 });

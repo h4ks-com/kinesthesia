@@ -198,6 +198,10 @@ export function Multiplayer({
     setMyRematch(false);
     setTheirRematch(false);
     setTheirHit(null);
+    // A round reads only itself: a card left standing from the last one would
+    // set this run against whatever the other player did before it.
+    setMySummary(null);
+    setTheirSummary(null);
     setOpponent((current) =>
       current === null ? current : { ...current, points: 0, finished: false },
     );

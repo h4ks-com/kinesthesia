@@ -182,6 +182,65 @@ describe("useGates", () => {
     expect(view.result.current.owed().size).toBe(0);
   });
 
+  describe("spread", () => {
+    it("is nothing before a note is struck", () => {
+      const { view } = bench([note(60, 1)], false);
+      expect(view.result.current.spread()).toBe(0);
+    });
+
+    it("ignores which side of the beat a strike fell", () => {
+      const { view, settle } = bench([note(60, 1), note(62, 2, 62)], false);
+      settle(1);
+      act(() => {
+        view.result.current.judgeStrike(60, 1.04);
+      });
+      settle(2);
+      act(() => {
+        view.result.current.judgeStrike(62, 1.96);
+      });
+      expect(view.result.current.spread()).toBeCloseTo(0.04, 6);
+    });
+
+    // The rank is read off this, so it has to describe the whole run rather
+    // than the tail of it: a clean song flubbed at the end must not rank as a
+    // flubbed one.
+    it("keeps counting past the window the latency hint remembers", () => {
+      const many = Array.from({ length: 40 }, (_, index) =>
+        note(60 + (index % 12), index + 1, index),
+      );
+      const { view, settle } = bench(many, false);
+      // Tidy for most of the song, then scrappy over the closing notes, so the
+      // tail the latency hint keeps and the whole run disagree.
+      for (let index = 0; index < 40; index += 1) {
+        settle(index + 1);
+        act(() => {
+          view.result.current.judgeStrike(
+            60 + (index % 12),
+            index + 1 + (index < 30 ? 0.01 : 0.2),
+          );
+        });
+      }
+      expect(view.result.current.timing()).toHaveLength(24);
+      const whole = (30 * 0.01 + 10 * 0.2) / 40;
+      const tail = (14 * 0.01 + 10 * 0.2) / 24;
+      expect(view.result.current.spread()).toBeCloseTo(whole, 6);
+      expect(view.result.current.spread()).not.toBeCloseTo(tail, 3);
+    });
+
+    it("forgets the run when the score is reset", () => {
+      const { view, settle } = bench([note(60, 1)], false);
+      settle(1);
+      act(() => {
+        view.result.current.judgeStrike(60, 1.1);
+      });
+      expect(view.result.current.spread()).toBeGreaterThan(0);
+      act(() => {
+        view.result.current.reset();
+      });
+      expect(view.result.current.spread()).toBe(0);
+    });
+  });
+
   describe("holding", () => {
     it("counts a long note the player saw out", () => {
       const { view, settle } = bench([note(60, 1, 60, 2)], false);

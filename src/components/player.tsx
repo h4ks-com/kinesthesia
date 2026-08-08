@@ -38,7 +38,6 @@ import { useSong } from "@/lib/midi/use-song";
 import type { PlayerMode, PlayerParams } from "@/lib/player-url";
 import { busiestTrack } from "@/lib/scoring/gates";
 import type { Judgement, Score } from "@/lib/scoring/judge";
-import { scorePoints } from "@/lib/scoring/judge";
 import { type Summary, summarise } from "@/lib/scoring/summary";
 import { useGates } from "@/lib/scoring/use-gates";
 import { useRunRecord } from "@/lib/scoring/use-run-record";
@@ -496,21 +495,14 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     }
     startedRef.current = false;
     endedRef.current = true;
-    endRef.current?.(
-      summarise(
-        gates.score,
-        scorePoints(gates.score),
-        gates.holds,
-        gates.timing(),
-      ),
-    );
+    endRef.current?.(summarise(gates.score, gates.holds, gates.spread()));
   }, [
     matchActive,
     song,
     playback.elapsed,
     gates.score,
     gates.holds,
-    gates.timing,
+    gates.spread,
   ]);
 
   function toggleTrack(index: number) {

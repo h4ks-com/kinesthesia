@@ -8,14 +8,26 @@ import { rankOf, type Summary } from "@/lib/scoring/summary";
 const rows = [
   {
     label: "notes",
+    tip: "The share of the notes asked of you that you answered at all, however near the beat you landed.",
     read: (run: Summary) => `${Math.round(run.notes * 100)}%`,
   },
-  { label: "streak", read: (run: Summary) => String(run.streak) },
+  {
+    label: "streak",
+    tip: "The longest run of notes you answered without missing one.",
+    read: (run: Summary) => String(run.streak),
+  },
   {
     label: "timing",
+    tip: "How far from the beat a note landed on average, counting early and late alike. The number that comes down with practice.",
     read: (run: Summary) => `${Math.round(run.spread * 1000)}ms`,
   },
 ] as const;
+
+const scoreTip =
+  "100 for a note on the beat, 50 for a near one, 10 a note for your longest streak, and 40 a second for every note you kept down.";
+
+const rankTip =
+  "Awarded on the notes you answered and how near the beat they landed, both at once, so neither one carries the other.";
 
 /** How a run read, side by side where there is another one to read it against.
  * The grand score leads, since it is the only thing that settles a battle, and
@@ -46,7 +58,14 @@ export function MatchSummary({
           </p>
         </div>
         <div className="text-right">
-          <p className="label">rank</p>
+          <p
+            className="label cursor-help"
+            data-tip={rankTip}
+            data-tip-wide=""
+            data-tip-align="right"
+          >
+            rank
+          </p>
           <p className="font-bold font-mono text-3xl text-good leading-none">
             {rankOf(mine)}
           </p>
@@ -57,10 +76,25 @@ export function MatchSummary({
 
       <div className="grid grid-cols-[1fr_auto_1fr] border-line border-t">
         <Column summary={mine} name={myName} align="left" lit={ahead} />
+        {/* The explanations open upward: the card clips what leaves it, and
+            every label but the first has the foot of the card just below. */}
         <div className="flex flex-col gap-1 border-line border-x px-3 py-3">
-          <span className="label h-7 leading-7">score</span>
+          <span
+            className="label h-7 cursor-help leading-7"
+            data-tip={scoreTip}
+            data-tip-wide=""
+            data-tip-side="top"
+          >
+            score
+          </span>
           {rows.map((row) => (
-            <span key={row.label} className="label h-7 leading-7">
+            <span
+              key={row.label}
+              className="label h-7 cursor-help leading-7"
+              data-tip={row.tip}
+              data-tip-wide=""
+              data-tip-side="top"
+            >
               {row.label}
             </span>
           ))}

@@ -163,4 +163,25 @@ describe("MatchSummary", () => {
       expect(shown(container)).toContain(label);
     }
   });
+
+  // A number nobody can read is a number nobody can act on, so every measure
+  // says what it is on the label it is written beside.
+  it("explains every measure where it is named", () => {
+    const { container } = render(
+      <MatchSummary
+        mine={summary()}
+        theirs={null}
+        myName="you"
+        theirName=""
+        coop={false}
+      />,
+    );
+    const explained = [...container.querySelectorAll("[data-tip]")].map(
+      (element) => element.textContent,
+    );
+    expect(explained).toEqual(["rank", "score", "notes", "streak", "timing"]);
+    for (const element of container.querySelectorAll("[data-tip]")) {
+      expect(element.getAttribute("data-tip")?.length ?? 0).toBeGreaterThan(20);
+    }
+  });
 });

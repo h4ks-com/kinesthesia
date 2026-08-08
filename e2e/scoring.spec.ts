@@ -34,22 +34,53 @@ test("a strike is judged and says so over the keys", async ({ page }) => {
 
   const flag = page.locator(".pop");
   await expect(flag.first()).toBeVisible();
-  await expect(flag.first()).toHaveText(/Perfect|Good|Miss|Let go/);
+  await expect(flag.first()).toHaveText(/Perfect|Good|Miss|Held short/);
 
-  // The verdict belongs where the eyes are as a note lands, which is the keys
-  // at the foot of the roll rather than the top of the screen.
-  const box = await flag.first().boundingBox();
-  const view = page.viewportSize();
-  expect(box).not.toBeNull();
-  expect(box?.y ?? 0).toBeGreaterThan((view?.height ?? 0) / 2);
+  // The verdict and the mark it leaves on the rail say the same thing, so the
+  // flag stands against the middle of the rail. A verdict fades as fast as it
+  // pops, so each reading strikes a key of its own rather than hoping the one
+  // before is still on screen.
+  const rail = await page.locator("[data-rail]").first().boundingBox();
+  const middle = (rail?.y ?? 0) + (rail?.height ?? 0) / 2;
+  const placement = { offCentre: 0, rightEdge: 0 };
+  await expect
+    .poll(
+      async () => {
+        await page.keyboard.press("z");
+        const box = await flag
+          .first()
+          .boundingBox({ timeout: 2000 })
+          .catch(() => null);
+        if (box === null) {
+          return false;
+        }
+        placement.offCentre = Math.abs(box.y + box.height / 2 - middle);
+        placement.rightEdge = box.x + box.width;
+        return true;
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(true);
+  expect(placement.offCentre).toBeLessThan(4);
+  expect(placement.rightEdge).toBeLessThanOrEqual(rail?.x ?? 0);
 });
 
 test("the rail fills in as notes are judged", async ({ page }) => {
   test.setTimeout(120_000);
   await openLearn(page);
-  await expect(page.locator(".fade-out")).toHaveCount(0);
+  await expect(page.locator("[data-tick]")).toHaveCount(0);
   await playAlong(page, 2);
-  await expect(page.locator(".fade-out").first()).toBeVisible();
+  // A rail entry fades, so each reading strikes a key of its own rather than
+  // hoping the one the last round left is still on screen.
+  await expect
+    .poll(
+      async () => {
+        await page.keyboard.press("z");
+        return page.locator("[data-tick]").first().isVisible();
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(true);
 });
 
 // Which verdict a strike earns is settled by the gates, and the hook's own
@@ -72,13 +103,19 @@ test("watching never presses a key for you", async ({ page }) => {
   await page.goto(`/watch?${playerQuery()}`);
   await expect(page.locator("canvas").first()).toBeVisible();
   await page.getByRole("button", { name: /play/i }).first().click();
-  await page.waitForTimeout(3400);
 
-  const lit = await litKeyCentre(page);
-  expect(lit).not.toBeNull();
   // A key the song is sounding carries its part's colour without wearing the
-  // full-strength one a hand puts on it.
-  expect(await isStruckKey(page, lit ?? 0)).toBe(false);
+  // full-strength one a hand puts on it. Nothing sounding reads as neither, so
+  // this waits for a lit key rather than for the song to have got to one.
+  await expect
+    .poll(
+      async () => {
+        const lit = await litKeyCentre(page);
+        return lit === null ? null : await isStruckKey(page, lit);
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(false);
 });
 
 test("the rail rides the right of both rolls, whatever the width", async ({
@@ -91,7 +128,6 @@ test("the rail rides the right of both rolls, whatever the width", async ({
     await page.goto(`/learn?${playerQuery()}&tracks=0`);
     await expect(page.locator("canvas").first()).toBeVisible();
     await page.getByRole("button", { name: /play/i }).first().click();
-    await playAlong(page, 1);
     const rail = page.locator("[data-rail]").first();
     await expect(rail).toBeVisible();
     const box = await rail.boundingBox();

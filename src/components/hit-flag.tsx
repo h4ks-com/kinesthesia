@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
+import { railInset } from "@/components/timing-rail";
 import type { Hit, Verdict } from "@/lib/scoring/use-gates";
 
 const label: Record<Verdict, string> = {
   perfect: "Perfect",
   good: "Good",
   miss: "Miss",
-  letGo: "Didn't hold note",
+  letGo: "Held short",
 };
 
 const tone: Record<Verdict, string> = {
@@ -17,10 +18,11 @@ const tone: Record<Verdict, string> = {
 
 const linger = 800;
 
-/** Sits just over the keys, where the eyes already are as a note lands. A timer
- * clears it rather than a fade, so it still shows and hides for someone who
- * asked for reduced motion, where every animation is nulled. The `seq` key
- * restarts the pop even when the verdict repeats. */
+/** Sits against the middle of the timing rail, so the verdict and the mark it
+ * put there read as one thing. A timer clears it rather than a fade, so it
+ * still shows and hides for someone who asked for reduced motion, where every
+ * animation is nulled. The `seq` key restarts the pop even when the verdict
+ * repeats. */
 export function HitFlag({ hit }: { hit: Hit | null }) {
   const [shown, setShown] = useState<Hit | null>(null);
 
@@ -37,12 +39,19 @@ export function HitFlag({ hit }: { hit: Hit | null }) {
     return null;
   }
   return (
+    // Given the rail's own stretch and centred in it, so the two stay level
+    // wherever the rail is asked to sit.
     <span
-      key={shown.seq}
       aria-hidden="true"
-      className={`pop pointer-events-none absolute bottom-36 left-1/2 -translate-x-1/2 rounded-full border px-4 py-1 font-semibold text-sm backdrop-blur ${tone[shown.judgement]}`}
+      style={railInset}
+      className="pointer-events-none absolute right-7 z-10 flex items-center"
     >
-      {label[shown.judgement]}
+      <span
+        key={shown.seq}
+        className={`pop whitespace-nowrap rounded-full border px-3 py-1 font-semibold text-sm backdrop-blur ${tone[shown.judgement]}`}
+      >
+        {label[shown.judgement]}
+      </span>
     </span>
   );
 }

@@ -5,8 +5,8 @@ export const defaultKeyWidth = 26;
 
 const blackKeyWidthRatio = 0.6;
 const blackKeyHeightRatio = 0.6;
-const maxKeyboardHeight = 120;
-const keyboardHeightRatio = 0.22;
+export const maxKeyboardHeight = 120;
+export const keyboardHeightRatio = 0.22;
 
 export const whiteKeys: readonly number[] = buildWhiteKeys();
 

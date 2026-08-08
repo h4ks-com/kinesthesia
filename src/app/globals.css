@@ -161,13 +161,23 @@ body {
 }
 
 /* A roomy tooltip for a sentence of explanation, so a control's help lives on
-   hover instead of crowding the panel it sits in. */
+   hover instead of crowding the panel it sits in. Set as prose rather than as
+   data: whatever it hangs off, a sentence in a label's mono caps and wide
+   tracking reads as shouting. */
 [data-tip-wide]::after {
   white-space: normal;
   width: max-content;
   max-width: 15rem;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-family: var(--font-archivo), system-ui, sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  text-transform: none;
   text-align: left;
-  line-height: 1.45;
+  line-height: 1.5;
+  color: var(--muted);
+  box-shadow: 0 10px 28px -12px rgb(0 0 0 / 0.85);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -236,12 +246,6 @@ body {
 
 .track-dot[data-live] {
   filter: brightness(2.1);
-}
-
-/* A tick on the timing rail. Its strength is set from how many readings stand
-   behind it, so the fade follows the playing rather than a fixed animation. */
-.fade-out {
-  transition: opacity 0.4s ease-out;
 }
 
 /* A bar that marches across its track, for a stage whose length is unknown. */

@@ -45,7 +45,6 @@ import { tourFor } from "@/lib/tour/steps";
 import { useWalkthrough } from "@/lib/tour/use-walkthrough";
 import { useBackground } from "@/lib/use-background";
 import { usePlayerSettings } from "@/lib/use-player-settings";
-import { useWideLayout } from "@/lib/use-wide-layout";
 
 type PlayerProps = {
   mode: PlayerMode;
@@ -56,7 +55,7 @@ type PlayerProps = {
    * it; the host does. */
   tourAuto?: boolean;
   onScore?: (score: Score) => void;
-  onHit?: (judgement: Judgement) => void;
+  onHit?: (judgement: Judgement, away: number | null) => void;
   /** Reports the part being played, so a match can mirror it on the other side
    * without reading it back out of the address bar. */
   onConfig?: (part: Part) => void;
@@ -109,7 +108,6 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const load = useSong(params);
   const original = load.status === "ready" ? load.song : null;
   const [pickingSkin, setPickingSkin] = useState(false);
-  const wideLayout = useWideLayout();
 
   const interactive = mode !== "watch";
   // Notes may only leave the keys where nobody has to read them coming: in
@@ -458,7 +456,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     // Only what the other side scores: letting a held note go is this player's
     // own business, and the peer has no verdict of that name to show.
     if (hit.judgement !== "letGo") {
-      onHit?.(hit.judgement);
+      onHit?.(hit.judgement, hit.away);
     }
   }, [gates.lastHit, onHit]);
 
@@ -659,12 +657,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
               onRelease={input.release}
             />
             {interactive ? <HitFlag hit={gates.lastHit} /> : null}
-            {interactive ? (
-              <TimingRail
-                hit={gates.lastHit}
-                lie={wideLayout ? "upright" : "flat"}
-              />
-            ) : null}
+            {interactive ? <TimingRail hit={gates.lastHit} /> : null}
             {gates.waiting ? (
               <p className="rise -translate-x-1/2 absolute top-6 left-1/2 rounded-full border border-accent/40 bg-panel/90 px-4 py-1.5 font-mono text-accent text-xs backdrop-blur">
                 waiting for you

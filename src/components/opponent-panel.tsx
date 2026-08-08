@@ -10,6 +10,7 @@ import {
 import { HitFlag } from "@/components/hit-flag";
 import { PartControls } from "@/components/part-controls";
 import { PianoRollView } from "@/components/piano-roll-view";
+import { TimingRail } from "@/components/timing-rail";
 import { ScoreReadout } from "@/components/ui/score-readout";
 import { clampMelodyRate, defaultMelodyRate } from "@/lib/midi/melody";
 import {
@@ -200,6 +201,7 @@ export function OpponentPanel({
           plain={plain}
         />
         <HitFlag hit={state === "playing" ? hit : null} />
+        <TimingRail hit={state === "playing" ? hit : null} />
         {state === "gone" ? (
           <p className="-translate-x-1/2 absolute top-4 left-1/2 rounded-full border border-line-strong bg-panel/90 px-3 py-1 text-muted text-xs backdrop-blur">
             they left

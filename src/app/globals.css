@@ -238,23 +238,10 @@ body {
   filter: brightness(2.1);
 }
 
-/* A tick on the timing rail, standing at full strength while it is the newest
-   reading and thinning as it ages out. It is removed by a timer as well, so
-   reduced motion lands on the last frame and the tick simply waits there. */
-@keyframes thin {
-  0% {
-    opacity: 1;
-  }
-  55% {
-    opacity: 0.85;
-  }
-  100% {
-    opacity: 0.12;
-  }
-}
-
+/* A tick on the timing rail. Its strength is set from how many readings stand
+   behind it, so the fade follows the playing rather than a fixed animation. */
 .fade-out {
-  animation: thin 1.6s ease-in both;
+  transition: opacity 0.4s ease-out;
 }
 
 /* A bar that marches across its track, for a stage whose length is unknown. */

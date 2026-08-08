@@ -25,8 +25,14 @@ export type MatchMessage =
       readonly points: number;
       readonly accuracy: number;
     }
-  /** One per judged note, so the other side can flash the same hit or miss. */
-  | { readonly kind: "hit"; readonly judgement: Judgement }
+  /** One per judged note, so the other side can flash the same hit or miss and
+   * mark where it landed. `away` rides along optionally, since a build from
+   * before the rail existed sends a hit without one. */
+  | {
+      readonly kind: "hit";
+      readonly judgement: Judgement;
+      readonly away?: number | null;
+    }
   /** The stats ride along optionally: a build from before they existed sends a
    * finish without them, and its side of the card is simply left unread rather
    * than showing zeroes it never claimed. */

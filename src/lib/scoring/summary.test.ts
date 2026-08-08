@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { emptyHolds } from "@/lib/scoring/hold";
 import { emptyScore, type Score } from "@/lib/scoring/judge";
+import { emptyShape } from "@/lib/scoring/rail";
 import {
   lowestRank,
   rankOf,
@@ -20,17 +21,19 @@ function summary(over: Partial<Summary> = {}): Summary {
     streak: 0,
     hold: 1,
     spread: 0,
+    shape: emptyShape,
     ...over,
   };
 }
 
 describe("summarise", () => {
   it("counts everything not missed as got through", () => {
-    const got = summarise(
-      score({ perfect: 6, good: 2, missed: 2, bestCombo: 5 }),
-      emptyHolds,
-      0,
-    );
+    const got = summarise({
+      score: score({ perfect: 6, good: 2, missed: 2, bestCombo: 5 }),
+      holds: emptyHolds,
+      spread: 0,
+      shape: emptyShape,
+    });
     expect(got.notes).toBeCloseTo(0.8, 10);
     expect(got.streak).toBe(5);
   });
@@ -38,21 +41,45 @@ describe("summarise", () => {
   // The scores column has always held the weighted share, so a run of goods
   // must not post as a run of perfects just because none were missed.
   it("keeps the weighted share apart from the share not missed", () => {
-    const got = summarise(score({ good: 4 }), emptyHolds, 0);
+    const got = summarise({
+      score: score({ good: 4 }),
+      holds: emptyHolds,
+      spread: 0,
+      shape: emptyShape,
+    });
     expect(got.notes).toBe(1);
     expect(got.accuracy).toBe(0.5);
   });
 
   it("says nothing was got through before a note is judged", () => {
-    expect(summarise(emptyScore, emptyHolds, 0).notes).toBe(0);
+    expect(
+      summarise({
+        score: emptyScore,
+        holds: emptyHolds,
+        spread: 0,
+        shape: emptyShape,
+      }).notes,
+    ).toBe(0);
   });
 
   it("treats a song asking for no holds as nothing dropped", () => {
-    expect(summarise(score({ perfect: 4 }), emptyHolds, 0).hold).toBe(1);
+    expect(
+      summarise({
+        score: score({ perfect: 4 }),
+        holds: emptyHolds,
+        spread: 0,
+        shape: emptyShape,
+      }).hold,
+    ).toBe(1);
   });
 
   it("carries the holds that were let go", () => {
-    const got = summarise(score({ perfect: 4 }), { kept: 3, letGo: 1 }, 0);
+    const got = summarise({
+      score: score({ perfect: 4 }),
+      holds: { kept: 3, letGo: 1 },
+      spread: 0,
+      shape: emptyShape,
+    });
     expect(got.hold).toBe(0.75);
   });
 });

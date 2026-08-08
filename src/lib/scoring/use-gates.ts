@@ -21,6 +21,8 @@ import {
   judge,
   type Score,
 } from "@/lib/scoring/judge";
+import { emptyShape, shapeColumn } from "@/lib/scoring/rail";
+import { type Summary, summarise } from "@/lib/scoring/summary";
 
 /** Bumped on every judged note so a flag re-triggers even when the verdict
  * repeats; the verdict alone would not change and the flag would sit still.
@@ -42,9 +44,8 @@ export type Gates = {
   judgeStrike: (pitch: number, position: number) => void;
   /** How far each recent hit landed from the note it answered, in seconds. */
   timing: () => readonly number[];
-  /** How far from its note a hit landed on average across the whole run,
-   * whichever side of it. */
-  spread: () => number;
+  /** Everything the finished run is worth reading out. */
+  summary: () => Summary;
   /** Judges a key coming up, so a note asked to be held can be seen through or
    * dropped. A pitch nothing is holding is passed over. */
   judgeRelease: (pitch: number, position: number) => void;
@@ -96,6 +97,9 @@ export function useGates({
   /** Every hit's distance from its note, added up across the whole run, so the
    * card reads out the run rather than the tail of it. */
   const spreadRef = useRef({ total: 0, count: 0 });
+  /** The run's timing counted into columns, so the card can draw the shape of
+   * it without keeping every strike. */
+  const shapeRef = useRef<number[]>([...emptyShape]);
   /** How far each recent hit landed from the note it answered. */
   const timingRef = useRef<number[]>([]);
   const seqRef = useRef(0);
@@ -189,6 +193,8 @@ export function useGates({
         }
         spreadRef.current.total += Math.abs(late);
         spreadRef.current.count += 1;
+        const column = shapeColumn(late);
+        shapeRef.current[column] = (shapeRef.current[column] ?? 0) + 1;
       }
       setScore((current) => applyJudgement(current, judgement));
       flag(judgement, late);
@@ -225,10 +231,15 @@ export function useGates({
     owed: useCallback(() => pendingRef.current as ReadonlySet<number>, []),
     judgeStrike,
     timing: useCallback(() => timingRef.current as readonly number[], []),
-    spread: useCallback(() => {
+    summary: useCallback(() => {
       const { total, count } = spreadRef.current;
-      return count === 0 ? 0 : total / count;
-    }, []),
+      return summarise({
+        score,
+        holds,
+        spread: count === 0 ? 0 : total / count,
+        shape: shapeRef.current,
+      });
+    }, [score, holds]),
     judgeRelease,
     holds,
     moveTo: useCallback(
@@ -245,6 +256,7 @@ export function useGates({
       holdingRef.current.clear();
       setHolds(emptyHolds);
       spreadRef.current = { total: 0, count: 0 };
+      shapeRef.current = [...emptyShape];
       setScore(emptyScore);
       setLastHit(null);
       timingRef.current.length = 0;

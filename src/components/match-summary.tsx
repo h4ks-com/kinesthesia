@@ -60,6 +60,8 @@ export function MatchSummary({
         </div>
       </div>
 
+      <TimingShape mine={mine.shape} theirs={theirs?.shape ?? null} />
+
       <div className="grid grid-cols-[1fr_auto_1fr] border-line border-t">
         <Column
           summary={mine}
@@ -88,6 +90,83 @@ export function MatchSummary({
       </div>
     </div>
   );
+}
+
+/** The run's timing as a curve: a lump under the middle is a player landing on
+ * the beat, and one sitting off to a side is a habit worth telling them about.
+ * Drawn as a smooth path rather than bars, since the shape is the reading and
+ * the exact column counts are not. */
+function TimingShape({
+  mine,
+  theirs,
+}: {
+  mine: readonly number[];
+  theirs: readonly number[] | null;
+}) {
+  const most = Math.max(1, ...mine, ...(theirs ?? []));
+  if (most === 1 && mine.every((count) => count === 0)) {
+    return null;
+  }
+  return (
+    <div className="border-line border-t px-5 py-4">
+      <p className="label mb-1.5">where your notes landed</p>
+      <svg
+        viewBox="0 0 300 60"
+        preserveAspectRatio="none"
+        className="block h-16 w-full"
+        aria-hidden="true"
+      >
+        <title>Timing distribution</title>
+        <line
+          x1="150"
+          y1="0"
+          x2="150"
+          y2="60"
+          stroke="currentColor"
+          strokeOpacity="0.25"
+          strokeDasharray="3 4"
+          className="text-text"
+        />
+        {theirs === null ? null : (
+          <path
+            d={curve(theirs, most)}
+            className="fill-warn/15 stroke-warn/50"
+            strokeWidth="1.5"
+          />
+        )}
+        <path
+          d={curve(mine, most)}
+          className="fill-accent/20 stroke-accent"
+          strokeWidth="2"
+        />
+      </svg>
+      <p className="flex justify-between font-mono text-[10px] text-faint">
+        <span>early</span>
+        <span>on the beat</span>
+        <span>late</span>
+      </p>
+    </div>
+  );
+}
+
+/** A path through the column tops, eased so the counts read as one shape. */
+function curve(shape: readonly number[], most: number): string {
+  const step = 300 / Math.max(1, shape.length - 1);
+  const points = shape.map((count, index) => ({
+    x: index * step,
+    y: 58 - (count / most) * 52,
+  }));
+  let path = `M0,60 L${points[0]?.x ?? 0},${points[0]?.y ?? 58}`;
+  for (let index = 1; index < points.length; index += 1) {
+    const from = points[index - 1];
+    const to = points[index];
+    if (from === undefined || to === undefined) {
+      continue;
+    }
+    const middle = (from.x + to.x) / 2;
+    path += ` C${middle},${from.y} ${middle},${to.y} ${to.x},${to.y}`;
+  }
+  return `${path} L300,60 Z`;
 }
 
 function Column({

@@ -185,7 +185,7 @@ describe("useGates", () => {
   describe("spread", () => {
     it("is nothing before a note is struck", () => {
       const { view } = bench([note(60, 1)], false);
-      expect(view.result.current.spread()).toBe(0);
+      expect(view.result.current.summary().spread).toBe(0);
     });
 
     it("ignores which side of the beat a strike fell", () => {
@@ -198,7 +198,7 @@ describe("useGates", () => {
       act(() => {
         view.result.current.judgeStrike(62, 1.96);
       });
-      expect(view.result.current.spread()).toBeCloseTo(0.04, 6);
+      expect(view.result.current.summary().spread).toBeCloseTo(0.04, 6);
     });
 
     // The rank is read off this, so it has to describe the whole run rather
@@ -223,8 +223,8 @@ describe("useGates", () => {
       expect(view.result.current.timing()).toHaveLength(24);
       const whole = (30 * 0.01 + 10 * 0.2) / 40;
       const tail = (14 * 0.01 + 10 * 0.2) / 24;
-      expect(view.result.current.spread()).toBeCloseTo(whole, 6);
-      expect(view.result.current.spread()).not.toBeCloseTo(tail, 3);
+      expect(view.result.current.summary().spread).toBeCloseTo(whole, 6);
+      expect(view.result.current.summary().spread).not.toBeCloseTo(tail, 3);
     });
 
     it("forgets the run when the score is reset", () => {
@@ -233,11 +233,11 @@ describe("useGates", () => {
       act(() => {
         view.result.current.judgeStrike(60, 1.1);
       });
-      expect(view.result.current.spread()).toBeGreaterThan(0);
+      expect(view.result.current.summary().spread).toBeGreaterThan(0);
       act(() => {
         view.result.current.reset();
       });
-      expect(view.result.current.spread()).toBe(0);
+      expect(view.result.current.summary().spread).toBe(0);
     });
   });
 

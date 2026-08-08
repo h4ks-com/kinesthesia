@@ -35,3 +35,18 @@ export function railMean(recent: readonly number[]): number | null {
   }
   return total / recent.length;
 }
+
+/** How many columns the run's timing is counted into. Odd, so one of them sits
+ * squarely on the beat rather than the beat falling on a seam. */
+export const shapeColumns = 15;
+
+/** Which column a strike belongs in. */
+export function shapeColumn(away: number): number {
+  const along = railPlace(away) * shapeColumns;
+  return Math.min(shapeColumns - 1, Math.max(0, Math.floor(along)));
+}
+
+export const emptyShape: readonly number[] = Array.from(
+  { length: shapeColumns },
+  () => 0,
+);

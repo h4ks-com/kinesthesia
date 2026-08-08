@@ -24,6 +24,8 @@ export type Summary = {
   /** How far from the beat a strike lands on average, in seconds, ignoring
    * which side of it. The number that comes down with practice. */
   readonly spread: number;
+  /** Where the run's strikes fell across the rail, as counts per column. */
+  readonly shape: readonly number[];
 };
 
 /** Ranks a run reads out as. Ordered best first, since the first one whose bar
@@ -37,11 +39,16 @@ const ranks = [
 
 export const lowestRank = "D";
 
-export function summarise(
-  score: Score,
-  holds: HoldTally,
-  spread: number,
-): Summary {
+/** Everything a run leaves behind, which the gates hold and nothing else
+ * assembles, so adding a measure never grows an argument list. */
+export type Run = {
+  readonly score: Score;
+  readonly holds: HoldTally;
+  readonly spread: number;
+  readonly shape: readonly number[];
+};
+
+export function summarise({ score, holds, spread, shape }: Run): Summary {
   const judged = totalJudged(score);
   return {
     points: scorePoints(score),
@@ -50,6 +57,7 @@ export function summarise(
     accuracy: accuracy(score),
     hold: holdShare(holds),
     spread,
+    shape,
   };
 }
 

@@ -1,6 +1,7 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { MatchSummary } from "@/components/match-summary";
+import { emptyShape } from "@/lib/scoring/rail";
 import type { Summary } from "@/lib/scoring/summary";
 
 function summary(over: Partial<Summary> = {}): Summary {
@@ -11,6 +12,7 @@ function summary(over: Partial<Summary> = {}): Summary {
     streak: 10,
     hold: 1,
     spread: 0.02,
+    shape: emptyShape,
     ...over,
   };
 }
@@ -104,6 +106,49 @@ describe("MatchSummary", () => {
     const lit = behind.container.querySelectorAll(".bg-good\\/5");
     expect(lit).toHaveLength(1);
     expect(lit[0]?.textContent).toContain("them");
+  });
+
+  it("draws the run's timing once there is any", () => {
+    const shape = [0, 1, 4, 9, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const { container } = render(
+      <MatchSummary
+        mine={summary({ shape })}
+        theirs={null}
+        myName="you"
+        theirName=""
+        coop={false}
+      />,
+    );
+    expect(container.querySelectorAll("path")).toHaveLength(1);
+  });
+
+  it("draws both runs when there are two", () => {
+    const shape = [0, 1, 4, 9, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const { container } = render(
+      <MatchSummary
+        mine={summary({ shape })}
+        theirs={summary({ shape })}
+        myName="you"
+        theirName="them"
+        coop={false}
+      />,
+    );
+    expect(container.querySelectorAll("path")).toHaveLength(2);
+  });
+
+  // A run that scored nothing has no shape, and an empty chart reads as a flat
+  // line the player might take for a result.
+  it("draws nothing when no note was judged", () => {
+    const { container } = render(
+      <MatchSummary
+        mine={summary()}
+        theirs={null}
+        myName="you"
+        theirName=""
+        coop={false}
+      />,
+    );
+    expect(container.querySelectorAll("path")).toHaveLength(0);
   });
 
   it("names every row it shows a number for", () => {

@@ -13,7 +13,6 @@ function summary(over: Partial<Summary> = {}): Summary {
     notes: 1,
     accuracy: 1,
     streak: 8,
-    hold: 1,
     spread: 0.02,
     shape: emptyShape,
     ...over,

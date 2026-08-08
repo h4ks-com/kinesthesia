@@ -10,7 +10,6 @@ function summary(over: Partial<Summary> = {}): Summary {
     notes: 1,
     accuracy: 1,
     streak: 10,
-    hold: 1,
     spread: 0.02,
     shape: emptyShape,
     ...over,
@@ -54,7 +53,7 @@ describe("MatchSummary", () => {
   it("reads the shares as whole percentages", () => {
     const { container } = render(
       <MatchSummary
-        mine={summary({ notes: 0.9612, hold: 0.7143 })}
+        mine={summary({ notes: 0.9612 })}
         theirs={null}
         myName="you"
         theirName=""
@@ -62,7 +61,6 @@ describe("MatchSummary", () => {
       />,
     );
     expect(shown(container)).toContain("96%");
-    expect(shown(container)).toContain("71%");
   });
 
   it("reads timing in milliseconds, not seconds", () => {
@@ -161,7 +159,7 @@ describe("MatchSummary", () => {
         coop={false}
       />,
     );
-    for (const label of ["notes", "streak", "hold", "timing"]) {
+    for (const label of ["notes", "streak", "timing"]) {
       expect(shown(container)).toContain(label);
     }
   });

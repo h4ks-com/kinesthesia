@@ -11,7 +11,6 @@ const rows = [
     read: (run: Summary) => `${Math.round(run.notes * 100)}%`,
   },
   { label: "streak", read: (run: Summary) => String(run.streak) },
-  { label: "hold", read: (run: Summary) => `${Math.round(run.hold * 100)}%` },
   {
     label: "timing",
     read: (run: Summary) => `${Math.round(run.spread * 1000)}ms`,
@@ -134,6 +133,18 @@ function TimingShape({
         <span>on the beat</span>
         <span>late</span>
       </p>
+      {theirs === null ? null : (
+        <p className="mt-1.5 flex gap-3 font-mono text-[10px]">
+          <span className="flex items-center gap-1 text-accent">
+            <span className="h-0.5 w-3 rounded-full bg-accent" />
+            you
+          </span>
+          <span className="flex items-center gap-1 text-warn">
+            <span className="h-0.5 w-3 rounded-full bg-warn" />
+            opponent
+          </span>
+        </p>
+      )}
     </div>
   );
 }

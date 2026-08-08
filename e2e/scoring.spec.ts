@@ -1,5 +1,10 @@
 import { expect, type Page, test } from "@playwright/test";
-import { playerQuery, serveFixture } from "./fixture";
+import {
+  isStruckKey,
+  litKeyCentre,
+  playerQuery,
+  serveFixture,
+} from "./fixture";
 
 /** Every white key the computer keyboard reaches, so a run of them is certain
  * to include whatever the song is asking for. */
@@ -56,4 +61,45 @@ test("a key nothing asked for is judged, not ignored", async ({ page }) => {
   await expect(page.locator(".pop")).toHaveCount(0);
   await playAlong(page, 1);
   await expect(page.locator(".pop").first()).toHaveText(/Miss|Perfect|Good/);
+});
+
+// The roll used to sink and shadow keys the song was sounding, which reads as
+// the game pressing them for you.
+test("watching never presses a key for you", async ({ page }) => {
+  test.setTimeout(120_000);
+  await serveFixture(page);
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto(`/watch?${playerQuery()}`);
+  await expect(page.locator("canvas").first()).toBeVisible();
+  await page.getByRole("button", { name: /play/i }).first().click();
+  await page.waitForTimeout(3400);
+
+  const lit = await litKeyCentre(page);
+  expect(lit).not.toBeNull();
+  // A key the song is sounding carries its part's colour without wearing the
+  // full-strength one a hand puts on it.
+  expect(await isStruckKey(page, lit ?? 0)).toBe(false);
+});
+
+test("the rail rides the right of both rolls, whatever the width", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await serveFixture(page);
+  for (const width of [1400, 620]) {
+    await page.setViewportSize({ width, height: 820 });
+    await page.goto(`/learn?${playerQuery()}&tracks=0`);
+    await expect(page.locator("canvas").first()).toBeVisible();
+    await page.getByRole("button", { name: /play/i }).first().click();
+    await playAlong(page, 1);
+    const rail = page.locator("[data-rail]").first();
+    await expect(rail).toBeVisible();
+    const box = await rail.boundingBox();
+    // Upright at every width, and against the right edge of the roll.
+    expect(box?.height ?? 0).toBeGreaterThan(box?.width ?? 0);
+    const roll = await page.locator("canvas").first().boundingBox();
+    expect(box?.x ?? 0).toBeGreaterThan(
+      (roll?.x ?? 0) + (roll?.width ?? 0) / 2,
+    );
+  }
 });

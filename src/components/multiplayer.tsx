@@ -267,11 +267,9 @@ export function Multiplayer({
         }
         if (raw.kind === "hit") {
           hitSeqRef.current += 1;
-          // Their verdict crosses the wire, not how near the beat they were:
-          // the rail reads this side's own habit.
           setTheirHit({
             judgement: raw.judgement,
-            away: null,
+            away: raw.away ?? null,
             seq: hitSeqRef.current,
           });
         }
@@ -578,8 +576,12 @@ export function Multiplayer({
     } satisfies MatchMessage);
   }, []);
 
-  const onHit = useCallback((judgement: Judgement) => {
-    linkRef.current?.send({ kind: "hit", judgement } satisfies MatchMessage);
+  const onHit = useCallback((judgement: Judgement, away: number | null) => {
+    linkRef.current?.send({
+      kind: "hit",
+      judgement,
+      away,
+    } satisfies MatchMessage);
   }, []);
 
   const opponentPosition = useCallback(
@@ -665,7 +667,9 @@ export function Multiplayer({
               theirPoints={theirPoints}
               mySummary={mySummary}
               theirSummary={theirSummary}
-              opponentName={opponent?.name ?? "them"}
+              // Named by role: an account name reads as ambiguous beside "you", and
+              // which side is which is the only thing the card needs to say.
+              opponentName="opponent"
               coop={coop}
               opponentReady={theirReady}
               opponentDone={opponentFinished}

@@ -113,6 +113,24 @@ async function litWidth(page: Page, top: number): Promise<number> {
   }, top);
 }
 
+/** The lit width once two readings running agree on it, so a bar still being
+ * drawn is never the measurement everything after is compared against. */
+async function settledWidth(page: Page, top: number): Promise<number> {
+  let last = 0;
+  await expect
+    .poll(
+      async () => {
+        const now = await litWidth(page, top);
+        const settled = now > 0 && now === last;
+        last = now;
+        return settled;
+      },
+      { timeout: 15_000, intervals: [250] },
+    )
+    .toBe(true);
+  return last;
+}
+
 async function open(page: Page): Promise<number> {
   await fakeDevice(page);
   await page.goto("/play");
@@ -132,22 +150,19 @@ async function open(page: Page): Promise<number> {
 test("a wheel the device sends reaches the roll", async ({ page }) => {
   const top = await open(page);
   await page.evaluate(() => window.sendMidi([0x90, 60, 100]));
-  await page.waitForTimeout(1400);
-  const straight = await litWidth(page, top);
+  const straight = await settledWidth(page, top);
 
   await page.evaluate(() => window.sendMidi([0xe0, 0x7f, 0x7f]));
-  await page.waitForTimeout(600);
-
-  expect(await litWidth(page, top)).toBeGreaterThan(straight + 10);
+  await expect
+    .poll(async () => litWidth(page, top), { timeout: 15_000 })
+    .toBeGreaterThan(straight + 10);
 });
 
 test("a wheel on another channel leaves the note alone", async ({ page }) => {
   const top = await open(page);
   await page.evaluate(() => window.sendMidi([0x90, 60, 100]));
-  await page.waitForTimeout(1400);
-  const straight = await litWidth(page, top);
-
   // Nothing lit would satisfy the comparison below on its own.
+  const straight = await settledWidth(page, top);
   expect(straight).toBeGreaterThan(0);
 
   // The wheels are channel wide, so a bend on channel 2 must not touch a note

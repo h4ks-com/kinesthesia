@@ -88,8 +88,11 @@ test("typing a song name still searches rather than opening anything", async ({
   page,
 }) => {
   await openHome(page);
+  // The search going out is what says the name was read as a name, and it is a
+  // firmer thing to wait on than a span of time.
+  const searched = page.waitForRequest(/\/api\/midi\/search\?/);
   await page.getByLabel(search).fill("moonlight");
   await page.getByLabel(search).press("Enter");
-  await page.waitForTimeout(400);
+  await searched;
   expect(page.url()).not.toContain("/watch");
 });

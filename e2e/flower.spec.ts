@@ -2,18 +2,25 @@ import { expect, test } from "@playwright/test";
 import { Midi } from "@tonejs/midi";
 import { seenTour } from "./fixture";
 
-/** Major chords then minor ones, so the meadow has something to answer to. */
+const majorBars = 6;
+const minorBars = 20;
+const turnsMinor = 2 + majorBars;
+
+/** Major chords then minor ones, so the meadow has something to answer to. The
+ * minor stretch is the long one: the meadow drains over frames rather than over
+ * song time, and a loaded machine draws few of them a second, so a short one
+ * ends before the fall it is there to show. */
 function chordSong(): Uint8Array {
   const midi = new Midi();
   const track = midi.addTrack();
   let at = 2;
-  for (let bar = 0; bar < 6; bar += 1) {
+  for (let bar = 0; bar < majorBars; bar += 1) {
     for (const pitch of [60, 64, 67]) {
       track.addNote({ midi: pitch, time: at, duration: 0.9, velocity: 0.8 });
     }
     at += 1;
   }
-  for (let bar = 0; bar < 6; bar += 1) {
+  for (let bar = 0; bar < minorBars; bar += 1) {
     for (const pitch of [57, 60, 64]) {
       track.addNote({ midi: pitch, time: at, duration: 0.9, velocity: 0.8 });
     }
@@ -43,7 +50,6 @@ test("the flower meadow colours on major and fades on minor", async ({
     `/watch?url=${encodeURIComponent("https://example.test/chords.mid")}&name=Chords&skin=flower`,
   );
   await page.locator("canvas").first().waitFor({ state: "visible" });
-  await page.waitForTimeout(1200);
 
   /** How much colour the background layer carries, and how bright it gets. */
   const read = async () =>
@@ -101,18 +107,20 @@ test("the flower meadow colours on major and fades on minor", async ({
       .toBeGreaterThanOrEqual(seconds);
   };
 
+  // Nothing about the resting meadow can be read off a layer that has yet to
+  // paint, and every later reading is measured against this one.
+  await expect
+    .poll(async () => (await read()).lit, { timeout: 15000, intervals: [500] })
+    .toBeGreaterThan(0);
   const atRest = await read();
   await page.getByRole("button", { name: "Play", exact: true }).click();
-  // Six bars of C major run from the second second, so this lands inside them.
-  await reached(7);
+  // The last major bar, so the meadow has had every one of them to fill on.
+  await reached(turnsMinor - 1);
   const afterMajor = await read();
 
-  // The song turns minor halfway through, and the meadow should fall back. Read
-  // well after the turn, since the meadow drains slower than it fills.
-  await reached(13);
-  const afterMinor = await read();
+  await reached(turnsMinor + 1);
   console.log(
-    `### rest=${JSON.stringify(atRest)} afterMajor=${JSON.stringify(afterMajor)} afterMinor=${JSON.stringify(afterMinor)}`,
+    `### rest=${JSON.stringify(atRest)} afterMajor=${JSON.stringify(afterMajor)}`,
   );
   console.log(`### errors=${JSON.stringify(errors.slice(0, 2))}`);
   expect(errors).toHaveLength(0);
@@ -124,6 +132,13 @@ test("the flower meadow colours on major and fades on minor", async ({
   // the music turned would be competing with the notes rather than sitting
   // behind them.
   expect(afterMajor.luma - atRest.luma).toBeLessThan(30);
-  // And falls back once the music turns, rather than only ever climbing.
-  expect(afterMinor.colour).toBeLessThan(afterMajor.colour);
+  // And falls back once the music turns, rather than only ever climbing. The
+  // meadow drains slower than it fills, and how many frames that takes belongs
+  // to the machine, so the fall is waited for rather than sampled at a moment.
+  await expect
+    .poll(async () => (await read()).colour, {
+      timeout: 60000,
+      intervals: [250],
+    })
+    .toBeLessThan(afterMajor.colour);
 });

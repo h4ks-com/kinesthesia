@@ -4,16 +4,44 @@ import { playerQuery, serveFixture, songName, songUrl } from "./fixture";
 const skip = (page: Page) =>
   page.getByRole("button", { name: "Skip tutorial" });
 
+/** What keeps a walkthrough from coming back is the note that it was seen, so
+ * that note is what a reload waits on rather than a span of time. */
+async function marked(
+  page: Page,
+  mode: "watch" | "learn" | "multiplayer",
+): Promise<void> {
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (key) => localStorage.getItem(`kinesthesia:tour:${key}`),
+        mode,
+      ),
+    )
+    .not.toBeNull();
+}
+
+/** The step being shown, or null once the walkthrough has finished. */
+async function step(page: Page): Promise<string | null> {
+  const title = page.locator("#walkthrough-title");
+  return (await title.count()) === 0 ? null : await title.textContent();
+}
+
+/** Waits for the walkthrough to leave a step, so a reading is never taken of
+ * the one that was already on screen when Next was clicked. */
+async function leftStep(page: Page, from: string | null): Promise<void> {
+  await expect.poll(async () => step(page), { timeout: 15_000 }).not.toBe(from);
+}
+
 async function walkToEnd(page: Page): Promise<string[]> {
   const seen: string[] = [];
   for (let guard = 0; guard < 12; guard += 1) {
-    const title = page.locator("#walkthrough-title");
-    if ((await title.count()) === 0) {
+    const showing = await step(page);
+    if (showing === null) {
       break;
     }
-    seen.push((await title.textContent()) ?? "");
-    await page.waitForTimeout(250);
+    seen.push(showing);
     await page.getByRole("button", { name: /^(Next|Done)$/ }).click();
+    await leftStep(page, showing);
   }
   return seen;
 }
@@ -31,9 +59,9 @@ test("the walkthrough runs on a first visit, then stays gone", async ({
   await expect(page.locator("#walkthrough-title")).toHaveCount(0);
 
   // A returning visitor is not shown it again.
+  await marked(page, "watch");
   await page.reload();
   await expect(page.locator("canvas")).toBeVisible();
-  await page.waitForTimeout(1000);
   await expect(page.locator("#walkthrough-title")).toHaveCount(0);
 });
 
@@ -46,9 +74,9 @@ test("skipping remembers it, and the help button replays it", async ({
   await skip(page).click();
   await expect(page.locator("#walkthrough-title")).toHaveCount(0);
 
+  await marked(page, "learn");
   await page.reload();
   await expect(page.locator("canvas")).toBeVisible();
-  await page.waitForTimeout(1000);
   await expect(page.locator("#walkthrough-title")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Tutorial", exact: true }).click();
@@ -95,14 +123,14 @@ test("the tour opens the tracks and points inside them", async ({ page }) => {
     page.getByRole("button", { name: /Play .* yourself/ }).first(),
   ).toBeVisible();
 
-  const advanceTo = async (title: string) => {
-    const heading = page.locator("#walkthrough-title");
+  const advanceTo = async (title: string): Promise<void> => {
     for (let guard = 0; guard < 8; guard += 1) {
-      if ((await heading.textContent()) === title) {
+      const showing = await step(page);
+      if (showing === title) {
         return;
       }
       await page.getByRole("button", { name: /^(Next|Done)$/ }).click();
-      await page.waitForTimeout(250);
+      await leftStep(page, showing);
     }
     throw new Error(`never reached ${title}`);
   };
@@ -133,34 +161,37 @@ test("on a phone the walkthrough fits and never covers what it points at", async
   ).toBeVisible();
 
   for (let guard = 0; guard < 12; guard += 1) {
-    if ((await page.locator("#walkthrough-title").count()) === 0) {
+    const showing = await step(page);
+    if (showing === null) {
       break;
     }
-    // The spotlight glides between steps, so read positions once it settles.
-    await page.waitForTimeout(300);
-    const clear = await page.evaluate(() => {
-      const dlg = document
-        .querySelector('[role="dialog"]')
-        ?.getBoundingClientRect();
-      const spot = document
-        .querySelector('.z-\\[70\\] > div[aria-hidden="true"]')
-        ?.getBoundingClientRect();
-      if (dlg === undefined || spot === undefined) {
-        return false;
-      }
-      const onScreen =
-        dlg.top >= -1 &&
-        dlg.bottom <= window.innerHeight + 1 &&
-        dlg.left >= -1 &&
-        dlg.right <= window.innerWidth + 1;
-      const apart =
-        dlg.right < spot.left ||
-        dlg.left > spot.right ||
-        dlg.bottom < spot.top ||
-        dlg.top > spot.bottom;
-      return onScreen && apart;
-    });
-    expect(clear).toBe(true);
+    // The spotlight glides between steps, so this waits for it to land rather
+    // than guessing how long the glide takes on this machine.
+    const clear = async (): Promise<boolean> =>
+      page.evaluate(() => {
+        const dlg = document
+          .querySelector('[role="dialog"]')
+          ?.getBoundingClientRect();
+        const spot = document
+          .querySelector('.z-\\[70\\] > div[aria-hidden="true"]')
+          ?.getBoundingClientRect();
+        if (dlg === undefined || spot === undefined) {
+          return false;
+        }
+        const onScreen =
+          dlg.top >= -1 &&
+          dlg.bottom <= window.innerHeight + 1 &&
+          dlg.left >= -1 &&
+          dlg.right <= window.innerWidth + 1;
+        const apart =
+          dlg.right < spot.left ||
+          dlg.left > spot.right ||
+          dlg.bottom < spot.top ||
+          dlg.top > spot.bottom;
+        return onScreen && apart;
+      });
+    await expect.poll(clear, { timeout: 15_000 }).toBe(true);
     await page.getByRole("button", { name: /^(Next|Done)$/ }).click();
+    await leftStep(page, showing);
   }
 });

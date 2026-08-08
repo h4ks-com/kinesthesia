@@ -9,6 +9,11 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: isCi,
   retries: isCi ? 1 : 0,
+  // A background runs its shader in a worker and is switched off when the frame
+  // clock starves, so oversubscribing the machine reads as a device that cannot
+  // run one. Three pages at once costs no wall clock here and leaves the
+  // machine usable.
+  workers: isCi ? 2 : 3,
   // The github reporter annotates the run but writes nothing to disk, so a
   // failure there left no trace to read afterwards.
   reporter: isCi ? [["github"], ["html", { open: "never" }]] : "list",

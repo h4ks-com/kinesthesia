@@ -8,6 +8,7 @@ import {
   playerQuery,
   reachBarLeft,
   serveFixture,
+  settingStored,
   songName,
 } from "./fixture";
 
@@ -185,7 +186,7 @@ test("key width is remembered across different songs", async ({ page }) => {
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByLabel("Piano key width").fill("60");
   await page.keyboard.press("Escape");
-  await page.waitForTimeout(400);
+  await settingStored(page, "keyWidth", 60);
 
   await page.goto(
     `/learn?url=${encodeURIComponent("https://example.test/other.mid")}&name=Other`,
@@ -357,9 +358,10 @@ test("a settled write does not undo focus mode", async ({ page }) => {
   await page.getByRole("button", { name: "Focus mode" }).click();
 
   await expect(page).toHaveURL(/focus=1/);
-  await page.waitForTimeout(600);
-  await expect(page).toHaveURL(/focus=1/);
+  // The speed reaching the link is the delayed write landing, so that is what
+  // the focus is read back after rather than a span of time.
   await expect(page).toHaveURL(/speed=0.5/);
+  await expect(page).toHaveURL(/focus=1/);
 });
 
 test("a focus link whose song fails still offers a way out", async ({

@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import { playerQuery, seenTour, serveFixture } from "./fixture";
+import { playerQuery, seenTour, serveFixture, settingStored } from "./fixture";
 
 /** A solid red picture, so a pixel read says plainly whether it was drawn and
  * what was done to its brightness. */
@@ -66,11 +66,21 @@ async function open(page: Page, skin: string | null): Promise<void> {
   await page.waitForTimeout(1200);
 }
 
+/** How long a machine may take to fetch, decode and draw a picture. Waited for
+ * rather than slept on, since that span is the machine's business. */
+const drawTimeout = 15_000;
+
+async function drawn(page: Page): Promise<void> {
+  await expect
+    .poll(async () => reddest(page), { timeout: drawTimeout })
+    .toBeGreaterThan(100);
+}
+
 test("a picture from a trusted host is drawn behind the notes", async ({
   page,
 }) => {
   await open(page, "url(https://example.test/dot.png)");
-  expect(await reddest(page)).toBeGreaterThan(100);
+  await drawn(page);
 });
 
 test("the plain roll has no picture on it", async ({ page }) => {
@@ -102,11 +112,13 @@ test("a host the deployment does not trust is never even asked", async ({
 
 test("brightness darkens the picture that is drawn", async ({ page }) => {
   await open(page, "url(https://example.test/dot.png)");
+  await drawn(page);
   const full = await reddest(page);
   await open(page, "url(https://example.test/dot.png) brightness(30%)");
-  const dimmed = await reddest(page);
-  expect(dimmed).toBeGreaterThan(0);
-  expect(dimmed).toBeLessThan(full);
+  await expect
+    .poll(async () => reddest(page), { timeout: drawTimeout })
+    .toBeGreaterThan(0);
+  expect(await reddest(page)).toBeLessThan(full);
 });
 
 test("a picture stays open to be shaped, and a shipped one is the whole choice", async ({
@@ -186,6 +198,24 @@ async function column(page: Page): Promise<string> {
   });
 }
 
+/** The column once two readings running agree on it, so a sample taken to be
+ * compared against a later one is never a frame of travel behind. */
+async function stillColumn(page: Page): Promise<string> {
+  let last = await column(page);
+  await expect
+    .poll(
+      async () => {
+        const now = await column(page);
+        const settled = now === last;
+        last = now;
+        return settled;
+      },
+      { timeout: drawTimeout },
+    )
+    .toBe(true);
+  return last;
+}
+
 test("a travelling picture moves with the song and stops when it does", async ({
   page,
 }) => {
@@ -198,7 +228,9 @@ test("a travelling picture moves with the song and stops when it does", async ({
     )}`,
   );
   await page.locator("canvas").first().waitFor({ state: "visible" });
-  await page.waitForTimeout(900);
+  await expect
+    .poll(async () => column(page), { timeout: drawTimeout })
+    .toContain("1");
 
   // Standing still before a note has been played.
   const before = await column(page);
@@ -206,13 +238,12 @@ test("a travelling picture moves with the song and stops when it does", async ({
   expect(await column(page)).toBe(before);
 
   await page.getByRole("button", { name: "Play", exact: true }).click();
-  await page.waitForTimeout(1500);
-  const playing = await column(page);
-  expect(playing).not.toBe(before);
+  await expect
+    .poll(async () => column(page), { timeout: drawTimeout })
+    .not.toBe(before);
 
   await page.getByRole("button", { name: "Pause" }).click();
-  await page.waitForTimeout(400);
-  const paused = await column(page);
+  const paused = await stillColumn(page);
   await page.waitForTimeout(1500);
   expect(await column(page)).toBe(paused);
 });
@@ -311,12 +342,10 @@ test("a picture survives the page being reloaded", async ({ page }) => {
 
   // A choice is written down a moment after the last change, and a link cannot
   // carry a picture held here, so the reload has only that write to read.
-  await page.waitForTimeout(600);
+  await settingStored(page, "skin", "picture");
   await page.reload();
   await page.locator("canvas").first().waitFor({ state: "visible" });
-  await page.waitForTimeout(1200);
-  // Chosen before the reload, so it is still what is drawn after one.
-  expect(await reddest(page)).toBeGreaterThan(100);
+  await drawn(page);
 });
 
 test.describe("with a system asking for less movement", () => {
@@ -333,9 +362,7 @@ test.describe("with a system asking for less movement", () => {
       )}`,
     );
     await page.locator("canvas").first().waitFor({ state: "visible" });
-    await page.waitForTimeout(1200);
-
-    expect(await reddest(page)).toBeGreaterThan(100);
+    await drawn(page);
 
     const before = await column(page);
     expect(before).not.toBe("");
@@ -343,8 +370,9 @@ test.describe("with a system asking for less movement", () => {
     expect(await column(page)).toBe(before);
 
     await page.getByRole("button", { name: "Play", exact: true }).click();
-    await page.waitForTimeout(1800);
-    expect(await column(page)).not.toBe(before);
+    await expect
+      .poll(async () => column(page), { timeout: drawTimeout })
+      .not.toBe(before);
   });
 });
 

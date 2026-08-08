@@ -16,6 +16,9 @@ const noteAt = 4;
 const noteLength = 0.25;
 const pedalUp = 8;
 
+/** How long a machine may take to redraw the keybed after a seek. */
+const repaint = 10_000;
+
 function pedalledMidi(): Uint8Array {
   const midi = new Midi();
   const track = midi.addTrack();
@@ -70,13 +73,15 @@ test("a pedalled note stops lighting its key once the hand leaves", async ({
 
   // Sounding: the key wears its track colour.
   await seek.fill(String(noteAt));
-  await page.waitForTimeout(300);
-  expect(await litKeys(page, centres, litRow)).toBeGreaterThan(0);
+  await expect
+    .poll(async () => litKeys(page, centres, litRow), { timeout: repaint })
+    .toBeGreaterThan(0);
 
   // Held by the pedal alone: still down, but the light belongs to the strike.
   await seek.fill("6");
-  await page.waitForTimeout(300);
-  expect(await litKeys(page, centres, litRow)).toBe(0);
+  await expect
+    .poll(async () => litKeys(page, centres, litRow), { timeout: repaint })
+    .toBe(0);
 
   // Well above the keys the roll must be empty: the written note ended a second
   // ago, so the pedal must not have drawn a bar up there.
@@ -99,15 +104,14 @@ test("the key stays dark from the note ending until the next one lands", async (
   const row = height - 40;
   const seek = page.getByRole("slider", { name: "Song position" });
 
-  const litAt = async (at: string): Promise<number> => {
-    await seek.fill(at);
-    await page.waitForTimeout(300);
-    return litKeys(page, centres, row);
-  };
+  const lit = () => litKeys(page, centres, row);
 
   // All three in one context, so the dark assertions cannot pass by the key
   // never having lit at all.
-  expect(await litAt(String(noteAt))).toBeGreaterThan(0);
-  expect(await litAt("6")).toBe(0);
-  expect(await litAt(String(pedalUp + 2))).toBe(0);
+  await seek.fill(String(noteAt));
+  await expect.poll(lit, { timeout: repaint }).toBeGreaterThan(0);
+  await seek.fill("6");
+  await expect.poll(lit, { timeout: repaint }).toBe(0);
+  await seek.fill(String(pedalUp + 2));
+  await expect.poll(lit, { timeout: repaint }).toBe(0);
 });

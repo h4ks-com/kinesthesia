@@ -148,26 +148,28 @@ test("choosing one draws it behind the keys", async ({ page }) => {
   test.setTimeout(120000);
   await openPicker(page);
   await page.getByRole("button", { name: /Magenta/ }).click();
-  await page.waitForTimeout(2500);
 
-  const wash = await page.evaluate(() => {
-    const layers = [...document.querySelectorAll("canvas")].filter(
-      (c) => c.getAttribute("role") !== "img" && c.width > 400,
-    );
-    for (const canvas of layers) {
-      const ctx = canvas.getContext("2d");
-      if (ctx === null) continue;
-      const [r, g, b, a] = ctx.getImageData(
-        Math.round(canvas.width / 2),
-        Math.round(canvas.height / 4),
-        1,
-        1,
-      ).data;
-      if ((a ?? 0) > 8 && (r ?? 0) > 120 && (b ?? 0) > 100 && (g ?? 0) < 80) {
-        return true;
+  // How long a worker takes to start, build its shader and paint is the
+  // machine's business, so the wash is waited for rather than slept on.
+  const wash = async (): Promise<boolean> =>
+    page.evaluate(() => {
+      const layers = [...document.querySelectorAll("canvas")].filter(
+        (c) => c.getAttribute("role") !== "img" && c.width > 400,
+      );
+      for (const canvas of layers) {
+        const ctx = canvas.getContext("2d");
+        if (ctx === null) continue;
+        const [r, g, b, a] = ctx.getImageData(
+          Math.round(canvas.width / 2),
+          Math.round(canvas.height / 4),
+          1,
+          1,
+        ).data;
+        if ((a ?? 0) > 8 && (r ?? 0) > 120 && (b ?? 0) > 100 && (g ?? 0) < 80) {
+          return true;
+        }
       }
-    }
-    return false;
-  });
-  expect(wash).toBe(true);
+      return false;
+    });
+  await expect.poll(wash, { timeout: 60_000, intervals: [500] }).toBe(true);
 });

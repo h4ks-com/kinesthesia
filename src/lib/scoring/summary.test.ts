@@ -14,7 +14,15 @@ function score(over: Partial<Score> = {}): Score {
 }
 
 function summary(over: Partial<Summary> = {}): Summary {
-  return { points: 0, notes: 1, streak: 0, hold: 1, spread: 0, ...over };
+  return {
+    points: 0,
+    notes: 1,
+    accuracy: 1,
+    streak: 0,
+    hold: 1,
+    spread: 0,
+    ...over,
+  };
 }
 
 describe("spreadOf", () => {
@@ -47,6 +55,14 @@ describe("summarise", () => {
     );
     expect(got.notes).toBeCloseTo(0.8, 10);
     expect(got.streak).toBe(5);
+  });
+
+  // The scores column has always held the weighted share, so a run of goods
+  // must not post as a run of perfects just because none were missed.
+  it("keeps the weighted share apart from the share not missed", () => {
+    const got = summarise(score({ good: 4 }), 0, emptyHolds, []);
+    expect(got.notes).toBe(1);
+    expect(got.accuracy).toBe(0.5);
   });
 
   it("says nothing was got through before a note is judged", () => {

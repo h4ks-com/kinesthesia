@@ -220,7 +220,12 @@ export function useGates({
     judgeRelease,
     holds,
     moveTo: useCallback(
-      (position: number) => openAt(gateIndexAt(gatesRef.current, position)),
+      (position: number) => {
+        // Whatever was under a hand belongs to where the song was, so a hold
+        // measured across a seek would count the jump as time held.
+        holdingRef.current.clear();
+        openAt(gateIndexAt(gatesRef.current, position));
+      },
       [openAt],
     ),
     reset: useCallback(() => {

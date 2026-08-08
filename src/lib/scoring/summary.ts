@@ -1,5 +1,5 @@
 import { type HoldTally, holdShare } from "@/lib/scoring/hold";
-import { type Score, totalJudged } from "@/lib/scoring/judge";
+import { accuracy, type Score, totalJudged } from "@/lib/scoring/judge";
 
 /** What a finished run is worth saying, in the five numbers a player can act
  * on. Counts of each verdict are left out on purpose: they say the same thing
@@ -10,6 +10,10 @@ export type Summary = {
    * song was got through. */
   readonly notes: number;
   readonly streak: number;
+  /** The weighted share the rest of the app records a run by, where a good is
+   * worth half a perfect. Kept beside `notes` because they answer different
+   * questions and one column already stores this one. */
+  readonly accuracy: number;
   /** Share of the held notes that were seen out. */
   readonly hold: number;
   /** How far from the beat a strike lands on average, in seconds, ignoring
@@ -50,6 +54,7 @@ export function summarise(
     points,
     notes: judged === 0 ? 0 : (judged - score.missed) / judged,
     streak: score.bestCombo,
+    accuracy: accuracy(score),
     hold: holdShare(holds),
     spread: spreadOf(timing),
   };

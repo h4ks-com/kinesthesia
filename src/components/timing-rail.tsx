@@ -10,7 +10,7 @@ const kept = 24;
 /** How long a tick stays before it starts going. */
 const linger = 1600;
 
-type Mark = { readonly seq: number; readonly at: number };
+type Mark = { readonly seq: number; readonly away: number };
 
 export type RailLie = "upright" | "flat";
 
@@ -21,20 +21,33 @@ export type RailLie = "upright" | "flat";
 export function TimingRail({ hit, lie }: { hit: Hit | null; lie: RailLie }) {
   const [marks, setMarks] = useState<readonly Mark[]>([]);
   const seen = useRef(0);
+  /** Every mark's own timer, held together rather than returned as this
+   * effect's cleanup: a new strike runs the last one's cleanup, which would
+   * cancel the removal of the mark before it and leave it on the rail. */
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(
+    () => () => {
+      for (const timer of timers.current) {
+        clearTimeout(timer);
+      }
+      timers.current = [];
+    },
+    [],
+  );
 
   useEffect(() => {
     if (hit === null || hit.seq === seen.current || hit.away === null) {
       return;
     }
     seen.current = hit.seq;
-    const mark = { seq: hit.seq, at: hit.away };
+    const mark = { seq: hit.seq, away: hit.away };
     setMarks((current) => [...current, mark].slice(-kept));
-    const timer = setTimeout(
-      () =>
-        setMarks((current) => current.filter((old) => old.seq !== mark.seq)),
-      linger,
+    timers.current.push(
+      setTimeout(() => {
+        setMarks((current) => current.filter((old) => old.seq !== mark.seq));
+      }, linger),
     );
-    return () => clearTimeout(timer);
   }, [hit]);
 
   if (marks.length === 0) {
@@ -42,7 +55,7 @@ export function TimingRail({ hit, lie }: { hit: Hit | null; lie: RailLie }) {
   }
 
   const upright = lie === "upright";
-  const mean = railMean(marks.map((mark) => mark.at));
+  const mean = railMean(marks.map((mark) => mark.away));
   const along = (fraction: number): string => `${fraction * 100}%`;
   const band = (width: number): React.CSSProperties =>
     upright
@@ -58,9 +71,7 @@ export function TimingRail({ hit, lie }: { hit: Hit | null; lie: RailLie }) {
           : "right-[14%] bottom-1.5 left-[14%] h-2.5"
       }`}
     >
-      <span
-        className={`absolute rounded-full bg-danger/25 ${upright ? "inset-x-0 inset-y-0" : "inset-x-0 inset-y-0"}`}
-      />
+      <span className="absolute inset-0 rounded-full bg-danger/25" />
       <span
         className={`absolute rounded-full bg-warn/30 ${upright ? "inset-x-0" : "inset-y-0"}`}
         style={band(goodBand)}
@@ -70,7 +81,7 @@ export function TimingRail({ hit, lie }: { hit: Hit | null; lie: RailLie }) {
         style={band(perfectBand)}
       />
       <span
-        className={`absolute bg-text/70 ${upright ? "-inset-x-1 h-px top-1/2" : "-inset-y-1 top-0 w-px left-1/2"}`}
+        className={`absolute bg-text/70 ${upright ? "-inset-x-1 top-1/2 h-px" : "-inset-y-1 left-1/2 w-px"}`}
       />
 
       {marks.map((mark) => (
@@ -79,8 +90,8 @@ export function TimingRail({ hit, lie }: { hit: Hit | null; lie: RailLie }) {
           className={`fade-out absolute rounded-sm bg-text ${upright ? "inset-x-[3px] h-[3px]" : "inset-y-[3px] w-[3px]"}`}
           style={
             upright
-              ? { top: along(railPlace(mark.at)) }
-              : { left: along(railPlace(mark.at)) }
+              ? { top: along(railPlace(mark.away)) }
+              : { left: along(railPlace(mark.away)) }
           }
         />
       ))}

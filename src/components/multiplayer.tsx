@@ -383,7 +383,7 @@ export function Multiplayer({
       setMyPoints(summary.points);
       setMySummary(summary);
       myStats.current = {
-        accuracy: summary.notes,
+        accuracy: summary.accuracy,
         bestCombo: summary.streak,
       };
       send({ kind: "finished", points: summary.points, summary });

@@ -4,7 +4,15 @@ import { MatchSummary } from "@/components/match-summary";
 import type { Summary } from "@/lib/scoring/summary";
 
 function summary(over: Partial<Summary> = {}): Summary {
-  return { points: 1000, notes: 1, streak: 10, hold: 1, spread: 0.02, ...over };
+  return {
+    points: 1000,
+    notes: 1,
+    accuracy: 1,
+    streak: 10,
+    hold: 1,
+    spread: 0.02,
+    ...over,
+  };
 }
 
 function shown(container: HTMLElement): string {

@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TimingRail } from "@/components/timing-rail";
 import { enoughForHabit } from "@/lib/scoring/rail";
@@ -72,11 +72,37 @@ describe("TimingRail", () => {
     expect(ticks(view.container, true)).toHaveLength(1);
   });
 
+  // The bug this replaces: each strike's cleanup cancelled the removal of the
+  // one before it, so every mark but the newest stayed on the rail for good.
+  it("lets go of every mark, not only the last one", () => {
+    const view = render(<TimingRail hit={hit(0.02, 1)} lie="upright" />);
+    for (let seq = 2; seq <= 6; seq += 1) {
+      view.rerender(<TimingRail hit={hit(0.02, seq)} lie="upright" />);
+    }
+    expect(ticks(view.container, true)).toHaveLength(6);
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
+    expect(view.container.firstChild).toBeNull();
+  });
+
+  it("keeps letting go when a strike answering nothing lands between", () => {
+    const view = render(<TimingRail hit={hit(0.02, 1)} lie="upright" />);
+    view.rerender(<TimingRail hit={hit(null, 2)} lie="upright" />);
+    view.rerender(<TimingRail hit={hit(0.03, 3)} lie="upright" />);
+    expect(ticks(view.container, true)).toHaveLength(2);
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
+    expect(view.container.firstChild).toBeNull();
+  });
+
   it("lets a mark go once it has aged out", () => {
     const view = render(<TimingRail hit={hit(0.02, 1)} lie="upright" />);
     expect(ticks(view.container, true)).toHaveLength(1);
-    vi.advanceTimersByTime(2000);
-    view.rerender(<TimingRail hit={hit(0.02, 1)} lie="upright" />);
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
     expect(view.container.firstChild).toBeNull();
   });
 

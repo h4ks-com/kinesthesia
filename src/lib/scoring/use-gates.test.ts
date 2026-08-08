@@ -230,6 +230,21 @@ describe("useGates", () => {
       expect(view.result.current.holds).toEqual({ kept: 0, letGo: 0 });
     });
 
+    it("forgets what was being held when the song is moved", () => {
+      const { view, settle } = bench([note(60, 1, 60, 2)], false);
+      settle(1);
+      act(() => {
+        view.result.current.judgeStrike(60, 1);
+      });
+      act(() => {
+        view.result.current.moveTo(40);
+      });
+      act(() => {
+        view.result.current.judgeRelease(60, 41);
+      });
+      expect(view.result.current.holds).toEqual({ kept: 0, letGo: 0 });
+    });
+
     it("forgets what was being held when the score is reset", () => {
       const { view, settle } = bench([note(60, 1, 60, 2)], false);
       settle(1);

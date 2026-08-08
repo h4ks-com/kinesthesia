@@ -1,5 +1,5 @@
 import type { Song, SongNote } from "@/lib/midi/song";
-import { isHold } from "@/lib/scoring/hold";
+import { holdFrom } from "@/lib/scoring/hold";
 import { lateWindow } from "@/lib/scoring/judge";
 
 const chordWindow = 0.03;
@@ -31,7 +31,7 @@ export function buildGates(notes: readonly SongNote[]): Gate[] {
     const last = gates[gates.length - 1];
     if (last !== undefined && note.start - last.start <= chordWindow) {
       const holds = new Map(last.holds);
-      if (isHold(length)) {
+      if (length >= holdFrom) {
         holds.set(note.pitch, length);
       }
       gates[gates.length - 1] = {
@@ -44,7 +44,7 @@ export function buildGates(notes: readonly SongNote[]): Gate[] {
     gates.push({
       start: note.start,
       pitches: [note.pitch],
-      holds: isHold(length) ? new Map([[note.pitch, length]]) : new Map(),
+      holds: length >= holdFrom ? new Map([[note.pitch, length]]) : new Map(),
     });
   }
   return gates;

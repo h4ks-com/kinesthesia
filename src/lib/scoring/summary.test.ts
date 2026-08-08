@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { emptyHolds } from "@/lib/scoring/hold";
 import { emptyScore, type Score } from "@/lib/scoring/judge";
 import { emptyShape } from "@/lib/scoring/rail";
 import {
@@ -19,7 +18,6 @@ function summary(over: Partial<Summary> = {}): Summary {
     notes: 1,
     accuracy: 1,
     streak: 0,
-    hold: 1,
     spread: 0,
     shape: emptyShape,
     ...over,
@@ -30,7 +28,7 @@ describe("summarise", () => {
   it("counts everything not missed as got through", () => {
     const got = summarise({
       score: score({ perfect: 6, good: 2, missed: 2, bestCombo: 5 }),
-      holds: emptyHolds,
+      bonus: 0,
       spread: 0,
       shape: emptyShape,
     });
@@ -43,7 +41,7 @@ describe("summarise", () => {
   it("keeps the weighted share apart from the share not missed", () => {
     const got = summarise({
       score: score({ good: 4 }),
-      holds: emptyHolds,
+      bonus: 0,
       spread: 0,
       shape: emptyShape,
     });
@@ -55,32 +53,29 @@ describe("summarise", () => {
     expect(
       summarise({
         score: emptyScore,
-        holds: emptyHolds,
+        bonus: 0,
         spread: 0,
         shape: emptyShape,
       }).notes,
     ).toBe(0);
   });
 
-  it("treats a song asking for no holds as nothing dropped", () => {
-    expect(
-      summarise({
-        score: score({ perfect: 4 }),
-        holds: emptyHolds,
-        spread: 0,
-        shape: emptyShape,
-      }).hold,
-    ).toBe(1);
-  });
-
-  it("carries the holds that were let go", () => {
-    const got = summarise({
+  // Holding pays into the same total the notes do, so the card reads one score
+  // rather than asking anyone to add two together.
+  it("carries the holding bonus inside the score", () => {
+    const bare = summarise({
       score: score({ perfect: 4 }),
-      holds: { kept: 3, letGo: 1 },
+      bonus: 0,
       spread: 0,
       shape: emptyShape,
     });
-    expect(got.hold).toBe(0.75);
+    const held = summarise({
+      score: score({ perfect: 4 }),
+      bonus: 250,
+      spread: 0,
+      shape: emptyShape,
+    });
+    expect(held.points).toBe(bare.points + 250);
   });
 });
 

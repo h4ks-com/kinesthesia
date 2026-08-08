@@ -1,4 +1,3 @@
-import { type HoldTally, holdShare } from "@/lib/scoring/hold";
 import {
   accuracy,
   type Score,
@@ -19,8 +18,6 @@ export type Summary = {
    * worth half a perfect. Kept beside `notes` because they answer different
    * questions and one column already stores this one. */
   readonly accuracy: number;
-  /** Share of the held notes that were seen out. */
-  readonly hold: number;
   /** How far from the beat a strike lands on average, in seconds, ignoring
    * which side of it. The number that comes down with practice. */
   readonly spread: number;
@@ -45,19 +42,19 @@ export type Rank = (typeof ranks)[number]["rank"] | typeof lowestRank;
  * assembles, so adding a measure never grows an argument list. */
 export type Run = {
   readonly score: Score;
-  readonly holds: HoldTally;
+  /** Points earned for keeping notes down, already inside `points`. */
+  readonly bonus: number;
   readonly spread: number;
   readonly shape: readonly number[];
 };
 
-export function summarise({ score, holds, spread, shape }: Run): Summary {
+export function summarise({ score, bonus, spread, shape }: Run): Summary {
   const judged = totalJudged(score);
   return {
-    points: scorePoints(score),
+    points: scorePoints(score) + bonus,
     notes: judged === 0 ? 0 : (judged - score.missed) / judged,
     streak: score.bestCombo,
     accuracy: accuracy(score),
-    hold: holdShare(holds),
     spread,
     shape,
   };

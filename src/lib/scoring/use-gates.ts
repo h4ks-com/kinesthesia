@@ -8,12 +8,7 @@ import {
   gateDeadline,
   gateIndexAt,
 } from "@/lib/scoring/gates";
-import {
-  emptyHolds,
-  type HoldTally,
-  judgeHold,
-  tallyHold,
-} from "@/lib/scoring/hold";
+import { droppedEarly, holdBonus } from "@/lib/scoring/hold";
 import {
   applyJudgement,
   emptyScore,
@@ -55,7 +50,8 @@ export type Gates = {
   /** Judges a key coming up, so a note asked to be held can be seen through or
    * dropped. A pitch nothing is holding is passed over. */
   judgeRelease: (pitch: number, position: number) => void;
-  holds: HoldTally;
+  /** Points earned so far for keeping notes down. */
+  bonus: number;
   moveTo: (position: number) => void;
   reset: () => void;
 };
@@ -82,7 +78,7 @@ export function useGates({
   const [score, setScore] = useState<Score>(emptyScore);
   const [waiting, setWaiting] = useState(false);
   const [lastHit, setLastHit] = useState<Hit | null>(null);
-  const [holds, setHolds] = useState<HoldTally>(emptyHolds);
+  const [bonus, setBonus] = useState(0);
   /** What is under a hand right now that the song asked to be held, and when it
    * was struck, so the release has something to measure against. */
   const holdingRef = useRef<Map<number, { at: number; length: number }>>(
@@ -223,9 +219,9 @@ export function useGates({
         return;
       }
       holdingRef.current.delete(pitch);
-      const verdict = judgeHold(holding.length, position - holding.at);
-      setHolds((current) => tallyHold(current, verdict));
-      if (verdict === "letGo") {
+      const kept = position - holding.at;
+      setBonus((current) => current + holdBonus(holding.length, kept));
+      if (droppedEarly(holding.length, kept)) {
         flag("letGo", null);
       }
     },
@@ -242,27 +238,23 @@ export function useGates({
     summary: useCallback(
       (at: number) => {
         const { total, count } = spreadRef.current;
-        // A song ends with the last chord still under a hand, so the holds that
-        // were never let go are settled against the end rather than left out of
-        // the tally, which would score a player for holding nothing.
-        let settled = holds;
+        // A song ends with the last chord still down, so what is still under a
+        // hand is paid for against the end rather than left unearned.
+        let earned = bonus;
         for (const holding of holdingRef.current.values()) {
-          settled = tallyHold(
-            settled,
-            judgeHold(holding.length, at - holding.at),
-          );
+          earned += holdBonus(holding.length, at - holding.at);
         }
         return summarise({
           score,
-          holds: settled,
+          bonus: earned,
           spread: count === 0 ? 0 : total / count,
           shape: shapeRef.current,
         });
       },
-      [score, holds],
+      [score, bonus],
     ),
     judgeRelease,
-    holds,
+    bonus,
     moveTo: useCallback(
       (position: number) => {
         // Whatever was under a hand belongs to where the song was, so a hold
@@ -275,7 +267,7 @@ export function useGates({
     reset: useCallback(() => {
       openAt(0);
       holdingRef.current.clear();
-      setHolds(emptyHolds);
+      setBonus(0);
       spreadRef.current = { total: 0, count: 0 };
       shapeRef.current = [...emptyShape];
       setScore(emptyScore);

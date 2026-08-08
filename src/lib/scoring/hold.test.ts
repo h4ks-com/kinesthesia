@@ -1,83 +1,69 @@
 import { describe, expect, it } from "vitest";
 import {
-  emptyHolds,
+  droppedEarly,
+  holdBonus,
   holdFrom,
-  holdSettled,
-  holdShare,
+  holdRate,
   holdSlack,
-  isHold,
-  judgeHold,
-  tallyHold,
+  worthSaying,
 } from "@/lib/scoring/hold";
 
-describe("isHold", () => {
-  it("passes over a note too short to hold", () => {
-    expect(isHold(0.1)).toBe(false);
-    expect(isHold(holdFrom - 0.01)).toBe(false);
+describe("holdBonus", () => {
+  it("pays nothing for a note let go before holding starts", () => {
+    expect(holdBonus(2, holdFrom / 2)).toBe(0);
+    expect(holdBonus(2, 0)).toBe(0);
   });
 
-  it("takes one exactly long enough", () => {
-    expect(isHold(holdFrom)).toBe(true);
+  it("pays nothing at the moment holding starts", () => {
+    expect(holdBonus(2, holdFrom)).toBe(0);
   });
 
-  it("takes anything longer", () => {
-    expect(isHold(4)).toBe(true);
-  });
-});
-
-describe("judgeHold", () => {
-  it("counts a note held the whole way", () => {
-    expect(judgeHold(2, 2)).toBe("kept");
+  it("pays for the time held past that", () => {
+    expect(holdBonus(2, holdFrom + 1)).toBe(holdRate);
   });
 
-  it("counts one let go inside the slack", () => {
-    expect(judgeHold(2, 2 * (1 - holdSlack) + 0.01)).toBe("kept");
+  it("pays more the longer it is kept down", () => {
+    expect(holdBonus(4, 3)).toBeGreaterThan(holdBonus(4, 1));
   });
 
-  it("calls out one let go before the slack begins", () => {
-    expect(judgeHold(2, 2 * (1 - holdSlack) - 0.01)).toBe("letGo");
+  // The song stops asking once the note is over, so leaning on a key cannot be
+  // farmed for points.
+  it("pays nothing extra past the end of the note", () => {
+    expect(holdBonus(1, 1)).toBe(holdBonus(1, 30));
   });
 
-  it("puts the line exactly where the slack starts", () => {
-    expect(judgeHold(2, holdSettled(2))).toBe("kept");
+  it("pays nothing for a note too short to hold at all", () => {
+    expect(holdBonus(0.1, 0.1)).toBe(0);
   });
 
-  // Letting go halfway is the case the whole thing exists for: today a note
-  // dropped at once scores the same as one seen out.
-  it("calls out a note dropped as soon as it was struck", () => {
-    expect(judgeHold(3, 0)).toBe("letGo");
-  });
-
-  it("asks nothing more of a key still down past the end", () => {
-    expect(judgeHold(2, 5)).toBe("kept");
-  });
-
-  it("scales the slack with the note rather than fixing it", () => {
-    // A quarter of a second off a four second note is nothing; off a half
-    // second note it is most of it.
-    expect(judgeHold(4, 3.75)).toBe("kept");
-    expect(judgeHold(0.5, 0.25)).toBe("letGo");
+  it("never pays a negative", () => {
+    expect(holdBonus(0.05, 5)).toBe(0);
   });
 });
 
-describe("tallying", () => {
-  it("starts owing nothing", () => {
-    expect(holdShare(emptyHolds)).toBe(1);
+describe("droppedEarly", () => {
+  it("says nothing about a short note, however fast it is let go", () => {
+    expect(droppedEarly(0.3, 0)).toBe(false);
+    expect(droppedEarly(worthSaying - 0.01, 0)).toBe(false);
   });
 
-  it("counts a song with no holds in it as nothing dropped", () => {
-    expect(holdShare({ kept: 0, letGo: 0 })).toBe(1);
+  // The complaint this exists to answer: it fired on nearly every note.
+  it("stays quiet across a run of ordinary notes let go a shade early", () => {
+    const ordinary = [0.3, 0.45, 0.5, 0.6, 0.8, 1.0];
+    for (const length of ordinary) {
+      expect(droppedEarly(length, length * 0.6)).toBe(false);
+    }
   });
 
-  it("adds each verdict to its own side", () => {
-    let tally = tallyHold(emptyHolds, "kept");
-    tally = tallyHold(tally, "kept");
-    tally = tallyHold(tally, "letGo");
-    expect(tally).toEqual({ kept: 2, letGo: 1 });
+  it("speaks up for a long note dropped near its start", () => {
+    expect(droppedEarly(3, 0.4)).toBe(true);
   });
 
-  it("shares out what was seen through", () => {
-    expect(holdShare({ kept: 3, letGo: 1 })).toBe(0.75);
-    expect(holdShare({ kept: 0, letGo: 2 })).toBe(0);
+  it("stays quiet when a long note is seen nearly out", () => {
+    expect(droppedEarly(3, 3 * (1 - holdSlack) + 0.01)).toBe(false);
+  });
+
+  it("stays quiet when a long note is held past its end", () => {
+    expect(droppedEarly(3, 9)).toBe(false);
   });
 });

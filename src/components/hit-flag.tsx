@@ -5,7 +5,7 @@ const label: Record<Verdict, string> = {
   perfect: "Perfect",
   good: "Good",
   miss: "Miss",
-  letGo: "Let go",
+  letGo: "Didn't hold note",
 };
 
 const tone: Record<Verdict, string> = {

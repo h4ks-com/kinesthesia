@@ -259,42 +259,83 @@ describe("useGates", () => {
   });
 
   describe("holding", () => {
-    it("counts a long note the player saw out", () => {
+    it("pays for a note kept down past where holding starts", () => {
       const { view, settle } = bench([note(60, 1, 60, 2)], false);
       settle(1);
       act(() => {
         view.result.current.judgeStrike(60, 1);
       });
       act(() => {
-        view.result.current.judgeRelease(60, 3);
+        view.result.current.judgeRelease(60, 2.5);
       });
-      expect(view.result.current.holds).toEqual({ kept: 1, letGo: 0 });
+      expect(view.result.current.bonus).toBeGreaterThan(0);
     });
 
-    it("calls out one dropped well before its end", () => {
-      const { view, settle } = bench([note(60, 1, 60, 2)], false);
+    // The bug the model replaces: a player who never touched a key was handed
+    // a full hold score.
+    it("pays nothing to a player who struck nothing", () => {
+      const { view, settle } = bench([note(60, 1, 60, 3)], false);
+      settle(1);
+      expect(view.result.current.summary(9).points).toBe(0);
+    });
+
+    it("pays nothing for a note let go at once", () => {
+      const { view, settle } = bench([note(60, 1, 60, 3)], false);
       settle(1);
       act(() => {
         view.result.current.judgeStrike(60, 1);
       });
       act(() => {
-        view.result.current.judgeRelease(60, 1.4);
+        view.result.current.judgeRelease(60, 1.05);
       });
-      expect(view.result.current.holds).toEqual({ kept: 0, letGo: 1 });
-      expect(view.result.current.lastHit?.judgement).toBe("letGo");
+      expect(view.result.current.bonus).toBe(0);
     });
 
-    // The whole point: today letting go at once scores the same as holding.
-    it("asks nothing of a note too short to hold", () => {
-      const { view, settle } = bench([note(60, 1, 60, 0.2)], false);
+    it("pays more the longer a note is kept down", () => {
+      const brief = bench([note(60, 1, 60, 4)], false);
+      brief.settle(1);
+      act(() => {
+        brief.view.result.current.judgeStrike(60, 1);
+      });
+      act(() => {
+        brief.view.result.current.judgeRelease(60, 1.6);
+      });
+
+      const long = bench([note(60, 1, 60, 4)], false);
+      long.settle(1);
+      act(() => {
+        long.view.result.current.judgeStrike(60, 1);
+      });
+      act(() => {
+        long.view.result.current.judgeRelease(60, 4);
+      });
+      expect(long.view.result.current.bonus).toBeGreaterThan(
+        brief.view.result.current.bonus,
+      );
+    });
+
+    it("keeps the bonus inside the score the card reads out", () => {
+      const { view, settle } = bench([note(60, 1, 60, 3)], false);
       settle(1);
       act(() => {
         view.result.current.judgeStrike(60, 1);
       });
       act(() => {
-        view.result.current.judgeRelease(60, 1.01);
+        view.result.current.judgeRelease(60, 4);
       });
-      expect(view.result.current.holds).toEqual({ kept: 0, letGo: 0 });
+      const bare = view.result.current.summary(9).points;
+      expect(bare).toBeGreaterThan(view.result.current.bonus);
+    });
+
+    it("pays for a note still down when the run ends", () => {
+      const { view, settle } = bench([note(60, 1, 60, 3)], false);
+      settle(1);
+      act(() => {
+        view.result.current.judgeStrike(60, 1);
+      });
+      expect(view.result.current.summary(4).points).toBeGreaterThan(
+        view.result.current.summary(1.1).points,
+      );
     });
 
     it("passes over a key coming up that nothing was holding", () => {
@@ -303,28 +344,7 @@ describe("useGates", () => {
       act(() => {
         view.result.current.judgeRelease(64, 2);
       });
-      expect(view.result.current.holds).toEqual({ kept: 0, letGo: 0 });
-    });
-
-    // A song ends with the last chord still down, so a hold left out of the
-    // tally would score a player for holding nothing.
-    it("settles a note still under a hand when the run ends", () => {
-      const { view, settle } = bench([note(60, 1, 60, 2)], false);
-      settle(1);
-      act(() => {
-        view.result.current.judgeStrike(60, 1);
-      });
-      expect(view.result.current.summary(3).hold).toBe(1);
-    });
-
-    it("counts one dropped before the end even if it was never released", () => {
-      const { view, settle } = bench([note(60, 1, 60, 2)], false);
-      settle(1);
-      act(() => {
-        view.result.current.judgeStrike(60, 1);
-      });
-      // The run ends a breath after the strike, so nothing was held.
-      expect(view.result.current.summary(1.2).hold).toBe(0);
+      expect(view.result.current.bonus).toBe(0);
     });
 
     it("forgets what was being held when the song is moved", () => {
@@ -339,22 +359,7 @@ describe("useGates", () => {
       act(() => {
         view.result.current.judgeRelease(60, 41);
       });
-      expect(view.result.current.holds).toEqual({ kept: 0, letGo: 0 });
-    });
-
-    it("forgets what was being held when the score is reset", () => {
-      const { view, settle } = bench([note(60, 1, 60, 2)], false);
-      settle(1);
-      act(() => {
-        view.result.current.judgeStrike(60, 1);
-      });
-      act(() => {
-        view.result.current.reset();
-      });
-      act(() => {
-        view.result.current.judgeRelease(60, 1.2);
-      });
-      expect(view.result.current.holds).toEqual({ kept: 0, letGo: 0 });
+      expect(view.result.current.bonus).toBe(0);
     });
   });
 });

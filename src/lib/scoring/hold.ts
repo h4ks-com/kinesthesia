@@ -1,48 +1,33 @@
-/** Shorter than this a note is struck rather than held, and asking anyone to
- * keep a key down for it would be asking them to notice something they cannot
- * feel. */
-export const holdFrom = 0.4;
+/** Past this a note is being held rather than struck, and the time beyond it is
+ * worth points. Short, because holding is a thing to be rewarded wherever it
+ * happens rather than a demand made of long notes. */
+export const holdFrom = 0.2;
 
-/** How much of the end a player may let go of and still be counted as having
- * held it. A key comes up before the ear says it should, and a hold that only
- * counted at its full length would fail almost everybody. */
-export const holdSlack = 0.15;
+/** Points a second of holding is worth, on the scale a judged note is scored
+ * on. Enough to be worth reaching for, far short of what playing the notes
+ * pays, since holding is the flourish and the notes are the song. */
+export const holdRate = 40;
 
-/** A note long enough to be worth holding. */
-export function isHold(length: number): boolean {
-  return length >= holdFrom;
+/** How much of a note's end may be let go of before anyone is told. A key comes
+ * up before the ear says it should, and calling that out on every note would
+ * teach nothing. */
+export const holdSlack = 0.25;
+
+/** A note long enough that dropping it early is worth saying. Well above where
+ * holding starts paying, so the reminder stays rare while the bonus is on
+ * offer everywhere. */
+export const worthSaying = 1.2;
+
+/** Points earned for keeping a note down, from the moment it counts as held.
+ * Nothing for a note let go before then, and nothing extra past its end: the
+ * song stops asking once the note is over. */
+export function holdBonus(length: number, held: number): number {
+  const counted = Math.min(held, length) - holdFrom;
+  return counted <= 0 ? 0 : Math.round(counted * holdRate);
 }
 
-/** The point a hold stops needing the key down. Past this the note is its own
- * ring rather than the player's work. */
-export function holdSettled(length: number): number {
-  return length * (1 - holdSlack);
-}
-
-export type HoldVerdict = "kept" | "letGo";
-
-/** Whether a hold was seen out. Overholding is free: a key still down when the
- * note ends costs nothing, and only letting go early is worth saying. */
-export function judgeHold(length: number, held: number): HoldVerdict {
-  return held >= holdSettled(length) ? "kept" : "letGo";
-}
-
-export type HoldTally = {
-  readonly kept: number;
-  readonly letGo: number;
-};
-
-export const emptyHolds: HoldTally = { kept: 0, letGo: 0 };
-
-export function tallyHold(tally: HoldTally, verdict: HoldVerdict): HoldTally {
-  return verdict === "kept"
-    ? { ...tally, kept: tally.kept + 1 }
-    : { ...tally, letGo: tally.letGo + 1 };
-}
-
-/** How much of the holding a player saw through, 0 to 1. One where a song asked
- * for no holds at all, since nothing was dropped. */
-export function holdShare(tally: HoldTally): number {
-  const total = tally.kept + tally.letGo;
-  return total === 0 ? 1 : tally.kept / total;
+/** Whether letting go here is worth telling the player about. Only a note long
+ * enough to have been obviously held, dropped well before its end. */
+export function droppedEarly(length: number, held: number): boolean {
+  return length >= worthSaying && held < length * (1 - holdSlack);
 }

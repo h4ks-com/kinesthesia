@@ -39,6 +39,8 @@ const ranks = [
 
 export const lowestRank = "D";
 
+export type Rank = (typeof ranks)[number]["rank"] | typeof lowestRank;
+
 /** Everything a run leaves behind, which the gates hold and nothing else
  * assembles, so adding a measure never grows an argument list. */
 export type Run = {
@@ -63,7 +65,7 @@ export function summarise({ score, holds, spread, shape }: Run): Summary {
 
 /** A run has to be both accurate and tidy to rank well, so a player cannot
  * mash their way to the top of one measure while ignoring the other. */
-export function rankOf(summary: Summary): string {
+export function rankOf(summary: Summary): Rank {
   for (const bar of ranks) {
     if (summary.notes >= bar.notes && summary.spread <= bar.spread) {
       return bar.rank;

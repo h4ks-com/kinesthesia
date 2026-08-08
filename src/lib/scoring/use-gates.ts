@@ -21,7 +21,12 @@ import {
   judge,
   type Score,
 } from "@/lib/scoring/judge";
-import { emptyShape, shapeColumn } from "@/lib/scoring/rail";
+import {
+  emptyShape,
+  railSpan,
+  shapeColumn,
+  strikesRemembered,
+} from "@/lib/scoring/rail";
 import { type Summary, summarise } from "@/lib/scoring/summary";
 
 /** Bumped on every judged note so a flag re-triggers even when the verdict
@@ -44,8 +49,9 @@ export type Gates = {
   judgeStrike: (pitch: number, position: number) => void;
   /** How far each recent hit landed from the note it answered, in seconds. */
   timing: () => readonly number[];
-  /** Everything the finished run is worth reading out. */
-  summary: () => Summary;
+  /** Everything the finished run is worth reading out, settled against where
+   * the song ended so a note still under a hand is counted. */
+  summary: (at: number) => Summary;
   /** Judges a key coming up, so a note asked to be held can be seen through or
    * dropped. A pitch nothing is holding is passed over. */
   judgeRelease: (pitch: number, position: number) => void;
@@ -63,10 +69,6 @@ type Options = {
   pause: () => void;
   resume: () => void;
 };
-
-/** Enough hits to read a habit from, and few enough that a player who fixes
- * their offset stops being told about the old one. */
-const timedHitsKept = 24;
 
 export function useGates({
   owed,
@@ -183,21 +185,27 @@ export function useGates({
       const stopped = waitingRef.current;
       const late = position - gate.start;
       const judgement = judge(late);
+      // A gate opens the moment the one before it is answered, so a player can
+      // strike the next note seconds before it is due. Only lateness is bounded,
+      // by the deadline, so anticipation is held to the same reach before it is
+      // counted: one guess a bar early would otherwise drag the whole run's
+      // timing with it.
+      const measured = Math.min(railSpan, Math.max(-railSpan, late));
       if (!stopped) {
         // Kept so a player who is consistently behind can be told what their
         // offset should be. A gate the song stopped for holds the clock still,
         // so its delay belongs to the pause and would teach the wrong offset.
-        timingRef.current.push(late);
-        if (timingRef.current.length > timedHitsKept) {
+        timingRef.current.push(measured);
+        if (timingRef.current.length > strikesRemembered) {
           timingRef.current.shift();
         }
-        spreadRef.current.total += Math.abs(late);
+        spreadRef.current.total += Math.abs(measured);
         spreadRef.current.count += 1;
-        const column = shapeColumn(late);
+        const column = shapeColumn(measured);
         shapeRef.current[column] = (shapeRef.current[column] ?? 0) + 1;
       }
       setScore((current) => applyJudgement(current, judgement));
-      flag(judgement, late);
+      flag(judgement, measured);
       if (pendingRef.current.size === 0) {
         openAt(indexRef.current + 1);
         if (stopped) {
@@ -231,15 +239,28 @@ export function useGates({
     owed: useCallback(() => pendingRef.current as ReadonlySet<number>, []),
     judgeStrike,
     timing: useCallback(() => timingRef.current as readonly number[], []),
-    summary: useCallback(() => {
-      const { total, count } = spreadRef.current;
-      return summarise({
-        score,
-        holds,
-        spread: count === 0 ? 0 : total / count,
-        shape: shapeRef.current,
-      });
-    }, [score, holds]),
+    summary: useCallback(
+      (at: number) => {
+        const { total, count } = spreadRef.current;
+        // A song ends with the last chord still under a hand, so the holds that
+        // were never let go are settled against the end rather than left out of
+        // the tally, which would score a player for holding nothing.
+        let settled = holds;
+        for (const holding of holdingRef.current.values()) {
+          settled = tallyHold(
+            settled,
+            judgeHold(holding.length, at - holding.at),
+          );
+        }
+        return summarise({
+          score,
+          holds: settled,
+          spread: count === 0 ? 0 : total / count,
+          shape: shapeRef.current,
+        });
+      },
+      [score, holds],
+    ),
     judgeRelease,
     holds,
     moveTo: useCallback(

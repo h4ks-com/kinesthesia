@@ -21,6 +21,10 @@ export function railBand(window: number): number {
 export const perfectBand = railBand(perfectWindow);
 export const goodBand = railBand(goodWindow);
 
+/** How many strikes are read as the current habit. Shared by the rail and the
+ * gates, so what is drawn and what is remembered are one window. */
+export const strikesRemembered = 24;
+
 /** The habit the last strikes add up to, or null before there are enough of
  * them to be reading a habit rather than a single hit. */
 export const enoughForHabit = 4;

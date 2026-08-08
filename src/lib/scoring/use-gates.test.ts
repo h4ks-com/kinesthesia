@@ -185,7 +185,7 @@ describe("useGates", () => {
   describe("spread", () => {
     it("is nothing before a note is struck", () => {
       const { view } = bench([note(60, 1)], false);
-      expect(view.result.current.summary().spread).toBe(0);
+      expect(view.result.current.summary(99).spread).toBe(0);
     });
 
     it("ignores which side of the beat a strike fell", () => {
@@ -198,7 +198,7 @@ describe("useGates", () => {
       act(() => {
         view.result.current.judgeStrike(62, 1.96);
       });
-      expect(view.result.current.summary().spread).toBeCloseTo(0.04, 6);
+      expect(view.result.current.summary(99).spread).toBeCloseTo(0.04, 6);
     });
 
     // The rank is read off this, so it has to describe the whole run rather
@@ -223,8 +223,25 @@ describe("useGates", () => {
       expect(view.result.current.timing()).toHaveLength(24);
       const whole = (30 * 0.01 + 10 * 0.2) / 40;
       const tail = (14 * 0.01 + 10 * 0.2) / 24;
-      expect(view.result.current.summary().spread).toBeCloseTo(whole, 6);
-      expect(view.result.current.summary().spread).not.toBeCloseTo(tail, 3);
+      expect(view.result.current.summary(99).spread).toBeCloseTo(whole, 6);
+      expect(view.result.current.summary(99).spread).not.toBeCloseTo(tail, 3);
+    });
+
+    // A gate opens as soon as the one before it is answered, so a player can
+    // strike the next note a bar early. Unbounded, one guess would drag the
+    // whole run's timing with it.
+    it("holds an anticipated note to the same reach as a late one", () => {
+      const { view, settle } = bench([note(60, 1), note(62, 9, 62)], false);
+      settle(1);
+      act(() => {
+        view.result.current.judgeStrike(60, 1);
+      });
+      act(() => {
+        view.result.current.judgeStrike(62, 2);
+      });
+      expect(view.result.current.summary(20).spread).toBeLessThanOrEqual(
+        lateWindow,
+      );
     });
 
     it("forgets the run when the score is reset", () => {
@@ -233,11 +250,11 @@ describe("useGates", () => {
       act(() => {
         view.result.current.judgeStrike(60, 1.1);
       });
-      expect(view.result.current.summary().spread).toBeGreaterThan(0);
+      expect(view.result.current.summary(99).spread).toBeGreaterThan(0);
       act(() => {
         view.result.current.reset();
       });
-      expect(view.result.current.summary().spread).toBe(0);
+      expect(view.result.current.summary(99).spread).toBe(0);
     });
   });
 
@@ -287,6 +304,27 @@ describe("useGates", () => {
         view.result.current.judgeRelease(64, 2);
       });
       expect(view.result.current.holds).toEqual({ kept: 0, letGo: 0 });
+    });
+
+    // A song ends with the last chord still down, so a hold left out of the
+    // tally would score a player for holding nothing.
+    it("settles a note still under a hand when the run ends", () => {
+      const { view, settle } = bench([note(60, 1, 60, 2)], false);
+      settle(1);
+      act(() => {
+        view.result.current.judgeStrike(60, 1);
+      });
+      expect(view.result.current.summary(3).hold).toBe(1);
+    });
+
+    it("counts one dropped before the end even if it was never released", () => {
+      const { view, settle } = bench([note(60, 1, 60, 2)], false);
+      settle(1);
+      act(() => {
+        view.result.current.judgeStrike(60, 1);
+      });
+      // The run ends a breath after the strike, so nothing was held.
+      expect(view.result.current.summary(1.2).hold).toBe(0);
     });
 
     it("forgets what was being held when the song is moved", () => {

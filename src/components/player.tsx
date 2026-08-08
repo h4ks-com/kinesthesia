@@ -45,7 +45,7 @@ import { tourFor } from "@/lib/tour/steps";
 import { useWalkthrough } from "@/lib/tour/use-walkthrough";
 import { useBackground } from "@/lib/use-background";
 import { usePlayerSettings } from "@/lib/use-player-settings";
-import { useSideBySide } from "@/lib/use-side-by-side";
+import { useWideLayout } from "@/lib/use-wide-layout";
 
 type PlayerProps = {
   mode: PlayerMode;
@@ -109,7 +109,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   const load = useSong(params);
   const original = load.status === "ready" ? load.song : null;
   const [pickingSkin, setPickingSkin] = useState(false);
-  const sideBySide = useSideBySide();
+  const wideLayout = useWideLayout();
 
   const interactive = mode !== "watch";
   // Notes may only leave the keys where nobody has to read them coming: in
@@ -495,7 +495,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     }
     startedRef.current = false;
     endedRef.current = true;
-    endRef.current?.(gates.summary());
+    endRef.current?.(gates.summary(song.duration));
   }, [matchActive, song, playback.elapsed, gates.summary]);
 
   function toggleTrack(index: number) {
@@ -662,7 +662,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             {interactive ? (
               <TimingRail
                 hit={gates.lastHit}
-                lie={sideBySide ? "upright" : "flat"}
+                lie={wideLayout ? "upright" : "flat"}
               />
             ) : null}
             {gates.waiting ? (

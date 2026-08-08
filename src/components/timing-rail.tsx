@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { goodBand, perfectBand, railMean, railPlace } from "@/lib/scoring/rail";
+import {
+  goodBand,
+  perfectBand,
+  railMean,
+  railPlace,
+  strikesRemembered,
+} from "@/lib/scoring/rail";
 import type { Hit } from "@/lib/scoring/use-gates";
 
-/** How many strikes the rail remembers. Enough to read a habit from, few enough
- * that fixing one stops being held against you. */
-const kept = 24;
 /** How long a tick stays before it starts going. */
 const linger = 1600;
 
@@ -42,7 +45,7 @@ export function TimingRail({ hit, lie }: { hit: Hit | null; lie: RailLie }) {
     }
     seen.current = hit.seq;
     const mark = { seq: hit.seq, away: hit.away };
-    setMarks((current) => [...current, mark].slice(-kept));
+    setMarks((current) => [...current, mark].slice(-strikesRemembered));
     timers.current.push(
       setTimeout(() => {
         setMarks((current) => current.filter((old) => old.seq !== mark.seq));

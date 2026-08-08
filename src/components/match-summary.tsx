@@ -2,27 +2,21 @@
 
 import { rankOf, type Summary } from "@/lib/scoring/summary";
 
-/** The rows both sides are read across, in the order they matter. Held here so
- * the labels and the values cannot drift apart. */
+/** The rows both sides are read across, in the order they matter. Each carries
+ * how it reads itself, so a row added here cannot arrive without a value or
+ * quietly borrow the one below it. */
 const rows = [
-  { key: "notes", label: "notes" },
-  { key: "streak", label: "streak" },
-  { key: "hold", label: "hold" },
-  { key: "timing", label: "timing" },
+  {
+    label: "notes",
+    read: (run: Summary) => `${Math.round(run.notes * 100)}%`,
+  },
+  { label: "streak", read: (run: Summary) => String(run.streak) },
+  { label: "hold", read: (run: Summary) => `${Math.round(run.hold * 100)}%` },
+  {
+    label: "timing",
+    read: (run: Summary) => `${Math.round(run.spread * 1000)}ms`,
+  },
 ] as const;
-
-function readOut(summary: Summary, key: (typeof rows)[number]["key"]): string {
-  if (key === "notes") {
-    return `${Math.round(summary.notes * 100)}%`;
-  }
-  if (key === "streak") {
-    return String(summary.streak);
-  }
-  if (key === "hold") {
-    return `${Math.round(summary.hold * 100)}%`;
-  }
-  return `${Math.round(summary.spread * 1000)}ms`;
-}
 
 /** How a run read, side by side where there is another one to read it against.
  * The grand score leads, since it is the only thing that settles a battle, and
@@ -41,7 +35,7 @@ export function MatchSummary({
   coop: boolean;
 }) {
   const grand = coop && theirs !== null ? mine.points + theirs.points : null;
-  const ahead = theirs === null ? true : mine.points >= theirs.points;
+  const ahead = theirs !== null && mine.points >= theirs.points;
 
   return (
     <div className="w-full max-w-md overflow-hidden rounded-2xl border border-line-strong bg-panel">
@@ -63,16 +57,11 @@ export function MatchSummary({
       <TimingShape mine={mine.shape} theirs={theirs?.shape ?? null} />
 
       <div className="grid grid-cols-[1fr_auto_1fr] border-line border-t">
-        <Column
-          summary={mine}
-          name={myName}
-          align="left"
-          lit={theirs !== null && ahead}
-        />
+        <Column summary={mine} name={myName} align="left" lit={ahead} />
         <div className="flex flex-col gap-1 border-line border-x px-3 py-3">
           <span className="label h-7 leading-7">score</span>
           {rows.map((row) => (
-            <span key={row.key} className="label h-7 leading-7">
+            <span key={row.label} className="label h-7 leading-7">
               {row.label}
             </span>
           ))}
@@ -191,10 +180,10 @@ function Column({
       </span>
       {rows.map((row) => (
         <span
-          key={row.key}
+          key={row.label}
           className="flex h-7 items-center font-mono text-sm tabular-nums"
         >
-          {readOut(summary, row.key)}
+          {row.read(summary)}
         </span>
       ))}
     </div>

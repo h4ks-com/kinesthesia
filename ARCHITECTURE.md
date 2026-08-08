@@ -74,6 +74,7 @@ src/components/
   instrument-picker.tsx       the 128 General MIDI programs, grouped and searchable
   envelope-editor.tsx         attack, volume and release as a curve you drag
   hit-flag.tsx                the per-note perfect, good or miss verdict
+  lead-meter.tsx              which way a battle is going, on the seam
   walkthrough.tsx             the first-run tour: spotlight, dialog, nav
   multiplayer.tsx             set up, invite, then the split view
   multiplayer-invite.tsx      the invite, at the end of the shared bar
@@ -163,6 +164,7 @@ src/lib/
   scoring/judge.ts            hit windows, combo and accuracy
   scoring/gates.ts            chords the player owes, as one unit each
   scoring/use-gates.ts        waiting, judging and missing
+  scoring/lead.ts             the live margin, as a share of the pot
   scoring/submission.ts       the one shape a recorded run is posted in
   scoring/use-run-record.ts   sends a finished run to the leaderboard
   input/use-note-input.ts     keyboard, MIDI and octave in one listener

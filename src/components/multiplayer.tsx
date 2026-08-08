@@ -2,6 +2,7 @@
 
 import type { DataConnection } from "peerjs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LeadMeter } from "@/components/lead-meter";
 import {
   MatchOverlay,
   outcomeTitle,
@@ -575,10 +576,14 @@ export function Multiplayer({
   }
 
   const onScore = useCallback((score: Score) => {
+    const points = scorePoints(score);
+    // Kept as well as sent: the meter reads both sides from here, and the end
+    // of the round overwrites this with what the card settles on.
+    setMyPoints(points);
     linkRef.current?.send({
       kind: "score",
       score,
-      points: scorePoints(score),
+      points,
       accuracy: accuracy(score),
     } satisfies MatchMessage);
   }, []);
@@ -668,6 +673,11 @@ export function Multiplayer({
         locked={settled}
         matchActive={setupDone}
         onEnd={onEnd}
+        seam={
+          live && !coop && phase === "playing" ? (
+            <LeadMeter mine={myPoints} theirs={theirPoints} />
+          ) : null
+        }
         overlay={
           live ? (
             <MatchOverlay

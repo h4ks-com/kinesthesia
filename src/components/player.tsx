@@ -72,6 +72,8 @@ type PlayerProps = {
   /** A match hangs its other half, its overlay and its invite off the player,
    * so one timeline spans both sides and stays on the clock that drives them. */
   aside?: ReactNode;
+  /** Stands on the line between the two halves, above both rolls. */
+  seam?: ReactNode;
   overlay?: ReactNode;
   footerExtra?: ReactNode;
   onEnd?: (summary: Summary) => void;
@@ -102,6 +104,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     locked = false,
     matchActive = false,
     aside = null,
+    seam = null,
     overlay = null,
     footerExtra = null,
     onEnd,
@@ -542,7 +545,8 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   if (song === null) {
     return (
       <div className="flex h-dvh flex-col overflow-hidden bg-void">
-        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
+          {seam}
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             <p className="flex flex-1 items-center justify-center px-6 text-center text-muted text-sm">
               {load.status === "failed" ? load.message : "Loading the song"}
@@ -564,7 +568,8 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-void">
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
+        {seam}
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           {focus ? null : (
             <PlayerHeader

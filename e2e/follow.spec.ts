@@ -28,7 +28,11 @@ async function keyboardPattern(page: Page): Promise<string> {
       return "";
     }
     const ratio = canvas.width / canvas.getBoundingClientRect().width;
-    const row = Math.round(canvas.height - 60 * ratio);
+    // Read near the far end of the keys, where a black key still reaches and a
+    // pressed one is at its shallowest: a key hinges at that end and opens its
+    // shadow toward the player, so a row taken near the front would read the
+    // shadow of whatever happened to be down as a black key.
+    const row = Math.round(canvas.height - 110 * ratio);
     const data = ctx.getImageData(0, row, canvas.width, 1).data;
     let out = "";
     for (let x = 0; x < canvas.width; x += Math.round(4 * ratio)) {
@@ -46,18 +50,28 @@ async function keyboardPattern(page: Page): Promise<string> {
   });
 }
 
+/** How many readings in a row have to agree before the view counts as still.
+ * The keyboard eases toward the note it is coming to a fraction per frame, and
+ * on a loaded machine two readings can land either side of a frame that never
+ * came, which is a stall rather than a view that has arrived. */
+const readingsAgreeing = 4;
+
 /** The pattern once it has stopped changing, so nothing is read while the keys
  * are still going out. */
 async function settledPattern(page: Page): Promise<string> {
   let last = await keyboardPattern(page);
+  let agreed = 0;
   await expect
-    .poll(async () => {
-      const now = await keyboardPattern(page);
-      const steady = now === last;
-      last = now;
-      return steady;
-    })
-    .toBe(true);
+    .poll(
+      async () => {
+        const now = await keyboardPattern(page);
+        agreed = now === last ? agreed + 1 : 0;
+        last = now;
+        return agreed;
+      },
+      { intervals: [150] },
+    )
+    .toBeGreaterThanOrEqual(readingsAgreeing);
   return last;
 }
 

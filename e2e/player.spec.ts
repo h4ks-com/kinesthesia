@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   brightNotePixels,
-  isPureWhite,
+  isStruckKey,
   keyRowFromBottom,
   litKeyCentre,
   noteSpan,
@@ -86,14 +86,14 @@ test("striking a key the song already lit still shows the hit", async ({
   expect(lit).not.toBeNull();
 
   const x = lit ?? 0;
-  expect(await isPureWhite(page, x)).toBe(false);
+  expect(await isStruckKey(page, x)).toBe(false);
 
   await page.mouse.move((box?.x ?? 0) + x, (box?.y ?? 0) + keyRow);
   await page.mouse.down();
-  await expect.poll(async () => isPureWhite(page, x)).toBe(true);
+  await expect.poll(async () => isStruckKey(page, x)).toBe(true);
 
   await page.mouse.up();
-  await expect.poll(async () => isPureWhite(page, x)).toBe(false);
+  await expect.poll(async () => isStruckKey(page, x)).toBe(false);
 });
 
 test("a link without a song explains itself", async ({ page }) => {

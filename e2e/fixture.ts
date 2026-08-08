@@ -154,16 +154,24 @@ export async function pixelAt(
   );
 }
 
-/** Every track colour keeps at least one channel below 250, so pure white marks
- * a key the player is holding rather than one the song is sounding. */
-export async function isPureWhite(page: Page, x: number): Promise<boolean> {
+/** Wider than any track's pale tint and narrower than any of their full ones,
+ * so it tells a key under a hand from one the song is merely sounding. */
+const struckSaturation = 120;
+
+/** Whether the key at this point is under a hand. A struck key wears its part's
+ * colour at full strength where a sounding one wears the pale tint of it, and
+ * the gap between the strongest and weakest channel is what separates them: the
+ * two are close in brightness, so brightness alone cannot. */
+export async function isStruckKey(page: Page, x: number): Promise<boolean> {
   const canvas = await page.locator("canvas").boundingBox();
-  const pixel = await pixelAt(
+  const [red = 0, green = 0, blue = 0] = await pixelAt(
     page,
     x,
     (canvas?.height ?? 0) - keyRowFromBottom,
   );
-  return pixel.every((channel) => channel >= 250);
+  return (
+    Math.max(red, green, blue) - Math.min(red, green, blue) >= struckSaturation
+  );
 }
 
 /** The centre of the first white key the song is sounding, which is the key the

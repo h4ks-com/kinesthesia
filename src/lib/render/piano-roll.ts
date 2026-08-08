@@ -353,9 +353,6 @@ export class PianoRollRenderer {
     }
 
     const active = new Map<number, NoteColor>();
-    // Keys the pedal is holding after the hand has left. They stay pressed, and
-    // dark: the colour belongs to the strike.
-    const held = new Set<number>();
     this.foreshadow.clear();
     this.onsets.clear();
     const advance =
@@ -367,16 +364,9 @@ export class PianoRollRenderer {
         ? this.previousPosition
         : null;
     if (frame.live === null) {
-      this.paintNotes(frame, keyboardTop, whiteWidth, active, held);
+      this.paintNotes(frame, keyboardTop, whiteWidth, active);
     } else {
-      this.paintLiveNotes(
-        frame,
-        frame.live,
-        keyboardTop,
-        whiteWidth,
-        active,
-        held,
-      );
+      this.paintLiveNotes(frame, frame.live, keyboardTop, whiteWidth, active);
     }
     this.previousPosition = frame.position;
     for (const pitch of frame.pressed) {
@@ -396,7 +386,6 @@ export class PianoRollRenderer {
     this.paintKeyboard(
       frame,
       active,
-      held,
       keyboardTop,
       keyboardHeight,
       whiteWidth,
@@ -503,7 +492,6 @@ export class PianoRollRenderer {
     keyboardTop: number,
     whiteWidth: number,
     active: Map<number, NoteColor>,
-    held: Set<number>,
   ): void {
     const ctx = this.context;
     const { position } = frame;
@@ -560,7 +548,6 @@ export class PianoRollRenderer {
       // A key is lit by a note being played, not by one the pedal is holding
       // on after the hand has gone: the light stands for the strike.
       const sounding = started && position < note.end;
-      const pedalled = started && !sounding && position < note.release;
       // Marked before any branch below returns, so a note whose whole length
       // falls inside one frame still counts as having landed.
       if (!ghost && started && since !== null && note.start > since) {
@@ -580,15 +567,7 @@ export class PianoRollRenderer {
         if (!ghost && frame.owed.has(note.pitch)) {
           active.set(note.pitch, color);
         }
-        // A drum key decays on its own, so the pedal has no say over it. The
-        // key stays down while the pedal holds it, but unlit.
-        if (!ghost && !drums.has(note.track) && pedalled) {
-          held.add(note.pitch);
-        }
         continue;
-      }
-      if (rising && !ghost && !drums.has(note.track) && pedalled) {
-        held.add(note.pitch);
       }
 
       // A drum is an impulse: the mark falls to the line and is spent there,
@@ -764,7 +743,6 @@ export class PianoRollRenderer {
     keyboardTop: number,
     whiteWidth: number,
     active: Map<number, NoteColor>,
-    held: Set<number>,
   ): void {
     const ctx = this.context;
     const { position } = frame;
@@ -782,11 +760,9 @@ export class PianoRollRenderer {
       const bottom = keyboardTop - footAge * scale;
       const color = trackColor(note.track);
       // Claimed before the geometry cull, so a note whose bar has climbed off
-      // the roll still owns its key. Down is lit; only pedalled is merely held.
+      // the roll still owns its key.
       if (down) {
         active.set(note.pitch, color);
-      } else if (note.release === null) {
-        held.add(note.pitch);
       }
       if (bottom < 0) {
         continue;
@@ -973,7 +949,6 @@ export class PianoRollRenderer {
   private paintKeyboard(
     frame: Frame,
     active: ReadonlyMap<number, NoteColor>,
-    held: ReadonlySet<number>,
     keyboardTop: number,
     keyboardHeight: number,
     whiteWidth: number,
@@ -987,7 +962,9 @@ export class PianoRollRenderer {
       const x = whiteKeyLeft(pitch, whiteWidth);
       // A key hinges at its far end, which is the top of the screen, so a
       // pressed one dips at the near end and comes up short of where it stood.
-      const sink = active.has(pitch) || held.has(pitch) ? pressSink : 0;
+      // Only a hand sinks a key: a key the song is sounding lights but is not
+      // being touched, and sinking it would report a press nobody made.
+      const sink = frame.pressed.has(pitch) ? pressSink : 0;
       this.setKeyPaint(frame, active, pitch, this.whiteFace ?? "#dfe4ec");
       ctx.fillRect(x + 0.5, keyboardTop, whiteWidth - 1, keyboardHeight - sink);
       // The bed the near end drops toward, at the front where it went down.
@@ -1040,8 +1017,7 @@ export class PianoRollRenderer {
         false,
       );
       this.paintKeyRecess(
-        active,
-        held,
+        frame.pressed,
         keyboardTop,
         keyboardHeight,
         whiteWidth,
@@ -1054,7 +1030,7 @@ export class PianoRollRenderer {
       }
       const blackWidth = blackKeyWidth(whiteWidth);
       const x = blackKeyLeft(pitch, whiteWidth);
-      const sink = active.has(pitch) || held.has(pitch) ? pressSink : 0;
+      const sink = frame.pressed.has(pitch) ? pressSink : 0;
       // The shadow a black key casts on the whites just past its tip. A key
       // that has gone down sits nearer the bed, and its shadow shrinking is
       // most of what reads as pressed.
@@ -1266,8 +1242,7 @@ export class PianoRollRenderer {
    * Black keys ride on top of the whites with nothing beside them at their own
    * height, so they get none of this. */
   private paintKeyRecess(
-    active: ReadonlyMap<number, NoteColor>,
-    held: ReadonlySet<number>,
+    pressed: ReadonlySet<number>,
     keyboardTop: number,
     keyboardHeight: number,
     whiteWidth: number,
@@ -1276,7 +1251,7 @@ export class PianoRollRenderer {
     const foot = keyboardTop + keyboardHeight - pressSink;
     const wall = Math.max(2, whiteWidth * 0.26);
     const sunk = (pitch: number | undefined): boolean =>
-      pitch !== undefined && (active.has(pitch) || held.has(pitch));
+      pitch !== undefined && pressed.has(pitch);
 
     for (let index = 0; index < whiteKeys.length; index += 1) {
       const pitch = whiteKeys[index];
@@ -1328,8 +1303,7 @@ export class PianoRollRenderer {
       const left = wantBlack
         ? blackKeyLeft(pitch, whiteWidth)
         : whiteKeyLeft(pitch, whiteWidth) + 0.5;
-      // Every key here is lit, and a lit key is a sunk one.
-      const deep = deepest - pressSink;
+      const deep = deepest - (struck ? pressSink : 0);
       const centre = left + wide / 2;
       const along = keyboardTop + deep * 0.62;
       const reach = Math.max(wide, deep * 0.5);

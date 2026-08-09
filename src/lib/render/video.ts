@@ -9,7 +9,6 @@ import {
   type RenderConfig,
   type RenderQuality,
   renderDuration,
-  renderFps,
   renderQualities,
   watchFrame,
 } from "@/lib/render/export";
@@ -43,7 +42,15 @@ const containers: readonly Container[] = [
   {
     extension: "mp4",
     mime: "video/mp4",
-    videoCodecs: ["avc1.4d0028", "avc1.640028", "avc1.42e01f"],
+    // High profile first, which is what YouTube asks for and what every other
+    // player has read for a decade. Level 5.0 leads because it is the only one
+    // here a browser accepts for 1080p60. The level named here is a ceiling
+    // asked for rather than one written down: an encoder stamps the level the
+    // stream actually reaches, measured as 3.1 at 720p30 and 4.2 at 1080p60
+    // off this same list. That is what lets one order serve every quality
+    // without handing a small render a level old hardware would refuse.
+    // Baseline last: it cannot carry CABAC and stops at 720p.
+    videoCodecs: ["avc1.640032", "avc1.640028", "avc1.4d0028", "avc1.42e01f"],
     audioCodec: "mp4a.40.2",
   },
   {
@@ -92,6 +99,10 @@ export async function renderSongVideo(
  * still have no encoder for the sound. Null sends the render to the recorder. */
 type Encoders = {
   readonly container: Container;
+  /** The quality a profile actually accepted, which a fallback can step down
+   * from what was asked. The canvas, the muxer, the frame clock and the
+   * background all have to agree with this one rather than with the request. */
+  readonly quality: RenderQuality;
   readonly video: VideoEncoderConfig;
   readonly audio: AudioEncoderConfig;
 };
@@ -109,43 +120,50 @@ async function supportedEncoders(
       codec: container.audioCodec,
       numberOfChannels: audio.numberOfChannels,
       sampleRate: audio.sampleRate,
-      bitrate: 192_000,
+      bitrate: renderQualities[video.quality].audioBitrate,
     };
     const support = await AudioEncoder.isConfigSupported(wanted).catch(
       () => null,
     );
     if (support?.supported === true) {
-      return { container, video, audio: wanted };
+      return { container, ...video, audio: wanted };
     }
   }
   return null;
 }
 
+/** A picture config and the quality it settled on. */
+type SettledVideo = {
+  readonly quality: RenderQuality;
+  readonly video: VideoEncoderConfig;
+};
+
 async function supportedVideoConfig(
   container: Container,
   quality: RenderQuality,
-): Promise<VideoEncoderConfig | null> {
-  // Asked for at the size wanted and then at the smaller one, because a profile
-  // can be present and still not reach 1080p: avc1.42e01f is Baseline 3.1 and
-  // stops at 720p. Falling back by size keeps the file in the container that
-  // plays everywhere, where falling back by codec would quietly hand back webm.
+): Promise<SettledVideo | null> {
+  // Asked for as wanted and then at the smaller one, because a profile can be
+  // present and still not reach the size or the rate: avc1.42e01f is Baseline
+  // 3.1 and stops at 720p, and only level 5.0 carries 1080p60. Falling back by
+  // quality keeps the file in the container that plays everywhere, where
+  // falling back by codec would quietly hand back webm.
   const wanted: readonly RenderQuality[] =
     quality === defaultQuality ? [quality] : [quality, defaultQuality];
   for (const step of wanted) {
-    const { width, height, bitrate } = renderQualities[step];
+    const { width, height, bitrate, fps } = renderQualities[step];
     for (const codec of container.videoCodecs) {
       const config: VideoEncoderConfig = {
         codec,
         width,
         height,
         bitrate,
-        framerate: renderFps,
+        framerate: fps,
       };
       const support = await VideoEncoder.isConfigSupported(config).catch(
         () => null,
       );
       if (support?.supported === true) {
-        return config;
+        return { quality: step, video: config };
       }
     }
   }
@@ -159,15 +177,11 @@ async function withWebCodecs(
   onProgress: VideoProgress,
   signal: AbortSignal,
 ): Promise<RenderedVideo> {
-  // Read back off the encoder rather than off the request: it settles the size
-  // once a profile has accepted it, and the canvas, the muxer and the frames
-  // all have to agree with whatever it settled on.
-  const { width, height } = encoders.video;
-  const totalFrames = Math.max(
-    1,
-    Math.ceil(renderDuration(config) * renderFps),
-  );
-  const scene = renderScene(config, width, height);
+  // Read off the quality a profile accepted rather than off the request, since
+  // a fallback can step it down.
+  const { width, height, fps, gop } = renderQualities[encoders.quality];
+  const totalFrames = Math.max(1, Math.ceil(renderDuration(config) * fps));
+  const scene = renderScene(config, width, height, fps);
   // Nothing is encoded until the background has what it needs, or the opening
   // seconds come out without it.
   await scene.ready;
@@ -180,7 +194,7 @@ async function withWebCodecs(
   const muxer = webm
     ? new WebmMuxer({
         target: new WebmTarget(),
-        video: { codec: "V_VP9", width, height, frameRate: renderFps },
+        video: { codec: "V_VP9", width, height, frameRate: fps },
         audio: { codec: "A_OPUS", ...sound },
       })
     : new Mp4Muxer({
@@ -218,12 +232,16 @@ async function withWebCodecs(
       if (failure !== null) {
         throw failure;
       }
-      await scene.draw((index / renderFps) * config.rate, index / renderFps);
+      await scene.draw((index / fps) * config.rate, index / fps);
       const frame = new VideoFrame(scene.canvas, {
-        timestamp: Math.round((index / renderFps) * 1_000_000),
-        duration: Math.round(1_000_000 / renderFps),
+        timestamp: Math.round((index / fps) * 1_000_000),
+        duration: Math.round(1_000_000 / fps),
       });
-      videoEncoder.encode(frame);
+      // False is the encoder's own default, so a quality that names no spacing
+      // is left to pick its own.
+      videoEncoder.encode(frame, {
+        keyFrame: gop !== null && index % gop === 0,
+      });
       frame.close();
       onProgress(index / totalFrames);
       // Keeps the encoder queue bounded, so a long song does not build a wall
@@ -275,8 +293,8 @@ async function withMediaRecorder(
   // The recorder exists because this browser cannot encode faster than real
   // time, so it is given the smaller picture whatever was asked for: handing it
   // more pixels than it can keep up with drops frames instead of adding detail.
-  const { width, height } = renderQualities[defaultQuality];
-  const scene = renderScene(config, width, height);
+  const { width, height, fps } = renderQualities[defaultQuality];
+  const scene = renderScene(config, width, height, fps);
   await scene.ready;
   const audioContext = new AudioContext({ sampleRate: audio.sampleRate });
   const destination = audioContext.createMediaStreamDestination();
@@ -294,7 +312,7 @@ async function withMediaRecorder(
   };
 
   const stream = new MediaStream([
-    ...scene.canvas.captureStream(renderFps).getVideoTracks(),
+    ...scene.canvas.captureStream(fps).getVideoTracks(),
     ...destination.stream.getAudioTracks(),
   ]);
   const recorder = new MediaRecorder(stream, { mimeType: mime.type });
@@ -374,6 +392,7 @@ function renderScene(
   config: RenderConfig,
   width: number,
   height: number,
+  fps: number,
 ): Scene {
   const roll = surface(width, height);
   const renderer = new PianoRollRenderer(roll, keyWidthRange.min, {
@@ -434,7 +453,7 @@ function renderScene(
         // The rate a render lays frames down at, never a measured one: a
         // background stepped by the wall clock would come out differently
         // every time the same song was rendered.
-        step: 1 / renderFps,
+        step: 1 / fps,
         travellers: report.travellers,
         strikes: report.strikes,
         pressed: noPressed,

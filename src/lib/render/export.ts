@@ -24,31 +24,65 @@ export type RenderConfig = {
   readonly noteNames: boolean;
 };
 
-export type RenderQuality = "720p" | "1080p";
+export type RenderQuality = "720p" | "1080p" | "1080p60";
 
-/** What each quality lays down. The bitrates are set against a roll rather than
- * against film: flat colour and hard edges compress far better, and the number
- * that matters is the one that keeps a file postable where a chat caps an
- * attachment at tens of megabytes. A moving background spends the most. */
+type QualitySpec = {
+  readonly width: number;
+  readonly height: number;
+  /** Falling notes carry their motion in long straight travel, which reads
+   * fine at half the rate a game needs, and every frame is one the encoder
+   * pays for twice: once drawn, once compressed. */
+  readonly fps: number;
+  readonly bitrate: number;
+  /** Asked for rather than promised: a platform AAC encoder clamps this to its
+   * own ceiling, which at 44.1kHz stereo lands nearer 256 kbps. */
+  readonly audioBitrate: number;
+  /** Frames between forced keyframes, or null to leave the spacing to the
+   * encoder. A tight one costs bitrate and buys seeking. */
+  readonly gop: number | null;
+};
+
+/** What each quality lays down. The first two are set against a roll rather
+ * than against film: flat colour and hard edges compress far better, and the
+ * number that matters is the one that keeps a file postable where a chat caps
+ * an attachment at tens of megabytes. A moving background spends the most.
+ *
+ * The last one answers to YouTube's published upload settings instead, which
+ * pull the other way: high profile, 12 Mbps, closed GOP at half the frame
+ * rate, 384 kbps sound. It buys a clean transcode from any site that re-encodes
+ * what it is given, at the cost of a file far too large to attach anywhere. */
 export const renderQualities = {
-  "720p": { width: 1280, height: 720, bitrate: 2_000_000 },
-  "1080p": { width: 1920, height: 1080, bitrate: 5_000_000 },
-} as const satisfies Record<
-  RenderQuality,
-  { width: number; height: number; bitrate: number }
->;
+  "720p": {
+    width: 1280,
+    height: 720,
+    fps: 30,
+    bitrate: 2_000_000,
+    audioBitrate: 192_000,
+    gop: null,
+  },
+  "1080p": {
+    width: 1920,
+    height: 1080,
+    fps: 30,
+    bitrate: 5_000_000,
+    audioBitrate: 192_000,
+    gop: null,
+  },
+  "1080p60": {
+    width: 1920,
+    height: 1080,
+    fps: 60,
+    bitrate: 12_000_000,
+    audioBitrate: 384_000,
+    gop: 30,
+  },
+} as const satisfies Record<RenderQuality, QualitySpec>;
 
 export const renderQualityIds = Object.keys(
   renderQualities,
 ) as readonly RenderQuality[];
 
 export const defaultQuality: RenderQuality = "720p";
-
-export const renderSize = renderQualities[defaultQuality];
-/** Falling notes carry their motion in long straight travel, which reads fine
- * at half the rate a game needs, and every frame here is one the encoder has to
- * pay for twice: once drawn, once compressed. */
-export const renderFps = 30;
 
 const noPitches: ReadonlySet<number> = new Set();
 

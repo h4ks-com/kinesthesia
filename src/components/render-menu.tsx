@@ -274,7 +274,7 @@ export function RenderMenu({
             onClick={() => void run("video")}
           />
           <fieldset className="flex gap-1 px-1">
-            <legend className="sr-only">Video size</legend>
+            <legend className="sr-only">Video quality</legend>
             {renderQualityIds.map((id) => (
               <button
                 key={id}

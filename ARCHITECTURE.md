@@ -140,7 +140,8 @@ src/lib/
                               listing wherever they are offered
   use-nearby.ts               whether an element has come near enough to be
                               looked at, for work worth putting off until then
-  render/export.ts            the watch view as a render job: size, frame, files
+  render/export.ts            the watch view as a render job: qualities, frame,
+                              files
   render/audio.ts             offline audio render to a WAV, at the live voicing
   render/video.ts             offline video render, WebCodecs with a recorder fallback
   render/video-support.ts     what this browser can encode, without loading an

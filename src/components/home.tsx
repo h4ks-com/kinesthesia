@@ -36,7 +36,11 @@ import {
   storeUpload,
 } from "@/lib/storage/uploads";
 import { isDeviceLocal } from "@/lib/trusted-url";
-import { shortestQuery, useLiveSearch } from "@/lib/use-live-search";
+import {
+  lastSearchQuery,
+  shortestQuery,
+  useLiveSearch,
+} from "@/lib/use-live-search";
 import type { Viewer } from "@/server/auth";
 
 type HomeProps = {
@@ -101,10 +105,11 @@ export function Home({
   signIn,
   signOut,
 }: HomeProps) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(lastSearchQuery);
   const [recent, setRecent] = useState<readonly LibraryEntry[]>([]);
   const [favorites, setFavorites] = useState<readonly LibraryEntry[]>([]);
   const [uploads, setUploads] = useState<readonly LibraryEntry[]>([]);
+  const [justShared, setJustShared] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -119,13 +124,20 @@ export function Home({
     [router],
   );
 
-  const refreshLibrary = useCallback(() => {
-    void listRecent().then(setRecent);
-    void listFavourites().then(setFavorites);
-    void listUploads().then(setUploads);
+  const refreshLibrary = useCallback(async () => {
+    const [played, starred, mine] = await Promise.all([
+      listRecent(),
+      listFavourites(),
+      listUploads(),
+    ]);
+    setRecent(played);
+    setFavorites(starred);
+    setUploads(mine);
   }, []);
 
-  useEffect(refreshLibrary, [refreshLibrary]);
+  useEffect(() => {
+    void refreshLibrary();
+  }, [refreshLibrary]);
 
   const addFiles = useCallback(
     async (files: FileList | null) => {
@@ -149,7 +161,7 @@ export function Home({
           break;
         }
       }
-      refreshLibrary();
+      await refreshLibrary();
       // Handing over one file means play it. Several is a library import, so
       // those stay on the page where the whole batch can be seen.
       const only = stored[0];
@@ -178,10 +190,23 @@ export function Home({
       }
       const { url }: { url: string } = await response.json();
       await markShared(entry.url, url);
-      refreshLibrary();
+      // Publishing lists the file under its new address, so the row holding the
+      // confirm button is replaced rather than updated. Its replacement has to
+      // be on the page before it can be asked for the focus.
+      await refreshLibrary();
+      setJustShared(url);
     },
     [refreshLibrary],
   );
+
+  // Claimed by the row that mounts with it, whose focus effect runs before this
+  // one. Dropped straight away so that filtering the library later, which
+  // mounts that row again, does not take the focus a second time.
+  useEffect(() => {
+    if (justShared !== null) {
+      setJustShared(null);
+    }
+  }, [justShared]);
 
   const favoriteKeys = new Set(favorites.map((entry) => entry.key));
 
@@ -191,7 +216,7 @@ export function Home({
     source: string | null;
   }) {
     await toggleFavourite(entry);
-    refreshLibrary();
+    await refreshLibrary();
   }
 
   const searching = state.status === "searching";
@@ -371,7 +396,11 @@ export function Home({
 
         {shown.length > 0 ? (
           <Section
-            title={trimmed === "" ? "Results" : "From the sources"}
+            title={
+              trimmed === ""
+                ? "Results"
+                : "Search results from external midi sources"
+            }
             dim={state.status === "searching"}
           >
             {shown.map((result) => (
@@ -410,7 +439,7 @@ export function Home({
                 confirmLabel="clear all"
                 onConfirm={async () => {
                   await clearFavourites();
-                  refreshLibrary();
+                  await refreshLibrary();
                 }}
               />
             }
@@ -443,7 +472,7 @@ export function Home({
                 confirmLabel="delete all"
                 onConfirm={async () => {
                   await clearUploads();
-                  refreshLibrary();
+                  await refreshLibrary();
                 }}
               />
             }
@@ -460,6 +489,7 @@ export function Home({
                 onToggleFavorite={() => void onToggleFavorite(entry)}
                 signedIn={authEnabled && viewer !== null}
                 share={shareEnabled ? () => shareUpload(entry) : null}
+                justShared={entry.url === justShared}
                 onRemove={() =>
                   void deleteUpload(entry.url).then(refreshLibrary)
                 }
@@ -480,7 +510,7 @@ export function Home({
                 confirmLabel="clear all"
                 onConfirm={async () => {
                   await clearRecent();
-                  refreshLibrary();
+                  await refreshLibrary();
                 }}
               />
             }

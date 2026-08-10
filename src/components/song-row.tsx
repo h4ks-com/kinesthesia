@@ -55,6 +55,9 @@ type SongRowProps = {
    * Whether it has been published already is this row's own to work out. */
   share: (() => Promise<void>) | null;
   signedIn?: boolean;
+  /** Set on the row whose file has just gone online, so the control replacing
+   * the confirm button takes the focus that button held. */
+  justShared?: boolean;
 };
 
 export function SongRow({
@@ -68,6 +71,7 @@ export function SongRow({
   onRemove,
   share,
   signedIn = false,
+  justShared = false,
 }: SongRowProps) {
   const local = isDeviceLocal(url);
   const watchHref = playerPath("watch", {
@@ -128,6 +132,7 @@ export function SongRow({
             onShare={local ? share : null}
             sharedHref={local ? null : watchHref}
             signedIn={signedIn}
+            takeFocus={justShared}
           />
         )}
         {onRemove === undefined ? null : (

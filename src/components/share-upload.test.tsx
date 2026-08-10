@@ -10,6 +10,7 @@ function offer(props: Partial<Parameters<typeof ShareUpload>[0]> = {}) {
       onShare={onShare}
       sharedHref={null}
       signedIn={true}
+      takeFocus={false}
       {...props}
     />,
   );
@@ -47,6 +48,7 @@ describe("ShareUpload", () => {
         onShare={onShare}
         sharedHref={null}
         signedIn={true}
+        takeFocus={false}
       />,
     );
     fireEvent.click(
@@ -66,6 +68,40 @@ describe("ShareUpload", () => {
     fireEvent.click(button);
     expect(onShare).not.toHaveBeenCalled();
     expect(button.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("takes the focus over from the confirm it replaces", () => {
+    render(
+      <ShareUpload
+        name="mine.mid"
+        onShare={null}
+        sharedHref="/watch?url=a"
+        signedIn={true}
+        takeFocus
+      />,
+    );
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Copy the link to mine.mid" }),
+    );
+  });
+
+  // A filter over the library mounts and unmounts these rows while somebody is
+  // typing, so an arrival nobody asked for must leave the focus alone.
+  it("leaves the focus where it is when it was not the one shared", () => {
+    const typing = document.createElement("input");
+    document.body.append(typing);
+    onTestFinished(() => typing.remove());
+    typing.focus();
+    render(
+      <ShareUpload
+        name="mine.mid"
+        onShare={null}
+        sharedHref="/watch?url=a"
+        signedIn={true}
+        takeFocus={false}
+      />,
+    );
+    expect(document.activeElement).toBe(typing);
   });
 
   it("hands out a whole address once the file is up", async () => {
@@ -92,6 +128,7 @@ describe("ShareUpload", () => {
         onShare={null}
         sharedHref="/watch?url=https%3A%2F%2Ffiles.test%2Fa.mid"
         signedIn={true}
+        takeFocus={false}
       />,
     );
     fireEvent.click(

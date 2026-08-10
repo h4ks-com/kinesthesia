@@ -9,6 +9,13 @@ type ShareUploadProps = {
   /** The player path to hand out, resolved against this origin when copied. */
   sharedHref: string | null;
   signedIn: boolean;
+  /** Set on the one row whose file has just gone online, which is the only time
+   * this may claim the focus. Publishing changes the address a row is listed
+   * under, so the confirm button does not hand over to the copy button in
+   * place: the whole row is replaced. Focusing on any other arrival would steal
+   * the search box from whoever is typing, since filtering the library mounts
+   * these rows again as the words change. */
+  takeFocus: boolean;
 };
 
 const copiedFor = 1600;
@@ -18,6 +25,7 @@ export function ShareUpload({
   onShare,
   sharedHref,
   signedIn,
+  takeFocus,
 }: ShareUploadProps) {
   const [open, setOpen] = useState(false);
   const [working, setWorking] = useState(false);
@@ -39,13 +47,11 @@ export function ShareUpload({
     [],
   );
 
-  // The confirm button unmounts the moment the file lands, so focus is moved
-  // to what replaced it rather than falling back to the top of the page.
   useEffect(() => {
-    if (sharedHref !== null) {
+    if (takeFocus) {
       copyRef.current?.focus();
     }
-  }, [sharedHref]);
+  }, [takeFocus]);
 
   useEffect(() => {
     if (!open || working) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MidiSearchItem } from "@/server/midi/types";
 
 export type SearchState =
@@ -16,12 +16,33 @@ export type SearchState =
 const settleDelay = 500;
 export const shortestQuery = 3;
 
+/** The last search that finished, held outside React so opening a song and
+ * coming back shows what was already found rather than asking the sources
+ * again. Only a mount reads it: any typing searches afresh. Never populated on
+ * the server, where one module would otherwise be every visitor's. */
+let lastSearch: { query: string; results: readonly MidiSearchItem[] } | null =
+  null;
+
+export function lastSearchQuery(): string {
+  return lastSearch?.query ?? "";
+}
+
 export function useLiveSearch(query: string): SearchState {
-  const [state, setState] = useState<SearchState>({ status: "idle" });
+  const [state, setState] = useState<SearchState>(() =>
+    lastSearch !== null && lastSearch.query === query.trim()
+      ? { status: "done", results: lastSearch.results }
+      : { status: "idle" },
+  );
+  const restored = useRef(state.status === "done" ? query.trim() : null);
 
   useEffect(() => {
     const trimmed = query.trim();
+    if (restored.current === trimmed) {
+      return;
+    }
+    restored.current = null;
     if (trimmed === "") {
+      lastSearch = null;
       setState({ status: "idle" });
       return;
     }
@@ -45,6 +66,7 @@ export function useLiveSearch(query: string): SearchState {
           }
           const body: { results: readonly MidiSearchItem[] } =
             await response.json();
+          lastSearch = { query: trimmed, results: body.results };
           setState({ status: "done", results: body.results });
         })
         .catch((error: unknown) => {

@@ -34,8 +34,10 @@ type QualitySpec = {
    * pays for twice: once drawn, once compressed. */
   readonly fps: number;
   readonly bitrate: number;
-  /** Asked for rather than promised: a platform AAC encoder clamps this to its
-   * own ceiling, which at 44.1kHz stereo lands nearer 256 kbps. */
+  /** Kept at or under what a platform AAC encoder will take at 44.1kHz stereo,
+   * which is 256 kbps. Asking past that is not clamped everywhere: some
+   * encoders accept the config, fail on the first frame and close, which
+   * surfaces only as a codec that is already shut. */
   readonly audioBitrate: number;
   /** Frames between forced keyframes, or null to leave the spacing to the
    * encoder. A tight one costs bitrate and buys seeking. */
@@ -49,8 +51,9 @@ type QualitySpec = {
  *
  * The last one answers to YouTube's published upload settings instead, which
  * pull the other way: high profile, 12 Mbps, closed GOP at half the frame
- * rate, 384 kbps sound. It buys a clean transcode from any site that re-encodes
- * what it is given, at the cost of a file far too large to attach anywhere. */
+ * rate. It buys a clean transcode from any site that re-encodes what it is
+ * given, at the cost of a file far too large to attach anywhere. Its sound
+ * stops short of the 384 kbps YouTube names, which no encoder here reaches. */
 export const renderQualities = {
   "720p": {
     width: 1280,
@@ -73,7 +76,7 @@ export const renderQualities = {
     height: 1080,
     fps: 60,
     bitrate: 12_000_000,
-    audioBitrate: 384_000,
+    audioBitrate: 256_000,
     gop: 30,
   },
 } as const satisfies Record<RenderQuality, QualitySpec>;

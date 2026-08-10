@@ -226,7 +226,13 @@ async function withWebCodecs(
     const priming = encoders.audio.codec.startsWith("mp4a")
       ? await primingOf(encoders.audio)
       : 0;
-    await encodeAudio(audioEncoder, audio, signal, silentHead(audio, priming));
+    await encodeAudio(
+      audioEncoder,
+      audio,
+      signal,
+      silentHead(audio, priming),
+      () => failure,
+    );
     for (let index = 0; index < totalFrames; index += 1) {
       abortIfNeeded(signal);
       if (failure !== null) {
@@ -562,11 +568,15 @@ function silentHead(buffer: AudioBuffer, want: number): number {
   return want;
 }
 
+/** A codec that has reported an error is already closed, so the next encode
+ * throws about a closed codec and buries whatever actually went wrong. Asked
+ * before every encode so the real reason is the one that reaches the caller. */
 async function encodeAudio(
   encoder: AudioEncoder,
   buffer: AudioBuffer,
   signal: AbortSignal,
   skip: number,
+  failed: () => DOMException | null,
 ): Promise<void> {
   const { numberOfChannels, sampleRate, length } = buffer;
   const block = 4096;
@@ -575,6 +585,10 @@ async function encodeAudio(
     channels.push(buffer.getChannelData(channel));
   }
   for (let start = skip; start < length; start += block) {
+    const dead = failed();
+    if (dead !== null) {
+      throw dead;
+    }
     const frames = Math.min(block, length - start);
     const data = new Float32Array(frames * numberOfChannels);
     for (let channel = 0; channel < numberOfChannels; channel += 1) {
@@ -594,8 +608,13 @@ async function encodeAudio(
     encoder.encode(audioData);
     audioData.close();
     // A long song is thousands of blocks; bounding the queue keeps it from
-    // holding the whole track in memory at once.
+    // holding the whole track in memory at once. A dead encoder never drains,
+    // so the failure check is what stops this waiting forever.
     while (encoder.encodeQueueSize > 64) {
+      const stalled = failed();
+      if (stalled !== null) {
+        throw stalled;
+      }
       await delay(2);
       abortIfNeeded(signal);
     }

@@ -21,15 +21,16 @@ describe("renderQualities", () => {
   });
 
   it("holds the largest quality to what YouTube publishes", () => {
-    // 1080p at high frame rate is 12 Mbps, sound is 384 kbps stereo, and the
-    // GOP is closed at half the frame rate. Pinned because the numbers come
-    // from outside and read like arbitrary ones from in here.
+    // 1080p at high frame rate is 12 Mbps and the GOP is closed at half the
+    // frame rate. Pinned because the numbers come from outside and read like
+    // arbitrary ones from in here. The sound sits at the AAC ceiling for this
+    // sample rate rather than the 384 kbps published, which is unreachable.
     expect(renderQualities["1080p60"]).toMatchObject({
       width: 1920,
       height: 1080,
       fps: 60,
       bitrate: 12_000_000,
-      audioBitrate: 384_000,
+      audioBitrate: 256_000,
       gop: 30,
     });
   });

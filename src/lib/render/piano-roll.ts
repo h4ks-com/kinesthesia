@@ -1042,12 +1042,23 @@ export class PianoRollRenderer {
       // that has gone down sits nearer the bed, and its shadow shrinking is
       // most of what reads as pressed.
       ctx.fillStyle = sink > 0 ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.28)";
-      ctx.fillRect(
-        x - 1,
-        keyboardTop + blackHeight - sink,
-        blackWidth + 2,
-        sink > 0 ? 1 : 4,
-      );
+      const reach = sink > 0 ? 1 : 4;
+      // A black key stands on the seam between two white keys, so each half of
+      // its shadow falls on a key of its own. One that has been pressed has
+      // dropped away from the tip casting it, and the shadow runs that much
+      // further down it.
+      const half = (blackWidth + 2) / 2;
+      for (const [side, white] of [
+        [0, pitch - 1],
+        [1, pitch + 1],
+      ] as const) {
+        ctx.fillRect(
+          x - 1 + side * half,
+          keyboardTop + blackHeight - sink,
+          half,
+          reach + (down.has(white) ? pressSink : 0),
+        );
+      }
       this.setKeyPaint(frame, active, down, pitch, this.blackFace ?? "#0b0e15");
       const blackFill = ctx.fillStyle;
       ctx.fillRect(x, keyboardTop, blackWidth, blackHeight - sink);

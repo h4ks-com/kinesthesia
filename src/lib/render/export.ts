@@ -113,6 +113,8 @@ export function watchFrame(
     keyLabels: null,
     noteNames: config.noteNames,
     follow: false,
+    // A render has nobody at the keys, so the song presses them itself.
+    songPresses: true,
     plain: config.plain,
   };
 }

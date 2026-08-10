@@ -174,6 +174,54 @@ export async function isStruckKey(page: Page, x: number): Promise<boolean> {
   );
 }
 
+/** Narrower than any key can be drawn, so a break this small in a run of colour
+ * is something painted on one key rather than a gap between two. The letter
+ * naming a key sits in exactly this row and splits its colour in two. */
+const withinOneKey = 16;
+
+/** How many white keys read as pressed, counted in one pass. Two passes cannot
+ * answer this: a note ends between them, so the lit key the first found is back
+ * up before the second measures it, and the reading straddles two frames. Read
+ * along the row nearest the player, where no black key reaches. */
+export async function struckKeyCount(page: Page): Promise<number> {
+  return page.evaluate(
+    ([fromBottom, saturated, sameKey]) => {
+      const canvas = document.querySelector("canvas");
+      const context = canvas?.getContext("2d") ?? null;
+      if (canvas === null || context === null) {
+        return 0;
+      }
+      const ratio = canvas.width / canvas.clientWidth;
+      const row = Math.round((canvas.clientHeight - (fromBottom ?? 0)) * ratio);
+      const { data } = context.getImageData(0, row, canvas.width, 1);
+      const gap = (sameKey ?? 0) * ratio;
+      let count = 0;
+      let since: number | null = null;
+      for (let pixel = 0; pixel < canvas.width; pixel += 1) {
+        const index = pixel * 4;
+        const red = data[index] ?? 0;
+        const green = data[index + 1] ?? 0;
+        const blue = data[index + 2] ?? 0;
+        const struck =
+          Math.max(red, green, blue) - Math.min(red, green, blue) >=
+          (saturated ?? 0);
+        if (!struck) {
+          continue;
+        }
+        // Counted per key rather than per run of colour: a run that resumes
+        // within one key's width is the same key showing through around
+        // whatever is printed on it.
+        if (since === null || pixel - since > gap) {
+          count += 1;
+        }
+        since = pixel;
+      }
+      return count;
+    },
+    [keyRowFromBottom, struckSaturation, withinOneKey],
+  );
+}
+
 /** The centre of the first white key the song is sounding, which is the key the
  * player owes while the gate waits. */
 export async function litKeyCentre(page: Page): Promise<number | null> {

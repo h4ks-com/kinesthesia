@@ -114,11 +114,22 @@ export type Frame = {
   /** Brings the note the player is next asked for into view, for a keyboard
    * wider than the screen. */
   readonly follow: boolean;
+  /** Nobody is at this keyboard, so the notes it is sounding press its keys
+   * themselves. False wherever a hand plays, where a key may only go down for a
+   * press somebody made: sinking a key the song is merely sounding would report
+   * a press that never happened, and in a match it would show an opponent
+   * playing along to notes they missed. */
+  readonly songPresses: boolean;
   /** Filled as the notes are drawn when a skin is behind the roll, so it can
    * answer to where they are without walking the song again. Null leaves the
    * roll opaque and costs nothing. */
   readonly report: SkinReport | null;
 };
+
+/** Whichever keys read as down this frame. The pressed set where a hand is
+ * playing, the sounding notes themselves where the song plays alone, so a frame
+ * asks one of the two it already holds and copies nothing. */
+type KeysDown = { has(pitch: number): boolean };
 
 /** What the roll hands a skin. Written to during the note passes, so a skinned
  * frame costs one push per drawn note and nothing else. The geometry comes from
@@ -386,6 +397,7 @@ export class PianoRollRenderer {
     this.paintKeyboard(
       frame,
       active,
+      frame.songPresses ? active : frame.pressed,
       keyboardTop,
       keyboardHeight,
       whiteWidth,
@@ -949,6 +961,7 @@ export class PianoRollRenderer {
   private paintKeyboard(
     frame: Frame,
     active: ReadonlyMap<number, NoteColor>,
+    down: KeysDown,
     keyboardTop: number,
     keyboardHeight: number,
     whiteWidth: number,
@@ -962,10 +975,8 @@ export class PianoRollRenderer {
       const x = whiteKeyLeft(pitch, whiteWidth);
       // A key hinges at its far end, which is the top of the screen, so a
       // pressed one dips at the near end and comes up short of where it stood.
-      // Only a hand sinks a key: a key the song is sounding lights but is not
-      // being touched, and sinking it would report a press nobody made.
-      const sink = frame.pressed.has(pitch) ? pressSink : 0;
-      this.setKeyPaint(frame, active, pitch, this.whiteFace ?? "#dfe4ec");
+      const sink = down.has(pitch) ? pressSink : 0;
+      this.setKeyPaint(frame, active, down, pitch, this.whiteFace ?? "#dfe4ec");
       ctx.fillRect(x + 0.5, keyboardTop, whiteWidth - 1, keyboardHeight - sink);
       // The bed the near end drops toward, at the front where it went down.
       if (sink > 0) {
@@ -1011,17 +1022,13 @@ export class PianoRollRenderer {
       this.paintKeyBloom(
         frame,
         active,
+        down,
         keyboardTop,
         keyboardHeight,
         whiteWidth,
         false,
       );
-      this.paintKeyRecess(
-        frame.pressed,
-        keyboardTop,
-        keyboardHeight,
-        whiteWidth,
-      );
+      this.paintKeyRecess(down, keyboardTop, keyboardHeight, whiteWidth);
     }
 
     for (let pitch = lowestPitch; pitch <= highestPitch; pitch += 1) {
@@ -1030,7 +1037,7 @@ export class PianoRollRenderer {
       }
       const blackWidth = blackKeyWidth(whiteWidth);
       const x = blackKeyLeft(pitch, whiteWidth);
-      const sink = frame.pressed.has(pitch) ? pressSink : 0;
+      const sink = down.has(pitch) ? pressSink : 0;
       // The shadow a black key casts on the whites just past its tip. A key
       // that has gone down sits nearer the bed, and its shadow shrinking is
       // most of what reads as pressed.
@@ -1041,7 +1048,7 @@ export class PianoRollRenderer {
         blackWidth + 2,
         sink > 0 ? 1 : 4,
       );
-      this.setKeyPaint(frame, active, pitch, this.blackFace ?? "#0b0e15");
+      this.setKeyPaint(frame, active, down, pitch, this.blackFace ?? "#0b0e15");
       const blackFill = ctx.fillStyle;
       ctx.fillRect(x, keyboardTop, blackWidth, blackHeight - sink);
       if (sink > 0) {
@@ -1078,6 +1085,7 @@ export class PianoRollRenderer {
       this.paintKeyBloom(
         frame,
         active,
+        down,
         keyboardTop,
         blackHeight,
         whiteWidth,
@@ -1242,7 +1250,7 @@ export class PianoRollRenderer {
    * Black keys ride on top of the whites with nothing beside them at their own
    * height, so they get none of this. */
   private paintKeyRecess(
-    pressed: ReadonlySet<number>,
+    down: KeysDown,
     keyboardTop: number,
     keyboardHeight: number,
     whiteWidth: number,
@@ -1251,7 +1259,7 @@ export class PianoRollRenderer {
     const foot = keyboardTop + keyboardHeight - pressSink;
     const wall = Math.max(2, whiteWidth * 0.26);
     const sunk = (pitch: number | undefined): boolean =>
-      pitch !== undefined && pressed.has(pitch);
+      pitch !== undefined && down.has(pitch);
 
     for (let index = 0; index < whiteKeys.length; index += 1) {
       const pitch = whiteKeys[index];
@@ -1287,6 +1295,7 @@ export class PianoRollRenderer {
   private paintKeyBloom(
     frame: Frame,
     active: ReadonlyMap<number, NoteColor>,
+    down: KeysDown,
     keyboardTop: number,
     deepest: number,
     whiteWidth: number,
@@ -1298,7 +1307,7 @@ export class PianoRollRenderer {
       if (isBlackKey(pitch) !== wantBlack) {
         continue;
       }
-      const struck = frame.pressed.has(pitch);
+      const struck = down.has(pitch);
       const wide = wantBlack ? blackKeyWidth(whiteWidth) : whiteWidth - 1;
       const left = wantBlack
         ? blackKeyLeft(pitch, whiteWidth)
@@ -1336,6 +1345,7 @@ export class PianoRollRenderer {
   private setKeyPaint(
     frame: Frame,
     active: ReadonlyMap<number, NoteColor>,
+    down: KeysDown,
     pitch: number,
     restingFill: string | CanvasGradient,
   ): void {
@@ -1346,13 +1356,15 @@ export class PianoRollRenderer {
       return;
     }
     if (frame.plain) {
+      // White stands for a hand, and watching has none, so a plain render keeps
+      // the colour that says which part is playing and lets the key's own dip
+      // carry that it is down.
       ctx.fillStyle = frame.pressed.has(pitch) ? "#ffffff" : color.flat;
       return;
     }
-    // A key under a hand takes the part's own colour at full strength, and one
-    // the song is only sounding takes the pale tint. White says nothing about
-    // which part is playing, which is what the colour is for.
-    ctx.fillStyle = frame.pressed.has(pitch) ? color.glow : color.core;
+    // A key that is down takes the part's own colour at full strength, and one
+    // merely near a note takes the pale tint.
+    ctx.fillStyle = down.has(pitch) ? color.glow : color.core;
   }
 }
 

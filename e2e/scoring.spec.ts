@@ -1,10 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import {
-  isStruckKey,
-  litKeyCentre,
-  playerQuery,
-  serveFixture,
-} from "./fixture";
+import { playerQuery, serveFixture, struckKeyCount } from "./fixture";
 
 /** Every white key the computer keyboard reaches, so a run of them is certain
  * to include whatever the song is asking for. */
@@ -94,9 +89,9 @@ test("a key nothing asked for is judged, not ignored", async ({ page }) => {
   await expect(page.locator(".pop").first()).toHaveText(/Miss|Perfect|Good/);
 });
 
-// The roll used to sink and shadow keys the song was sounding, which reads as
-// the game pressing them for you.
-test("watching never presses a key for you", async ({ page }) => {
+// Watching has nobody at the keys, so the song plays them itself and every
+// sounding key reads as pressed rather than merely tinted.
+test("watching presses the keys the song is sounding", async ({ page }) => {
   test.setTimeout(120_000);
   await serveFixture(page);
   await page.setViewportSize({ width: 1280, height: 820 });
@@ -104,19 +99,17 @@ test("watching never presses a key for you", async ({ page }) => {
   await expect(page.locator("canvas").first()).toBeVisible();
   await page.getByRole("button", { name: /play/i }).first().click();
 
-  // A key the song is sounding carries its part's colour without wearing the
-  // full-strength one a hand puts on it. Nothing sounding reads as neither, so
-  // this waits for a lit key rather than for the song to have got to one.
   await expect
-    .poll(
-      async () => {
-        const lit = await litKeyCentre(page);
-        return lit === null ? null : await isStruckKey(page, lit);
-      },
-      { timeout: 30_000 },
-    )
-    .toBe(false);
+    .poll(async () => struckKeyCount(page), { timeout: 30_000 })
+    .toBeGreaterThan(0);
 });
+
+// The other half of the rule, that a hand's own press is the only thing that may
+// sink a key where somebody is playing, has no test here on purpose. Learn only
+// diverges in the instant after a gate opens, and every steady moment a spec can
+// read is a gate holding still with nothing sounding, so an assertion there
+// passes under either rule and would claim cover it does not have. A match would
+// show it plainly, and nothing yet drives one from end to end.
 
 test("the rail rides the right of both rolls, whatever the width", async ({
   page,

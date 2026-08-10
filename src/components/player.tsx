@@ -659,6 +659,10 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
               // so there would be no single note to come to, and the view
               // would wander the song.
               follow={simplified && interactive}
+              // Watching has nobody at the keys, so every note the shown parts
+              // sound presses its own key. Anywhere a hand plays, a key going
+              // down has to mean that hand put it there.
+              songPresses={!interactive}
               getPosition={playback.getPosition}
               getPressed={input.pressed}
               getOwed={gates.owed}

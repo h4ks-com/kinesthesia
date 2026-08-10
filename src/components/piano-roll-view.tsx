@@ -36,6 +36,9 @@ type PianoRollViewProps = {
   /** Brings the note the player is next asked for into view, where the keyboard
    * is wider than the screen. */
   follow: boolean;
+  /** Sinks and shadows every key the shown parts are sounding, for a keyboard
+   * nobody is playing. Where a hand plays, only its own presses may sink a key. */
+  songPresses?: boolean;
   getPosition: () => number;
   getPressed: () => ReadonlySet<number>;
   getOwed: () => ReadonlySet<number>;
@@ -76,6 +79,7 @@ export function PianoRollView({
   keyWidth,
   focusPitch,
   follow,
+  songPresses = false,
   getPosition,
   getPressed,
   getOwed,
@@ -148,6 +152,8 @@ export function PianoRollView({
   focusRef.current = focusPitch;
   const followRef = useRef(follow);
   followRef.current = follow;
+  const songPressesRef = useRef(songPresses);
+  songPressesRef.current = songPresses;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -182,6 +188,7 @@ export function PianoRollView({
         hits: hitsRef.current?.() ?? noHits,
         yours: getYours(),
         follow: followRef.current,
+        songPresses: songPressesRef.current,
         reach: reachRef.current,
         keyLabels: labelsRef.current,
         noteNames: noteNamesRef.current,

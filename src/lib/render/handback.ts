@@ -5,7 +5,9 @@
  * The key is the whole credential. It opens one job's artifact and nothing
  * else, and it dies with the job, which is what makes it safe to carry in a url
  * a shared browser can read. */
-export type RenderKind = "video" | "audio";
+export const renderKinds = ["video", "audio"] as const;
+
+export type RenderKind = (typeof renderKinds)[number];
 
 export type Handback = {
   readonly job: string;

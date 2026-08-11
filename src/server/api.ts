@@ -1,11 +1,15 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
 import type { Context } from "hono";
+import { apiBase, renderReportPath } from "@/lib/analytics-report";
 import { readMidi } from "@/lib/midi/analysis";
+import { renderQualityIds } from "@/lib/render/export";
+import { renderKinds } from "@/lib/render/handback";
 import { skinSource, skins } from "@/lib/skins/registry";
 import { runtimeBundle } from "@/lib/skins/runtime/stamp";
 import { skinIds } from "@/lib/skins/types";
 import { isPlayableUrl } from "@/lib/trusted-url";
+import { longestText, track } from "@/server/analytics/track";
 import { currentViewer } from "@/server/auth";
 import { config } from "@/server/config";
 import type { Score } from "@/server/db/schema";
@@ -157,11 +161,34 @@ const sourcesRoute = createRoute({
   },
 });
 
-export const api = new OpenAPIHono().basePath("/api");
+export const api = new OpenAPIHono().basePath(apiBase);
+
+/** A day, which no render or song reaches. */
+const longestSong = 86_400;
+
+/** Anything a caller writes that only ever becomes an event property, cut to fit
+ * so a long one is still counted. */
+const shortText = z
+  .string()
+  .optional()
+  .transform((text) => text?.slice(0, longestText));
 
 api.openapi(searchRoute, async (c) => {
   const { q, source, limit } = c.req.valid("query");
   const results = await searchMidi({ query: q, source: source ?? null, limit });
+  // What was searched for, since which songs people go looking for is the point
+  // of asking. How many came back says whether the sources are answering.
+  track(
+    "song_searched",
+    c.req.raw.headers,
+    // Cut to fit, since the box takes any length and none of it is ours.
+    {
+      query: q.slice(0, longestText),
+      source: source ?? null,
+      results: results.length,
+    },
+    await currentViewer(),
+  );
   return c.json({ results }, 200);
 });
 
@@ -197,6 +224,69 @@ api.openapi(sourcesRoute, (c) =>
   ),
 );
 
+/** A render runs entirely in the browser that asked for it, so the only way the
+ * server hears how one went is the player saying so. Nothing is returned, and a
+ * deployment with no analytics simply drops it. */
+const renderReportRoute = createRoute({
+  method: "post",
+  path: renderReportPath,
+  summary: "Report how a render went",
+  description:
+    "Used by the player once it has finished encoding, so renders can be counted. Names the song and how it was encoded, and carries no file.",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          // Anything the page writes is cut to fit rather than refused, since a
+          // song with a long title would otherwise be the one render nobody
+          // hears about.
+          schema: z.object({
+            kind: z.enum(renderKinds),
+            quality: z.enum(renderQualityIds),
+            songSeconds: z.number().min(0).max(longestSong),
+            elapsedSeconds: z.number().min(0).max(longestSong),
+            song: shortText,
+            realtime: z.boolean().optional(),
+            error: shortText,
+          }),
+        },
+      },
+    },
+  },
+  responses: { 204: { description: "Counted" } },
+});
+
+api.openapi(renderReportRoute, async (c) => {
+  const { kind, quality, songSeconds, elapsedSeconds, song, realtime, error } =
+    c.req.valid("json");
+  const shared = {
+    kind,
+    // Audio comes out as a wav whatever is picked, so a quality on one would
+    // split a dashboard by something that had no effect.
+    quality: kind === "video" ? quality : null,
+    song: song ?? null,
+    song_seconds: songSeconds,
+    elapsed_seconds: elapsedSeconds,
+  };
+  const person = await currentViewer();
+  if (error === undefined) {
+    track(
+      "render_finished",
+      c.req.raw.headers,
+      { ...shared, realtime: realtime ?? null },
+      person,
+    );
+  } else {
+    track(
+      "render_failed",
+      c.req.raw.headers,
+      { ...shared, reason: error },
+      person,
+    );
+  }
+  return c.body(null, 204);
+});
+
 /** Streams a source's file through our own origin, so a provider that sends no
  * cross origin headers still plays in a browser. Binary, so it is a plain route
  * rather than a documented JSON one. */
@@ -221,7 +311,18 @@ api.get("/midi/file", async (c) => {
     if (!upstream.ok) {
       return c.json({ error: "The file could not be fetched" }, 502);
     }
-    return c.body(await upstream.arrayBuffer(), 200, {
+    const bytes = await upstream.arrayBuffer();
+    track(
+      "song_fetched",
+      c.req.raw.headers,
+      {
+        source: c.req.query("source") ?? null,
+        song: id,
+        bytes: bytes.byteLength,
+      },
+      await currentViewer(),
+    );
+    return c.body(bytes, 200, {
       "content-type": "audio/midi",
       "access-control-allow-origin": "*",
       "cache-control": "public, max-age=86400",
@@ -372,21 +473,33 @@ function roomResponse(room: MultiplayerRoom) {
   return { ...room, tracks: [...room.tracks] };
 }
 
-api.openapi(createRoomRoute, (c) => {
+api.openapi(createRoomRoute, async (c) => {
   const room = c.req.valid("json");
   // A joiner loads this url straight from the room, so it is held to the same
   // allowlist as a url typed into the address bar.
   if (!isPlayableUrl(room.url, config.trustedMidiOrigins)) {
     return c.json({ error: "The song url is not from an allowed origin" }, 400);
   }
+  track(
+    "match_created",
+    c.req.raw.headers,
+    { coop: room.coop, song: room.name, source: room.source },
+    await currentViewer(),
+  );
   return c.json(roomResponse(createRoom(room)), 200);
 });
 
-api.openapi(joinRoomRoute, (c) => {
+api.openapi(joinRoomRoute, async (c) => {
   const room = findRoom(c.req.valid("param").code);
   if (room === null) {
     return c.json({ error: "That room is not open" }, 404);
   }
+  track(
+    "match_joined",
+    c.req.raw.headers,
+    { coop: room.coop, song: room.name, source: room.source },
+    await currentViewer(),
+  );
   return c.json(roomResponse(room), 200);
 });
 
@@ -548,6 +661,18 @@ api.openapi(submitScoreRoute, async (c) => {
     playerId: viewer.id,
     playerName: viewer.name,
   });
+  track(
+    "score_submitted",
+    c.req.raw.headers,
+    {
+      mode: stored.mode,
+      song: stored.song,
+      points: stored.points,
+      accuracy: stored.accuracy,
+      best_combo: stored.bestCombo,
+    },
+    viewer,
+  );
   return c.json(publicScore(stored), 200);
 });
 
@@ -828,6 +953,12 @@ api.openapi(shareUploadRoute, async (c) => {
     );
   }
   const url = await uploadMidi(`shared/${crypto.randomUUID()}.mid`, bytes);
+  track(
+    "upload_published",
+    c.req.raw.headers,
+    { bytes: bytes.byteLength },
+    viewer,
+  );
   return c.json({ url }, 200);
 });
 

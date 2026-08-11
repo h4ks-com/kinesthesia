@@ -20,6 +20,9 @@ src/server/
                               the player links it builds for agents
   config.ts                   environment
   auth.ts                     optional Logto session and sign in actions
+  analytics/track.ts          the one place a usage event leaves this server,
+                              off unless a key is configured. An address is read
+                              for a country and a daily hash, never sent
   http/fetch.ts               proxy aware fetch for outbound source calls
   multiplayer/rooms.ts        room codes pointing at a host peer, per match
   db/schema.ts                Drizzle tables
@@ -87,6 +90,8 @@ src/components/
 src/lib/
   player-url.ts               builds and parses player URLs
   download.ts                 hands a blob to the browser as a named file
+  analytics-report.ts         the two names the analytics route, the page that
+                              posts to it and the build config have to agree on
   trusted-url.ts              whether a url may be opened at all, which the
                               player, the pictures and the MCP tools all ask
   use-player-settings.ts      the settings a song plays with, restored from this

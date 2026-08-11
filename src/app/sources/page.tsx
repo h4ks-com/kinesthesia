@@ -59,6 +59,21 @@ export default async function SourcesPage() {
             </li>
           ))}
         </ul>
+
+        {/* CC-BY-4.0 asks for this by name wherever the data is used. */}
+        <p className="font-mono text-[0.7rem] text-faint leading-relaxed">
+          Where usage is counted, the country it came from is worked out on our
+          own server from{" "}
+          <a
+            href="https://db-ip.com"
+            target="_blank"
+            rel="noreferrer"
+            className="transition-colors hover:text-accent"
+          >
+            IP Geolocation by DB-IP
+          </a>
+          , CC BY 4.0. No address is stored or sent anywhere.
+        </p>
       </main>
     </>
   );

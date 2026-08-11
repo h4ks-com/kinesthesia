@@ -12,6 +12,7 @@ import {
 import { type ReactNode, useEffect, useReducer, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Popover } from "@/components/ui/popover";
+import { renderReportUrl } from "@/lib/analytics-report";
 import type { SongVoicing } from "@/lib/audio/voicing";
 import { downloadBlob, downloadName } from "@/lib/download";
 import type { Song } from "@/lib/midi/song";
@@ -27,6 +28,7 @@ import {
   handBackFailure,
   handbackFromUrl,
   isExpected,
+  type RenderKind,
 } from "@/lib/render/handback";
 import { canRenderVideo, isFastVideo } from "@/lib/render/video-support";
 import type { BackdropSource, NoteDirection } from "@/lib/skins/types";
@@ -45,11 +47,9 @@ type RenderMenuProps = {
   title: string;
 };
 
-type JobKind = "video" | "audio";
-
 type Job =
   | {
-      kind: JobKind;
+      kind: RenderKind;
       phase: "working";
       stage: string;
       progress: number | null;
@@ -63,13 +63,13 @@ type Job =
       paced: boolean;
     }
   | {
-      kind: JobKind;
+      kind: RenderKind;
       phase: "done";
       filename: string;
       blob: Blob;
       realtime: boolean;
     }
-  | { kind: JobKind; phase: "error"; message: string };
+  | { kind: RenderKind; phase: "error"; message: string };
 
 export function RenderMenu({
   song,
@@ -120,7 +120,7 @@ export function RenderMenu({
     });
   }, []);
 
-  async function run(kind: JobKind): Promise<void> {
+  async function run(kind: RenderKind): Promise<void> {
     const config: RenderConfig = {
       song,
       voicing,
@@ -136,6 +136,7 @@ export function RenderMenu({
     abort.current = controller;
     lastShown.current = 0;
     const seconds = renderDuration(config);
+    const started = performance.now();
     const begin = (stage: string, paced: boolean, progress: number | null) =>
       setJob({
         kind,
@@ -172,7 +173,14 @@ export function RenderMenu({
         return;
       }
       if (kind === "audio") {
-        finish(kind, audioToWav(audio), downloadName(title, "wav"), false);
+        finish(
+          kind,
+          audioToWav(audio),
+          downloadName(title, "wav"),
+          false,
+          seconds,
+          started,
+        );
         return;
       }
       begin("Encoding video", true, 0);
@@ -198,6 +206,8 @@ export function RenderMenu({
         video.blob,
         downloadName(title, video.extension),
         video.realtime,
+        seconds,
+        started,
       );
     } catch (error) {
       if (isAbort(error) || controller.signal.aborted) {
@@ -210,15 +220,18 @@ export function RenderMenu({
       if (asked !== null) {
         void handBackFailure(asked, message);
       }
+      report({ kind, seconds, started, error: message });
       setJob({ kind, phase: "error", message });
     }
   }
 
   function finish(
-    kind: JobKind,
+    kind: RenderKind,
     blob: Blob,
     filename: string,
     realtime: boolean,
+    seconds: number,
+    started: number,
   ): void {
     const asked = handbackFromUrl();
     if (asked === null) {
@@ -226,7 +239,36 @@ export function RenderMenu({
     } else {
       void handBack(asked, blob, filename);
     }
+    report({ kind, seconds, started, realtime });
     setJob({ kind, phase: "done", filename, blob, realtime });
+  }
+
+  /** Encoding happens here rather than on the server, so how it went is only
+   * known if the page says so. Nothing is waited on and a refusal is dropped: a
+   * render must not care whether it was counted. */
+  function report(
+    outcome: {
+      kind: RenderKind;
+      /** How long the finished file runs. */
+      seconds: number;
+      started: number;
+    } & ({ realtime: boolean } | { error: string }),
+  ): void {
+    const { kind, seconds, started, ...how } = outcome;
+    void fetch(renderReportUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        kind,
+        quality,
+        song: title,
+        songSeconds: seconds,
+        // What says whether rendering is slow, which is the reason to count one.
+        elapsedSeconds: (performance.now() - started) / 1000,
+        ...how,
+      }),
+      keepalive: true,
+    }).catch(() => undefined);
   }
 
   function cancel(): void {

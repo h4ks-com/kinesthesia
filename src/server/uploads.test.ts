@@ -2,7 +2,11 @@ import { Midi } from "@tonejs/midi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const viewer = vi.fn(
-  async (): Promise<{ id: string; name: string } | null> => null,
+  async (): Promise<{
+    id: string;
+    name: string;
+    username: string | null;
+  } | null> => null,
 );
 const upload = vi.fn(
   async (key: string, _bytes: Uint8Array) => `https://files.test/${key}`,
@@ -49,7 +53,7 @@ describe("POST /api/uploads", () => {
   });
 
   it("publishes a signed-in player's file and says where it went", async () => {
-    viewer.mockResolvedValue({ id: "u1", name: "Player" });
+    viewer.mockResolvedValue({ id: "u1", name: "Player", username: "player" });
     const response = await post(midiBytes());
     expect(response.status).toBe(200);
     expect((await response.json()).url).toContain("https://files.test/shared/");
@@ -57,26 +61,26 @@ describe("POST /api/uploads", () => {
   });
 
   it("keeps each file to its own address", async () => {
-    viewer.mockResolvedValue({ id: "u1", name: "Player" });
+    viewer.mockResolvedValue({ id: "u1", name: "Player", username: "player" });
     const first = await (await post(midiBytes())).json();
     const second = await (await post(midiBytes())).json();
     expect(first.url).not.toBe(second.url);
   });
 
   it("refuses something that is not a MIDI, so a link cannot go out dead", async () => {
-    viewer.mockResolvedValue({ id: "u1", name: "Player" });
+    viewer.mockResolvedValue({ id: "u1", name: "Player", username: "player" });
     const response = await post(new Uint8Array([1, 2, 3, 4]));
     expect(response.status).toBe(400);
     expect(upload).not.toHaveBeenCalled();
   });
 
   it("refuses an empty body", async () => {
-    viewer.mockResolvedValue({ id: "u1", name: "Player" });
+    viewer.mockResolvedValue({ id: "u1", name: "Player", username: "player" });
     expect((await post(new Uint8Array())).status).toBe(400);
   });
 
   it("refuses a body larger than the server accepts, before reading it", async () => {
-    viewer.mockResolvedValue({ id: "u1", name: "Player" });
+    viewer.mockResolvedValue({ id: "u1", name: "Player", username: "player" });
     const response = await api.request("/api/uploads", {
       method: "POST",
       headers: {
@@ -90,7 +94,11 @@ describe("POST /api/uploads", () => {
   });
 
   it("stops one account filling the shared store", async () => {
-    viewer.mockResolvedValue({ id: "greedy", name: "Player" });
+    viewer.mockResolvedValue({
+      id: "greedy",
+      name: "Player",
+      username: "player",
+    });
     const codes: number[] = [];
     for (let attempt = 0; attempt < 32; attempt += 1) {
       codes.push((await post(midiBytes())).status);
@@ -100,7 +108,7 @@ describe("POST /api/uploads", () => {
   });
 
   it("says so when the server has no object store", async () => {
-    viewer.mockResolvedValue({ id: "u1", name: "Player" });
+    viewer.mockResolvedValue({ id: "u1", name: "Player", username: "player" });
     enabled.mockReturnValue(false);
     const response = await post(midiBytes());
     expect(response.status).toBe(503);

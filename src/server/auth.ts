@@ -6,6 +6,10 @@ import { authConfig } from "@/server/config";
 export type Viewer = {
   readonly id: string;
   readonly name: string;
+  /** What this account calls itself, where it calls itself anything. Null rather
+   * than the email `name` falls back to, so a display name can be shown outside
+   * this deployment without an address going with it. */
+  readonly username: string | null;
 };
 
 const logtoConfig =
@@ -36,6 +40,7 @@ export async function currentViewer(): Promise<Viewer | null> {
   return {
     id: claims.sub,
     name: claims.username ?? claims.name ?? claims.email ?? "Player",
+    username: claims.username ?? claims.name ?? null,
   };
 }
 

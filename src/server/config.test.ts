@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { envKeys } from "@/server/config";
 
 async function loadConfig(env: Record<string, string> = {}) {
@@ -88,5 +88,58 @@ describe("server config", () => {
       MINIO_PUBLIC_BASE: "not a url",
     });
     expect(bucketConfig).toBeNull();
+  });
+
+  it("leaves analytics off until a key is given, and says so when half set", async () => {
+    const warnings: string[] = [];
+    const warn = vi
+      .spyOn(console, "warn")
+      .mockImplementation((message: unknown) => warnings.push(String(message)));
+    onTestFinished(() => warn.mockRestore());
+
+    const { analyticsConfig: off } = await loadConfig();
+    expect(off).toBeNull();
+    expect(warnings).toEqual([]);
+
+    const { analyticsConfig: half } = await loadConfig({
+      ANALYTICS_COUNTRY_HEADER: "cf-ipcountry",
+    });
+    expect(half).toBeNull();
+    expect(warnings.join()).toMatch(/ANALYTICS_COUNTRY_HEADER.*POSTHOG_KEY/);
+
+    const { analyticsConfig: on } = await loadConfig({
+      POSTHOG_KEY: "phc_test",
+      ANALYTICS_COUNTRY_HEADER: "X-GeoIP-Country",
+    });
+    expect(on).toEqual({
+      key: "phc_test",
+      host: "https://eu.i.posthog.com",
+      // Lowercased, since that is how a header is looked up.
+      countryHeader: "x-geoip-country",
+      ipSalt: null,
+    });
+  });
+
+  // Looking a header up by an illegal name throws, and that throw would land in
+  // whichever route was being tracked. A space either side of a compose value is
+  // how it happens, so it is trimmed rather than refused.
+  it("refuses a country header that is not a header name", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    onTestFinished(() => warn.mockRestore());
+
+    const { analyticsConfig: padded } = await loadConfig({
+      POSTHOG_KEY: "phc_test",
+      ANALYTICS_COUNTRY_HEADER: "  cf-ipcountry  ",
+    });
+    expect(padded?.countryHeader).toBe("cf-ipcountry");
+
+    for (const name of ["cf ipcountry", "cf-ipcountry:", "a\nb", "héader"]) {
+      const { analyticsConfig: bad } = await loadConfig({
+        POSTHOG_KEY: "phc_test",
+        ANALYTICS_COUNTRY_HEADER: name,
+      });
+      expect(bad?.countryHeader).toBeNull();
+      expect(() => new Headers().get(name)).toThrow();
+    }
   });
 });

@@ -49,7 +49,7 @@ vi.mock("next/navigation", () => ({
 function mine() {
   return render(
     <Home
-      viewer={{ id: "1", name: "me" }}
+      viewer={{ id: "1", name: "me", username: "me" }}
       authEnabled={true}
       shareEnabled={true}
       homeLink="https://h4ks.test"
@@ -76,12 +76,23 @@ beforeEach(() => {
       ],
     ]),
   );
+  // Only the endpoints this exercises answer. Anything else refuses, which is
+  // what keeps the top bar's own stats request from filling the page with a
+  // shape it never asked for.
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (target: string) => ({
-      ok: target === "/api/uploads",
-      json: async () => ({ url: "https://files.test/abc.mid" }),
-    })),
+    vi.fn(async (target: string) => {
+      if (target === "/api/uploads") {
+        return {
+          ok: true,
+          json: async () => ({ url: "https://files.test/abc.mid" }),
+        };
+      }
+      if (target.startsWith("/api/midi/search")) {
+        return { ok: true, json: async () => ({ results: [] }) };
+      }
+      return { ok: false, json: async () => ({}) };
+    }),
   );
 });
 
@@ -114,7 +125,9 @@ describe("Home", () => {
     box.focus();
     // Filtering the row out and back in mounts it again, which is where a row
     // that focuses itself on arrival takes the box away from whoever is typing.
-    fireEvent.change(box, { target: { value: "zzz" } });
+    // Two letters, which is under the length that sends a search, so nothing
+    // lands from the network partway through.
+    fireEvent.change(box, { target: { value: "zz" } });
     await waitFor(() =>
       expect(
         screen.queryByRole("button", { name: "Copy the link to mine.mid" }),

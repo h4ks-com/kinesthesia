@@ -38,6 +38,10 @@ const envSchema = z.object({
     z.coerce.number().int().positive().optional(),
   ),
   MIDI_SOURCE_PROXY_URL: optionalString,
+  POSTHOG_KEY: optionalString,
+  POSTHOG_HOST: urlOr("https://eu.i.posthog.com"),
+  ANALYTICS_COUNTRY_HEADER: optionalString,
+  ANALYTICS_IP_SALT: optionalString,
   DATABASE_URL: stringOr("file:./data/kinesthesia.db"),
   DATABASE_AUTH_TOKEN: optionalString,
   NEXT_PUBLIC_PEER_SERVER: optionalString,
@@ -158,6 +162,61 @@ export const renderBrowser: RenderBrowser | null =
     : {
         endpoint: env.RENDER_BROWSER_WS,
         headers: renderHeaders(env.RENDER_BROWSER_HEADERS),
+      };
+
+export type AnalyticsConfig = {
+  readonly key: string;
+  readonly host: string;
+  /** The header a proxy in front puts a country code in, preferred over this
+   * build's own table. */
+  readonly countryHeader: string | null;
+  /** Keys the hash that names a visitor, so it is secret. */
+  readonly ipSalt: string | null;
+};
+
+/** Checked because looking a header up by an illegal name throws, and the one
+ * thing analytics may never do is break the request it was reading. A stray space
+ * either side of a value in a compose file is how that happens. */
+function countryHeaderName(value: string | undefined): string | null {
+  const name = value?.trim().toLowerCase() ?? "";
+  if (name === "") {
+    return null;
+  }
+  if (!/^[a-z0-9_-]+$/.test(name)) {
+    console.warn(
+      `ANALYTICS_COUNTRY_HEADER is not a header name, so no country is read from one: ${value}`,
+    );
+    return null;
+  }
+  return name;
+}
+
+const analyticsNames = [
+  "POSTHOG_HOST",
+  "ANALYTICS_COUNTRY_HEADER",
+  "ANALYTICS_IP_SALT",
+] as const;
+
+/** Set without a key, so somebody meant to turn analytics on and has not. */
+const halfSet = analyticsNames.filter(
+  (name) => env.POSTHOG_KEY === undefined && (process.env[name] ?? "") !== "",
+);
+if (halfSet.length > 0) {
+  console.warn(
+    `${halfSet.join(" and ")} set without POSTHOG_KEY, so no analytics are sent.`,
+  );
+}
+
+/** Null unless a project key is set, which is what keeps analytics entirely opt
+ * in: a deployment that names no key sends nothing anywhere. */
+export const analyticsConfig: AnalyticsConfig | null =
+  env.POSTHOG_KEY === undefined
+    ? null
+    : {
+        key: env.POSTHOG_KEY,
+        host: env.POSTHOG_HOST,
+        countryHeader: countryHeaderName(env.ANALYTICS_COUNTRY_HEADER),
+        ipSalt: env.ANALYTICS_IP_SALT ?? null,
       };
 
 export const config = {

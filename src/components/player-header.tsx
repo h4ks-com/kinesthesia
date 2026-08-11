@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { PartControls } from "@/components/part-controls";
+import { SongMenu } from "@/components/song-menu";
 import { type SoundSharing, TrackMenu } from "@/components/track-menu";
 import { ScoreReadout } from "@/components/ui/score-readout";
 import type { SongVoicing, Voicing } from "@/lib/audio/voicing";
@@ -43,6 +44,11 @@ type PlayerHeaderProps = {
   hiddenTracks: ReadonlySet<number>;
   playerTracks: ReadonlySet<number>;
   interactive: boolean;
+  /** The song's name without its file extension. */
+  title: string;
+  signedIn: boolean;
+  shareEnabled: boolean;
+  onPublished: (url: string) => void;
   simplified: boolean;
   onSimplified: (simplified: boolean) => void;
   melodyRate: MelodyRate;
@@ -75,6 +81,10 @@ export function PlayerHeader({
   hiddenTracks,
   playerTracks,
   interactive,
+  title,
+  signedIn,
+  shareEnabled,
+  onPublished,
   simplified,
   onSimplified,
   melodyRate,
@@ -111,9 +121,17 @@ export function PlayerHeader({
         <span className="hidden sm:inline">Kinesthesia</span>
       </Link>
 
-      <span className="min-w-0 flex-1 truncate text-muted text-sm">
-        {params.name}
-      </span>
+      <div className="min-w-0 flex-1">
+        <SongMenu
+          mode={mode}
+          params={params}
+          title={title}
+          trackCount={tracks.length}
+          signedIn={signedIn}
+          shareEnabled={shareEnabled}
+          onPublished={onPublished}
+        />
+      </div>
 
       {interactive ? (
         <div className="hidden shrink-0 sm:flex">

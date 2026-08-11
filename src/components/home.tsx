@@ -16,7 +16,12 @@ import { TopBar } from "@/components/top-bar";
 import { ConfirmButton } from "@/components/ui/confirm-button";
 import { defaultMelodyRate } from "@/lib/midi/melody";
 import { defaultTranspose } from "@/lib/midi/song";
-import { defaultSpeed, defaultStart, playerPath } from "@/lib/player-url";
+import {
+  defaultSpeed,
+  defaultStart,
+  nameFromUrl,
+  playerPath,
+} from "@/lib/player-url";
 import {
   clearFavourites,
   clearRecent,
@@ -84,16 +89,7 @@ function midiUrlFrom(query: string): SongLink | null {
   if (!/^https?:\/\//i.test(value)) {
     return null;
   }
-  try {
-    const parsed = new URL(value);
-    const last = parsed.pathname.split("/").filter(Boolean).pop() ?? "";
-    return {
-      url: value,
-      name: last === "" ? parsed.hostname : decodeURIComponent(last),
-    };
-  } catch {
-    return null;
-  }
+  return { url: value, name: nameFromUrl(value) };
 }
 
 export function Home({

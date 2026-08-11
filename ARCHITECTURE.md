@@ -61,7 +61,9 @@ src/components/
   library-section.tsx         preview, expand and bound a saved list
   player.tsx                  composes the hooks below into a mode, and hosts a
                               match through its aside, overlay and footer slots
-  player-header.tsx           title, score, focus mode and mode switching
+  player-header.tsx           the song menu, score, focus mode and mode switching
+  song-menu.tsx               what you can do with the open song: download it,
+                              copy its link, favourite it, put it online
   part-controls.tsx           tracks, simplify and note density for one side
   player-transport.tsx        play, clock, scrubber, speed, key and settings
   settings-menu.tsx           key size, octave, timing and input
@@ -84,6 +86,7 @@ src/components/
   parts-menu.tsx              the parts you play into and each one's instrument
 src/lib/
   player-url.ts               builds and parses player URLs
+  download.ts                 hands a blob to the browser as a named file
   trusted-url.ts              whether a url may be opened at all, which the
                               player, the pictures and the MCP tools all ask
   use-player-settings.ts      the settings a song plays with, restored from this
@@ -140,8 +143,7 @@ src/lib/
                               listing wherever they are offered
   use-nearby.ts               whether an element has come near enough to be
                               looked at, for work worth putting off until then
-  render/export.ts            the watch view as a render job: qualities, frame,
-                              files
+  render/export.ts            the watch view as a render job: qualities and frame
   render/audio.ts             offline audio render to a WAV, at the live voicing
   render/video.ts             offline video render, WebCodecs with a recorder fallback
   render/video-support.ts     what this browser can encode, without loading an
@@ -177,6 +179,8 @@ src/lib/
   storage/settings.ts         remembered settings, per song and global
   storage/uploads.ts          bytes of uploaded MIDI files, keyed by local: url,
                               and where one was published if it has been
+  storage/publish.ts          puts one of your own files in the object store and
+                              records the address it answers to
   storage/pictures.ts         background images, kept on this device only and
                               never uploaded
 ```

@@ -365,9 +365,11 @@ export function transposeSong(song: Song, semitones: Transpose): Song {
   };
 }
 
-export async function loadSong(url: string, name: string): Promise<Song> {
+/** The single place that resolves a device-local address to the browser's own
+ * store, so playing a song and handing the file over agree on where it lives. */
+export async function readSongBytes(url: string): Promise<ArrayBuffer> {
   if (isDeviceLocal(url)) {
-    return parseSong(await readUpload(url), name);
+    return readUpload(url);
   }
   const response = await fetch(url);
   if (!response.ok) {
@@ -377,5 +379,9 @@ export async function loadSong(url: string, name: string): Promise<Song> {
   if (Number.isFinite(declaredBytes) && declaredBytes > maxMidiBytes) {
     throw new Error("That MIDI file is too large to play.");
   }
-  return parseSong(await response.arrayBuffer(), name);
+  return response.arrayBuffer();
+}
+
+export async function loadSong(url: string, name: string): Promise<Song> {
+  return parseSong(await readSongBytes(url), name);
 }

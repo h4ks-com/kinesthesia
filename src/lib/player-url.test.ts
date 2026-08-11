@@ -114,6 +114,41 @@ describe("parsePlayerParams", () => {
   });
 });
 
+// A link built here always carries a name, but one typed or pasted by hand need
+// not, and a song with no title on screen reads as broken.
+describe("a link with no name", () => {
+  it("takes the name of the file the address points at", () => {
+    const params = parse(
+      new URLSearchParams({ url: "https://bitmidi.com/uploads/87216.mid" }),
+    );
+    expect(params?.name).toBe("87216");
+  });
+
+  it("reads past our own file endpoint to the path it serves", () => {
+    const params = parse(
+      new URLSearchParams({
+        url: "https://x.test/api/midi/file?source=mutopia&id=ChopinFF%2FB130%2FTroisNouvellesEtudes_Chopin_n1",
+      }),
+    );
+    expect(params?.name).toBe("TroisNouvellesEtudes_Chopin_n1");
+  });
+
+  it("falls back to the host when the address names no file", () => {
+    const params = parse(new URLSearchParams({ url: "https://x.test/" }));
+    expect(params?.name).toBe("x.test");
+  });
+
+  it("keeps a name that was given", () => {
+    const params = parse(
+      new URLSearchParams({
+        url: "https://bitmidi.com/uploads/87216.mid",
+        name: "Bohemian Rhapsody",
+      }),
+    );
+    expect(params?.name).toBe("Bohemian Rhapsody");
+  });
+});
+
 describe("focus", () => {
   it("rides in the link only while it is on", () => {
     expect(playerPath("watch", song)).not.toContain("focus");

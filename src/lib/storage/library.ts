@@ -72,6 +72,18 @@ export async function listFavourites(): Promise<LibraryEntry[]> {
   );
 }
 
+export async function isFavourite(
+  source: string | null,
+  url: string,
+): Promise<boolean> {
+  const entry = await run<LibraryEntry | undefined>(
+    favouriteStore,
+    "readonly",
+    (store) => store.get(entryKey(source, url)),
+  );
+  return entry !== undefined;
+}
+
 export async function clearRecent(): Promise<void> {
   await run(recentStore, "readwrite", (store) => store.clear());
 }

@@ -210,6 +210,40 @@ export function playerPath(mode: PlayerMode, params: PlayerParams): string {
   return buildPlayerUrl(localBase, mode, params).slice(localBase.length);
 }
 
+/** What to call a song whose link carries no name: the file the address points
+ * at. Our own file endpoint keeps the path it is serving in `id`, so that is
+ * read before the endpoint's own name, which is the same for every song. */
+export function nameFromUrl(url: string): string {
+  const parsed = readUrl(url);
+  const path = parsed?.searchParams.get("id") ?? parsed?.pathname ?? url;
+  const last = path.split("/").filter(Boolean).pop() ?? "";
+  const name = decodeSegment(last).replace(/\.midi?$/i, "");
+  // A directory address names no file, so the host stands in as the title.
+  return name === "" ? (parsed?.hostname ?? "") : name;
+}
+
+/** A stray `%` is a segment that was never encoded, and this runs on the server
+ * while a page is being built, where a throw is a 500 rather than a missing
+ * song. */
+function decodeSegment(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch (error) {
+    if (error instanceof URIError) {
+      return value;
+    }
+    throw error;
+  }
+}
+
+function readUrl(value: string): URL | null {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+}
+
 /** Returns null unless the url is our `local:` upload id or an http(s) file
  * from an allowed origin, which keeps a crafted link from pointing the player
  * at an arbitrary or `javascript:` target. */
@@ -233,9 +267,11 @@ export function parsePlayerParams(
   const speed = Number(searchParams.get("speed"));
   const transpose = Number(searchParams.get("transpose"));
 
+  const named = searchParams.get("name")?.trim() ?? "";
+
   return {
     url,
-    name: searchParams.get("name") ?? "",
+    name: named === "" ? nameFromUrl(url) : named,
     source: searchParams.get("source"),
     tracks,
     speed: isSpeed(speed) ? speed : defaultSpeed,

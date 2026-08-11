@@ -1,6 +1,7 @@
 "use client";
 
 import { Minimize, Piano, Volume2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import {
   forwardRef,
   type ReactNode,
@@ -35,7 +36,11 @@ import {
 } from "@/lib/midi/part";
 import { type Song, transposeSong } from "@/lib/midi/song";
 import { useSong } from "@/lib/midi/use-song";
-import type { PlayerMode, PlayerParams } from "@/lib/player-url";
+import {
+  type PlayerMode,
+  type PlayerParams,
+  playerPath,
+} from "@/lib/player-url";
 import { busiestTrack } from "@/lib/scoring/gates";
 import type { Judgement, Score } from "@/lib/scoring/judge";
 import type { Summary } from "@/lib/scoring/summary";
@@ -51,6 +56,10 @@ type PlayerProps = {
   params: PlayerParams;
   /** Who is signed in, so their own sound for a song wins over the newest. */
   viewerId?: string | null;
+  /** Whether the server has somewhere to keep a file, so a song held on this
+   * device can be offered a permanent home. A match never carries one, since
+   * both sides have to be able to fetch it. */
+  shareEnabled?: boolean;
   /** Whether the walkthrough may run on its own here. A match joiner never sees
    * it; the host does. */
   tourAuto?: boolean;
@@ -95,6 +104,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     mode,
     params,
     viewerId = null,
+    shareEnabled = false,
     tourAuto = true,
     onScore,
     onHit,
@@ -126,6 +136,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
   );
   // The file extension is noise on the presented title.
   const songTitle = params.name.replace(/\.midi?$/i, "");
+  const router = useRouter();
   // A crafted link auto-focuses a solo view, but not a match, whose setup and
   // invite live in the chrome focus mode hides.
   const [focus, setFocus] = useState(mode !== "multiplayer" && params.focus);
@@ -589,6 +600,15 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
               hiddenTracks={hiddenTracks}
               playerTracks={playerTracks}
               interactive={interactive}
+              title={songTitle}
+              signedIn={viewerId !== null}
+              shareEnabled={shareEnabled}
+              // The file now answers to an address anyone can fetch, so the page
+              // moves onto it: every control that asks whether this song can be
+              // shared reads that one url.
+              onPublished={(url) =>
+                router.replace(playerPath(mode, { ...params, url }))
+              }
               simplified={simplified}
               onSimplified={changeSimplified}
               melodyRate={melodyRate}

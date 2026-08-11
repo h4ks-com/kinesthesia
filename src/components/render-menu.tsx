@@ -13,11 +13,10 @@ import { type ReactNode, useEffect, useReducer, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Popover } from "@/components/ui/popover";
 import type { SongVoicing } from "@/lib/audio/voicing";
+import { downloadBlob, downloadName } from "@/lib/download";
 import type { Song } from "@/lib/midi/song";
 import {
   defaultQuality,
-  downloadBlob,
-  exportFilename,
   type RenderConfig,
   type RenderQuality,
   renderDuration,
@@ -173,7 +172,7 @@ export function RenderMenu({
         return;
       }
       if (kind === "audio") {
-        finish(kind, audioToWav(audio), exportFilename(title, "wav"), false);
+        finish(kind, audioToWav(audio), downloadName(title, "wav"), false);
         return;
       }
       begin("Encoding video", true, 0);
@@ -197,7 +196,7 @@ export function RenderMenu({
       finish(
         kind,
         video.blob,
-        exportFilename(title, video.extension),
+        downloadName(title, video.extension),
         video.realtime,
       );
     } catch (error) {

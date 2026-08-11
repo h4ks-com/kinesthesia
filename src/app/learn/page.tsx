@@ -4,6 +4,7 @@ import { parsePlayerParams } from "@/lib/player-url";
 import { type RouteSearchParams, toSearchParams } from "@/lib/search-params";
 import { currentViewer } from "@/server/auth";
 import { config } from "@/server/config";
+import { bucketEnabled } from "@/server/storage/bucket";
 
 export default async function LearnPage({
   searchParams,
@@ -18,5 +19,12 @@ export default async function LearnPage({
     return <MissingSong />;
   }
   const viewer = await currentViewer();
-  return <Player mode="learn" params={params} viewerId={viewer?.id ?? null} />;
+  return (
+    <Player
+      mode="learn"
+      params={params}
+      viewerId={viewer?.id ?? null}
+      shareEnabled={bucketEnabled()}
+    />
+  );
 }

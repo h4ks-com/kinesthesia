@@ -2,6 +2,7 @@
 
 import { Check, Globe, Link2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { permanenceWarning } from "@/lib/storage/publish";
 
 type ShareUploadProps = {
   name: string;
@@ -167,8 +168,7 @@ export function ShareUpload({
           className="absolute right-0 z-50 mt-1 w-60 rounded-lg border border-line-strong bg-raised p-3 text-left shadow-xl"
         >
           <p className="mb-2.5 text-text text-xs leading-relaxed">
-            Anyone with the link can play {name}, and you cannot take it down.
-            The copy stays online.
+            {permanenceWarning}
           </p>
           {failed === null ? null : (
             <p className="mb-2.5 text-danger text-xs">{failed}</p>

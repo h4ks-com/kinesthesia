@@ -122,7 +122,8 @@ src/lib/
   audio/soundfont-samples.ts  a soundfont file as decoded buffers, each marked
                               where it loops
   audio/voicing.ts            the instrument and shaping a track sounds with
-  audio/use-song-voicing.ts   whose sound is playing, and saving your own
+  audio/use-song-voicing.ts   whose sound is playing, kept on this device and
+                              saved to your account
   audio/general-midi.ts       program number to soundfont name
   audio/percussion.ts         drum note number to kit sample
   audio/use-playback-engine.ts  engine lifecycle, transport and speed
@@ -181,7 +182,8 @@ src/lib/
   storage/idb.ts              the IndexedDB connection and one query helper
   storage/library.ts          recents and favourites, and the word filter the
                               home page runs over them
-  storage/settings.ts         remembered settings, per song and global
+  storage/settings.ts         remembered settings, per song and global, plus
+                              how a song sounds on this device
   storage/uploads.ts          bytes of uploaded MIDI files, keyed by local: url,
                               and where one was published if it has been
   storage/publish.ts          puts one of your own files in the object store and
@@ -325,12 +327,19 @@ settings (key width, timing offset) hold across every song. A link that states
 a song setting outright still wins, so a shared view reproduces itself. A locked
 match neither reads nor writes this memory, since its part is the prepared one.
 
-How a song sounds is shared instead of local. A signed in listener saves the
-instrument and shaping they gave each track, one saved version per person per
-song, and everyone reads from the same table. What plays is what you picked
-this session, then your own saved version, then whoever shaped it last, then
-the instruments the file named. It stays out of the URL: there is a version per
-track and a link carrying all of it would be unreadable.
+How a song sounds is kept on the device that shaped it and shared from the
+account that saved it. Every edit lands in the browser as it settles, so a
+listener with no account keeps what they made and an unsaved edit survives a
+reload. A signed in listener can save it to their account, one saved version
+per person per song, and everyone reads from the same table. What plays is
+what you picked this session, then what this device last shaped, then your own
+saved version, then whoever shaped it last, then the instruments the file
+named. It stays out of the URL: there is a version per track and a link
+carrying all of it would be unreadable.
+
+A song is its url. A voicing is keyed on that alone, on the device and in the
+table, so one file has one sound however the link that opened it named where
+it came from.
 
 Focus mode strips any mode back to the keys and the falling notes, for
 recording. It rides in the link so a focused view reproduces itself, and stays

@@ -10,8 +10,8 @@ const { deleteVoicing, saveVoicing, voicingsFor } = await import(
   "@/server/voicings/store"
 );
 
-const song = { source: "bitmidi", url: "https://example.test/a.mid" };
-const other = { source: "", url: "https://example.test/b.mid" };
+const song = "https://example.test/a.mid";
+const other = "https://example.test/b.mid";
 const tracks = JSON.stringify({ 0: { program: 40 } });
 
 beforeAll(async () => {
@@ -26,13 +26,13 @@ describe("saveVoicing", () => {
     await saveVoicing({
       authorId: "ana",
       authorName: "Ana",
-      song,
+      url: song,
       tracks,
     });
     await saveVoicing({
       authorId: "ana",
       authorName: "Ana",
-      song,
+      url: song,
       tracks: JSON.stringify({ 0: { program: 56 } }),
     });
 
@@ -42,18 +42,18 @@ describe("saveVoicing", () => {
   });
 
   it("keeps everyone else's beside it, newest first", async () => {
-    await saveVoicing({ authorId: "bo", authorName: "Bo", song, tracks });
+    await saveVoicing({ authorId: "bo", authorName: "Bo", url: song, tracks });
 
     const saved = await voicingsFor(song);
     expect(saved).toHaveLength(2);
     expect(saved[0]?.authorName).toBe("Bo");
   });
 
-  it("counts a bare url as its own song", async () => {
+  it("counts another url as its own song", async () => {
     await saveVoicing({
       authorId: "ana",
       authorName: "Ana",
-      song: other,
+      url: other,
       tracks,
     });
 

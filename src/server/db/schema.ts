@@ -46,16 +46,17 @@ export type NewScore = typeof scores.$inferInsert;
 
 /** How a song is made to sound, as one document per person per song: it is
  * always read and written whole, and the unique index is what keeps a person
- * to a single saved version they can come back to. */
+ * to a single saved version they can come back to.
+ *
+ * A song is its url and nothing else, so one file has one row per author
+ * however it was found. The provider a link names describes where it came
+ * from, and belongs in the key of nothing. */
 export const songVoicings = sqliteTable(
   "song_voicings",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     authorId: text("author_id").notNull(),
     authorName: text("author_name").notNull(),
-    /** Empty for a bare URL: SQLite counts NULLs as distinct, so a nullable
-     * column here would let one person keep several rows for one song. */
-    source: text("source").notNull().default(""),
     url: text("url").notNull(),
     /** A voicing per track index, as JSON. */
     tracks: text("tracks").notNull(),
@@ -64,12 +65,8 @@ export const songVoicings = sqliteTable(
       .default(sql`(unixepoch() * 1000)`),
   },
   (table) => [
-    uniqueIndex("song_voicings_author_song_idx").on(
-      table.authorId,
-      table.source,
-      table.url,
-    ),
-    index("song_voicings_song_idx").on(table.source, table.url),
+    uniqueIndex("song_voicings_author_song_idx").on(table.authorId, table.url),
+    index("song_voicings_song_idx").on(table.url),
   ],
 );
 

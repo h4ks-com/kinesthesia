@@ -1,3 +1,4 @@
+import type { StoredVoicing } from "@/lib/audio/voicing";
 import type { MidiShortcut } from "@/lib/input/midi-shortcuts";
 import type { Transpose } from "@/lib/midi/song";
 import { defaultKeyWidth } from "@/lib/render/keyboard";
@@ -106,6 +107,42 @@ export function updateGlobalSettings(
   });
   globalWrites = next.catch(() => undefined);
   return next;
+}
+
+/** How a song sounds on this device, keyed by url alone so one file has one
+ * voicing however the link that opened it named where it came from. */
+export type DeviceVoicing = {
+  readonly tracks: StoredVoicing;
+  /** When this device shaped it, so a version saved to the account later from
+   * somewhere else is the newer answer. */
+  readonly updatedAt: number;
+};
+
+/** Null where this device has never shaped the song, which is different from
+ * an empty voicing: that is a listener asking for the instruments the file
+ * itself names. */
+export async function loadSongVoicing(
+  url: string,
+): Promise<DeviceVoicing | null> {
+  const row = await run<Stored<DeviceVoicing> | undefined>(
+    stores.voicings,
+    "readonly",
+    (store) => store.get(url),
+  );
+  return row === undefined ? null : stripKey(row);
+}
+
+export async function saveSongVoicing(
+  url: string,
+  tracks: StoredVoicing,
+): Promise<void> {
+  await run(stores.voicings, "readwrite", (store) =>
+    store.put({ key: url, tracks, updatedAt: Date.now() }),
+  );
+}
+
+export async function forgetSongVoicing(url: string): Promise<void> {
+  await run(stores.voicings, "readwrite", (store) => store.delete(url));
 }
 
 function stripKey<T>(row: Stored<T>): T {

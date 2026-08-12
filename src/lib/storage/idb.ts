@@ -1,5 +1,5 @@
 const databaseName = "kinesthesia";
-const databaseVersion = 4;
+const databaseVersion = 5;
 
 export const stores = {
   recent: "recent",
@@ -7,6 +7,10 @@ export const stores = {
   settings: "settings",
   uploads: "uploads",
   pictures: "pictures",
+  /** Its own store because its key is a bare url, while a settings key carries
+   * the provider a link named, and a link naming the provider `voicing` would
+   * otherwise write one row over the other. */
+  voicings: "voicings",
 } as const;
 
 export type StoreName = (typeof stores)[keyof typeof stores];

@@ -92,6 +92,30 @@ test("the envelope reads back what it is set to", async ({ page }) => {
   await expect(page.getByText("60%")).toBeVisible();
 });
 
+test("a shaped song sounds the same way when it opens again", async ({
+  page,
+}) => {
+  await serveFixture(page);
+  await page.goto(`/learn?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  await openSound(page);
+  await page.getByLabel("Search instruments").fill("marim");
+  await page.getByRole("button", { name: "Marimba" }).click();
+  await expect(page.getByText(/Marimba\. Play a key/)).toBeVisible();
+
+  // The same file, reached the way a link off the home page names it, so the
+  // provider in the address cannot lose what was shaped.
+  await page.goto(`/watch?${playerQuery()}&source=local`);
+  await expect(page.locator("canvas")).toBeVisible();
+  await openSound(page);
+
+  await expect(page.getByRole("button", { name: "Marimba" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+});
+
 test("a shaped song offers to keep the sound, and to drop it", async ({
   page,
 }) => {
@@ -103,12 +127,12 @@ test("a shaped song offers to keep the sound, and to drop it", async ({
   await page.getByLabel("Volume percent").fill("60");
   await page.getByRole("button", { name: "Back to tracks" }).click();
 
-  await expect(page.getByText("Sign in to keep this")).toBeVisible();
+  await expect(page.getByText("Kept on this device")).toBeVisible();
 
   await page
     .getByRole("button", { name: "Back to the sounds in the file" })
     .click();
-  await expect(page.getByText("Sign in to keep this")).toHaveCount(0);
+  await expect(page.getByText("Kept on this device")).toHaveCount(0);
 });
 
 for (const width of [390, 1280]) {

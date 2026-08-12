@@ -286,7 +286,7 @@ export function TrackMenu({
                   {sound.dirty
                     ? sound.canSave
                       ? "Yours, not saved"
-                      : "Sign in to keep this"
+                      : "Kept on this device"
                     : sound.playing === ""
                       ? "The sounds in the file"
                       : `Sound by ${sound.playing}`}

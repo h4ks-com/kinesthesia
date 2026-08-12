@@ -715,7 +715,6 @@ const savedVoicingSchema = z.object({
 
 const songQuery = {
   url: z.string().url().describe("The .mid the voicing belongs to"),
-  source: z.string().default("").describe("Provider, empty for a bare URL"),
 };
 
 const listVoicingsRoute = createRoute({
@@ -804,8 +803,7 @@ function readTracks(raw: string): z.infer<typeof songVoicingShape> {
 }
 
 api.openapi(listVoicingsRoute, async (c) => {
-  const song = c.req.valid("query");
-  const saved = await voicingsFor(song);
+  const saved = await voicingsFor(c.req.valid("query").url);
   return c.json(
     {
       voicings: saved.map((entry) => ({
@@ -822,11 +820,11 @@ api.openapi(saveVoicingRoute, async (c) => {
   if (viewer === null) {
     return c.json({ error: "Sign in to save how a song sounds" }, 401);
   }
-  const { tracks, ...song } = c.req.valid("json");
+  const { tracks, url } = c.req.valid("json");
   const saved = await saveVoicing({
     authorId: viewer.id,
     authorName: viewer.name,
-    song,
+    url,
     tracks: JSON.stringify(tracks),
   });
   return c.json({ ...saved, tracks: readTracks(saved.tracks) }, 200);
@@ -837,7 +835,7 @@ api.openapi(deleteVoicingRoute, async (c) => {
   if (viewer === null) {
     return c.json({ error: "Sign in to change how a song sounds" }, 401);
   }
-  await deleteVoicing(viewer.id, c.req.valid("query"));
+  await deleteVoicing(viewer.id, c.req.valid("query").url);
   return c.json({ deleted: true }, 200);
 });
 

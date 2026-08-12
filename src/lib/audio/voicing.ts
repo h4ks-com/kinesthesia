@@ -18,6 +18,10 @@ export type Voicing = {
 /** A voicing per track index. Absent tracks sound as they were parsed. */
 export type SongVoicing = ReadonlyMap<number, Voicing>;
 
+/** The same, as it travels and as it is stored: a map keyed by number is not
+ * JSON. */
+export type StoredVoicing = Record<string, Voicing>;
+
 export const attackRange = { min: 0, max: 1000 } as const;
 export const releaseRange = { min: 0, max: 4000 } as const;
 export const brightnessRange = { min: 200, max: 20000 } as const;

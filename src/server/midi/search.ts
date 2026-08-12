@@ -8,6 +8,7 @@ import {
 } from "@/lib/player-url";
 import { config } from "@/server/config";
 import { findSource, midiSources } from "@/server/midi/registry";
+import { ranked } from "@/server/midi/relevance";
 import type {
   MidiListing,
   MidiSearchItem,
@@ -73,7 +74,12 @@ function ask({
       .map((entry) =>
         entry.search(query, limit).catch((): MidiListing[] => []),
       ),
-  ).then((found) => interleave(found, limit));
+  ).then((found) =>
+    interleave(
+      found.map((list) => ranked(list, query)),
+      limit,
+    ),
+  );
 }
 
 async function listingsFor(params: SearchMidiParams): Promise<MidiListing[]> {

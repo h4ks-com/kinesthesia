@@ -27,6 +27,10 @@ export type MidiSource = {
   readonly homeUrl: string;
   /** How the catalogue is licensed, for the sources page. */
   readonly license: string;
+  /** As many as the source will give up to `limit`, or more where one page
+   * holds more: what comes back is ranked and trimmed centrally, and a source
+   * that hands over only the first `limit` of its own order cannot be
+   * reordered usefully. */
   search(query: string, limit: number): Promise<MidiListing[]>;
   /** Where a listed id actually lives, fetched server side through the proxy so
    * a source with no cross origin headers still plays in the browser. */

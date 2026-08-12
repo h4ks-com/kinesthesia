@@ -50,6 +50,8 @@ src/server/
     mutopia.ts                Mutopia adapter
     id.ts                     rejects a file id that could climb out of its path
     search.ts                 searches sources, proxies files and attaches links
+    relevance.ts              orders results by what they carry of the query,
+                              since a source ranks two words worse than one
     analyse.ts                reads a .mid and reports what it holds
     inputs.ts                 the search and info inputs both surfaces validate
                               with

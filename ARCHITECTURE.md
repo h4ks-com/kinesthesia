@@ -231,11 +231,14 @@ backwards.
 
 ## Notation view
 
-`sheet-view.tsx` shows the open song as sheet music, off, half beside the
-falling notes, or full in its place. `src/lib/sheet/` turns a song into
-MusicXML: `convert.ts` quantises every note onto a 16th note grid, splits the
-notes across the grand staff by their own pitch median, spells each pitch from
-the key `midi/analysis.ts` already detects, and writes measures, rests and
+`sheet-view.tsx` shows the open song as sheet music, off, half above the
+falling notes, or full in their place. Notation reads across the page and the
+notes fall down it, so the two are stacked rather than set side by side and
+each keeps the whole width. `src/lib/sheet/` turns a song into MusicXML:
+`convert.ts` quantises every note onto a 16th note grid, splits the notes
+across the grand staff by the same hand assignment the player uses, spells each
+pitch from the key `midi/analysis.ts` already detects, and writes measures,
+rests and
 ties across a barline as plain MusicXML 3.1. It is pure and knows nothing of a
 live song; `load.ts` is the one place that rereads a file's own MIDI for the
 tempo, meter and key `Song` does not carry, and hands the converter a plain

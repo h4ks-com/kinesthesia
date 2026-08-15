@@ -665,17 +665,31 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             />
           )}
 
+          {/* Stacked rather than side by side: notation reads across the page
+              and the notes fall down it, so each gets the whole width. */}
           <div
             ref={stage}
             tabIndex={-1}
-            className="relative flex min-h-0 flex-1 outline-none"
+            className="relative flex min-h-0 flex-1 flex-col outline-none"
           >
-            {notationView === "full" ? null : (
+            {notationView === "off" ? null : (
               <div
-                className={`relative min-h-0 min-w-0 flex-1 ${
-                  notationView === "half" ? "border-line border-r" : ""
-                }`}
+                className={
+                  notationView === "half"
+                    ? "h-1/2 min-h-0 shrink-0 border-line border-b"
+                    : "min-h-0 min-w-0 flex-1"
+                }
               >
+                <SheetView
+                  url={params.url}
+                  song={song}
+                  transpose={transpose}
+                  getPosition={playback.getPosition}
+                />
+              </div>
+            )}
+            {notationView === "full" ? null : (
+              <div className="relative min-h-0 min-w-0 flex-1">
                 {pickingSkin ? (
                   <SkinPicker
                     chosen={background.chosen}
@@ -730,22 +744,6 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                     press play to start the sound
                   </p>
                 )}
-              </div>
-            )}
-            {notationView === "off" ? null : (
-              <div
-                className={
-                  notationView === "half"
-                    ? "min-h-0 w-1/2 shrink-0"
-                    : "min-h-0 min-w-0 flex-1"
-                }
-              >
-                <SheetView
-                  url={params.url}
-                  song={song}
-                  transpose={transpose}
-                  getPosition={playback.getPosition}
-                />
               </div>
             )}
           </div>

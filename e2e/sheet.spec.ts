@@ -73,6 +73,15 @@ test("half and full layouts", async ({ page }) => {
   await page.keyboard.press("Escape");
   await page.screenshot({ path: "/tmp/sheet-half.png" });
 
+  // Notation reads across the page and the notes fall down it, so the two are
+  // stacked and each keeps the whole width rather than halving it.
+  const above = await sheet.boundingBox();
+  const below = await page
+    .getByRole("img", { name: /Piano roll/ })
+    .boundingBox();
+  expect(above?.y ?? 0).toBeLessThan(below?.y ?? 0);
+  expect(above?.width ?? 0).toBeCloseTo(below?.width ?? 0, 0);
+
   // The popover stays open after picking Half, so Full is already reachable.
   await page.getByRole("button", { name: "Notation view" }).click();
   await page.getByRole("button", { name: "Full" }).click();

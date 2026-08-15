@@ -13,14 +13,19 @@ test("choosing a hand narrows the owed part and changes what is drawn bright", a
   await expect.poll(async () => brightNotePixels(page)).toBeGreaterThan(1000);
   const both = await brightNotePixels(page);
 
-  await page.getByRole("button", { name: "Left hand" }).click();
+  const chooseHand = async (label: string): Promise<void> => {
+    await page.getByRole("button", { name: /^Hand, / }).click();
+    await page.getByRole("button", { name: label, exact: true }).click();
+  };
+
+  await chooseHand("Left hand");
   await expect(page).toHaveURL(/hand=left/);
   await expect
     .poll(async () => brightNotePixels(page))
     .toBeLessThan(both * 0.9);
   const left = await brightNotePixels(page);
 
-  await page.getByRole("button", { name: "Right hand" }).click();
+  await chooseHand("Right hand");
   await expect(page).toHaveURL(/hand=right/);
   await expect
     .poll(async () => brightNotePixels(page))
@@ -30,7 +35,7 @@ test("choosing a hand narrows the owed part and changes what is drawn bright", a
   // The two hands own different notes, so their share of the roll differs.
   expect(Math.abs(left - right)).toBeGreaterThan(both * 0.05);
 
-  await page.getByRole("button", { name: "Both hands" }).click();
+  await chooseHand("Both hands");
   await expect(page).toHaveURL(/hand=both/);
   await expect.poll(async () => brightNotePixels(page)).toBeGreaterThan(left);
 });
@@ -58,13 +63,7 @@ test("a locked side shows the hand chooser disabled rather than missing", async 
   // A battle mirrors the host's line onto the other side and locks it, so
   // their hand chooser stays put but disabled rather than disappearing.
   const theirs = page.getByRole("region", { name: "Other player" });
-  await expect(
-    theirs.getByRole("button", { name: "Their both hands" }),
-  ).toBeDisabled();
-  await expect(
-    theirs.getByRole("button", { name: "Their left hand" }),
-  ).toBeDisabled();
-  await expect(
-    theirs.getByRole("button", { name: "Their right hand" }),
-  ).toBeDisabled();
+  const chooser = theirs.getByRole("button", { name: /^Their hand, / });
+  await expect(chooser).toBeVisible();
+  await expect(chooser).toBeDisabled();
 });

@@ -75,6 +75,11 @@ export function PartControls({
     : "Maximum notes per second";
   const density = theirs ? "Their note density" : "Note density";
   const handGroupLabel = theirs ? "Their hand" : "Hand";
+  const chosenHand = handOptions.find((option) => option.hand === hand) ?? {
+    hand: null,
+    icon: Columns2,
+    label: "Both hands",
+  };
 
   return (
     <>
@@ -117,34 +122,59 @@ export function PartControls({
         <Music2 className="size-4" aria-hidden="true" />
       </button>
 
-      <fieldset
-        disabled={onHand === null}
-        data-tip={
-          onHand === null ? (lockedNote ?? "Fixed for this match") : undefined
-        }
-        className="flex shrink-0 items-center gap-0.5 rounded-lg border border-line-strong p-0.5 disabled:opacity-50"
-      >
-        <legend className="sr-only">{handGroupLabel}</legend>
-        {handOptions.map((option) => (
-          <button
-            key={option.label}
-            type="button"
-            aria-pressed={hand === option.hand}
-            aria-label={
-              theirs ? `Their ${option.label.toLowerCase()}` : option.label
-            }
-            data-tip={onHand === null ? undefined : option.label}
-            onClick={() => onHand?.(option.hand)}
-            className={`rounded-md p-1.5 transition-colors ${
-              hand === option.hand
-                ? "bg-accent text-void"
-                : "text-muted enabled:hover:text-text"
-            }`}
-          >
-            <option.icon className="size-3.5" aria-hidden="true" />
-          </button>
-        ))}
-      </fieldset>
+      {onHand === null ? (
+        <button
+          type="button"
+          disabled
+          aria-label={`${handGroupLabel}, ${chosenHand.label.toLowerCase()}`}
+          data-tip={lockedNote ?? "Fixed for this match"}
+          className="inline-flex shrink-0 items-center rounded-lg border border-line-strong p-2 text-muted opacity-50"
+        >
+          <chosenHand.icon className="size-4" aria-hidden="true" />
+        </button>
+      ) : (
+        <Popover
+          label={`${handGroupLabel}, ${chosenHand.label.toLowerCase()}`}
+          align="right"
+          trigger={(open) => (
+            <span
+              data-tip="Which hand you play"
+              data-tip-align="right"
+              className={`inline-flex items-center rounded-lg border p-2 transition-colors ${
+                open || hand !== null
+                  ? "border-accent text-accent"
+                  : "border-line-strong text-muted hover:border-accent hover:text-accent"
+              }`}
+            >
+              <chosenHand.icon className="size-4" aria-hidden="true" />
+            </span>
+          )}
+        >
+          {(close) => (
+            <div className="flex w-44 flex-col gap-0.5">
+              {handOptions.map((option) => (
+                <button
+                  key={option.label}
+                  type="button"
+                  aria-pressed={hand === option.hand}
+                  onClick={() => {
+                    onHand(option.hand);
+                    close();
+                  }}
+                  className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 pointer-coarse:min-h-11 text-left text-sm transition-colors hover:bg-raised ${
+                    hand === option.hand ? "text-accent" : "text-text"
+                  }`}
+                >
+                  <option.icon className="size-4 shrink-0" aria-hidden="true" />
+                  {theirs
+                    ? `Their ${option.label.toLowerCase()}`
+                    : option.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </Popover>
+      )}
 
       {simplified && onMelodyRate === null ? (
         <span

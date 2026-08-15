@@ -61,6 +61,7 @@ function playSong(parts: readonly PlayPart[]): Song {
     harmony: [],
     key: null,
     report: blankDigest("Play"),
+    hands: new Map(),
   };
 }
 

@@ -1,5 +1,6 @@
 import { Midi } from "@tonejs/midi";
 import { Chord, Note } from "tonal";
+import { looksTwoHanded } from "@/lib/midi/hands";
 
 export type Meter = {
   readonly beats: number;
@@ -212,6 +213,9 @@ export type DigestTrack = {
   readonly percussion: boolean;
   readonly notes: number;
   readonly range: readonly [string, string];
+  /** Whether splitting this one into hands would give two real parts, so a
+   * caller knows before offering it whether a hand of it is worth playing. */
+  readonly bothHands: boolean;
 };
 
 export type HarmonySpan = {
@@ -339,6 +343,14 @@ export function digest(midi: Midi, name: string): Digest {
       percussion: track.instrument.percussion,
       notes: track.notes.length,
       range: [noteName(low), noteName(high)],
+      bothHands: looksTwoHanded(
+        track.notes.map((note, at) => ({
+          id: at,
+          pitch: note.midi,
+          start: note.time,
+          track: index,
+        })),
+      ),
     });
   });
   const durationSeconds = Math.round(midi.duration * 10) / 10;

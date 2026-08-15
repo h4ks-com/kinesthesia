@@ -4,6 +4,7 @@ import { z } from "@hono/zod-openapi";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Context } from "hono";
 import { digest, readMidi } from "@/lib/midi/analysis";
+import { hands } from "@/lib/midi/hands";
 import {
   clampMelodyRate,
   defaultMelodyRate,
@@ -116,6 +117,12 @@ const playerLinkShape = {
     .boolean()
     .optional()
     .describe("Reduce the part they owe to one note at a time"),
+  hand: z
+    .enum(hands)
+    .optional()
+    .describe(
+      "Which hand of the chosen tracks the player owes, where a track holds both. Left out plays both hands. Check midi_info's bothHands per track before offering this",
+    ),
   melodyRate: z
     .number()
     .int()
@@ -161,6 +168,7 @@ type PlayerLinkInput = {
   readonly transpose: number | undefined;
   readonly tracks: readonly number[] | undefined;
   readonly simplified: boolean | undefined;
+  readonly hand: (typeof hands)[number] | undefined;
   readonly melodyRate: number | undefined;
   readonly focus: boolean | undefined;
   readonly skin: string | undefined;
@@ -243,6 +251,7 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
       tracks: input.tracks ?? null,
       speed: asSpeed(input.speed ?? defaultSpeed),
       simplified: input.simplified ?? false,
+      hand: input.hand ?? null,
       melodyRate: clampMelodyRate(input.melodyRate ?? defaultMelodyRate),
       transpose: clampTranspose(input.transpose ?? defaultTranspose),
       focus: input.focus ?? false,
@@ -265,6 +274,9 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
   }
   if (input.simplified !== undefined) {
     built.searchParams.set("simple", input.simplified ? "1" : "0");
+  }
+  if (input.hand !== undefined) {
+    built.searchParams.set("hand", input.hand);
   }
   if (input.melodyRate !== undefined) {
     built.searchParams.set("rate", String(clampMelodyRate(input.melodyRate)));
@@ -594,9 +606,11 @@ track, which is how to answer how long or how hard a song is and how to pick a
 track to play.
 
 Those player links take the song as it comes. To open one at a different speed,
-in another key, on chosen tracks, partway through, stripped back for recording,
-or against a background, build it with player_link, passing the same source and
-id: it validates every value and refuses a combination the player would ignore.
+in another key, on chosen tracks, on one hand of them where a track holds both,
+partway through, stripped back for recording, or against a background, build it
+with player_link, passing the same source and id: it validates every value and
+refuses a combination the player would ignore. midi_info reports bothHands per
+track, which says whether offering a hand link for that track is worth it.
 
 A background may also be a picture rather than one this build ships. Write it the
 way a CSS background is written, url(https://host/a.jpg) followed by scroll or
@@ -971,7 +985,7 @@ function createMcpServer(): McpServer {
     {
       title: "Read a MIDI file",
       description:
-        "Read a source's file and report how long it runs, how many notes it holds, and what is on each track. Use it to answer how long or how hard a song is, and to choose the tracks argument for player_link rather than guessing. Take the source and id from search_midi.",
+        "Read a source's file and report how long it runs, how many notes it holds, and what is on each track, including whether a track looks like it holds both hands (bothHands). Use it to answer how long or how hard a song is, to choose the tracks argument for player_link rather than guessing, and to know whether a hand argument is worth offering for a track. Take the source and id from search_midi.",
       inputSchema: infoInputShape,
     },
     async ({ source, id, name }) => {
@@ -1006,7 +1020,7 @@ function createMcpServer(): McpServer {
     {
       title: "Build a player link",
       description:
-        "Turn a source and id (from search_midi), or a direct .mid url from a trusted origin, into a browser link that opens the song exactly as asked: the mode to open in, the speed, the key, which tracks the player owes, whether the part is reduced to one note at a time, how many seconds in to start, and whether the page is stripped back to the keys and the falling notes for recording.",
+        "Turn a source and id (from search_midi), or a direct .mid url from a trusted origin, into a browser link that opens the song exactly as asked: the mode to open in, the speed, the key, which tracks the player owes, which hand of them where a track holds both, whether the part is reduced to one note at a time, how many seconds in to start, and whether the page is stripped back to the keys and the falling notes for recording.",
       inputSchema: playerLinkShape,
     },
     async (input) => {

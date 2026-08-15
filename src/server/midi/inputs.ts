@@ -28,6 +28,11 @@ const digestTrackSchema = z.object({
   range: z
     .tuple([z.string(), z.string()])
     .describe("Lowest and highest note names on this track"),
+  bothHands: z
+    .boolean()
+    .describe(
+      "Whether this track holds both hands, so the hand player option splits it into two real parts",
+    ),
 });
 
 const tempoSchema = z.object({

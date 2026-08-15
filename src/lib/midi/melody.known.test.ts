@@ -77,6 +77,7 @@ function arrangement(
     harmony: [],
     key: null,
     report: blankDigest("arrangement"),
+    hands: new Map(),
   };
 }
 
@@ -150,6 +151,7 @@ describe("reduceToMelody on tunes with a known shape", () => {
       harmony: [],
       key: null,
       report: blankDigest("arpeggiated"),
+      hands: new Map(),
     };
     const atTuneSpeed: MelodyOptions = {
       tracks: new Set([0]),

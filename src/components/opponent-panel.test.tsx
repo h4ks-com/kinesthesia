@@ -55,9 +55,15 @@ const song: Song = {
   harmony: [],
   key: null,
   report: blankDigest("Test"),
+  hands: new Map(),
 };
 
-const part = { simplified: false, melodyRate: 8, tracks: [0] } as const;
+const part = {
+  simplified: false,
+  melodyRate: 8,
+  tracks: [0],
+  hand: null,
+} as const;
 
 function show(theirKeys: () => ReadonlySet<number>) {
   return render(

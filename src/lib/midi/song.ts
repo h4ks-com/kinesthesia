@@ -7,6 +7,7 @@ import {
   trackLabel,
 } from "@/lib/midi/analysis";
 import { ExpressionTrail } from "@/lib/midi/expression";
+import { assignHandsForSong, type HandMap } from "@/lib/midi/hands";
 import { type HarmonySpan, nameChord, rootOf } from "@/lib/midi/harmony";
 import { pedalSpans, releaseAt } from "@/lib/midi/sustain";
 import type { SongKey } from "@/lib/skins/types";
@@ -115,6 +116,9 @@ export type Song = {
    * here so the song info panel reads it straight off the parsed song instead
    * of asking the server again for what this tab already worked out. */
   readonly report: Digest;
+  /** Which hand plays each note, worked out once per track here because both
+   * sides of a match need to land on the identical split. */
+  readonly hands: HandMap;
 };
 
 /** How often the harmony is named. Short enough to catch a chord change, long
@@ -283,6 +287,7 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
     tracks,
     expression,
     report: digest(midi, name),
+    hands: assignHandsForSong(runwayNotes),
   };
 }
 

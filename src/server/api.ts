@@ -3,6 +3,7 @@ import { Scalar } from "@scalar/hono-api-reference";
 import type { Context } from "hono";
 import { apiBase, renderReportPath } from "@/lib/analytics-report";
 import { readMidi } from "@/lib/midi/analysis";
+import { hands as handIds } from "@/lib/midi/hands";
 import { renderQualityIds } from "@/lib/render/export";
 import { renderKinds } from "@/lib/render/handback";
 import { skinSource, skins } from "@/lib/skins/registry";
@@ -374,6 +375,7 @@ const roomSchema = z
     speed: z.number(),
     simplified: z.boolean(),
     melodyRate: z.number().int(),
+    hand: z.enum(handIds).nullable(),
     transpose: z.number().int(),
     coop: z.boolean(),
   })
@@ -398,6 +400,7 @@ const createRoomRoute = createRoute({
             speed: z.number().positive().max(4).default(1),
             simplified: z.boolean().default(false),
             melodyRate: z.number().int().min(1).max(12).default(8),
+            hand: z.enum(handIds).nullable().default(null),
             transpose: z.number().int().min(-12).max(12).default(0),
             coop: z.boolean().default(false),
           }),

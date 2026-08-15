@@ -117,6 +117,7 @@ export async function searchMidi(
         speed: defaultSpeed,
         simplified: false,
         melodyRate: defaultMelodyRate,
+        hand: null,
         transpose: defaultTranspose,
         focus: false,
         skin: null,

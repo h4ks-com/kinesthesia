@@ -42,6 +42,7 @@ function song(notes: SongNote[]): Song {
     harmony: [],
     key: null,
     report: blankDigest("test"),
+    hands: new Map(),
   };
 }
 

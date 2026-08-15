@@ -1,10 +1,11 @@
 "use client";
 
-import { Music2 } from "lucide-react";
+import { Columns2, Music2, PanelLeft, PanelRight } from "lucide-react";
 import { type SoundSharing, TrackMenu } from "@/components/track-menu";
 import { Popover } from "@/components/ui/popover";
 import { SliderRow } from "@/components/ui/slider-row";
 import type { SongVoicing, Voicing } from "@/lib/audio/voicing";
+import type { Hand } from "@/lib/midi/hands";
 import { type MelodyRate, melodyRateRange } from "@/lib/midi/melody";
 import type { SongNote, SongTrack } from "@/lib/midi/song";
 
@@ -26,11 +27,23 @@ type PartControlsProps = {
   onSimplified: ((simplified: boolean) => void) | null;
   melodyRate: MelodyRate;
   onMelodyRate: ((rate: number) => void) | null;
+  hand: Hand | null;
+  onHand: ((hand: Hand | null) => void) | null;
   /** Whose part this is, so the labels read right on either half. */
   whose: "yours" | "theirs";
   /** Why their side is fixed, when it is. */
   lockedNote?: string;
 };
+
+const handOptions: readonly {
+  hand: Hand | null;
+  icon: typeof Columns2;
+  label: string;
+}[] = [
+  { hand: null, icon: Columns2, label: "Both hands" },
+  { hand: "left", icon: PanelLeft, label: "Left hand" },
+  { hand: "right", icon: PanelRight, label: "Right hand" },
+];
 
 export function PartControls({
   tracks,
@@ -48,6 +61,8 @@ export function PartControls({
   onSimplified,
   melodyRate,
   onMelodyRate,
+  hand,
+  onHand,
   whose,
   lockedNote,
 }: PartControlsProps) {
@@ -59,6 +74,7 @@ export function PartControls({
     ? "Their maximum notes per second"
     : "Maximum notes per second";
   const density = theirs ? "Their note density" : "Note density";
+  const handGroupLabel = theirs ? "Their hand" : "Hand";
 
   return (
     <>
@@ -100,6 +116,35 @@ export function PartControls({
       >
         <Music2 className="size-4" aria-hidden="true" />
       </button>
+
+      <fieldset
+        disabled={onHand === null}
+        data-tip={
+          onHand === null ? (lockedNote ?? "Fixed for this match") : undefined
+        }
+        className="flex shrink-0 items-center gap-0.5 rounded-lg border border-line-strong p-0.5 disabled:opacity-50"
+      >
+        <legend className="sr-only">{handGroupLabel}</legend>
+        {handOptions.map((option) => (
+          <button
+            key={option.label}
+            type="button"
+            aria-pressed={hand === option.hand}
+            aria-label={
+              theirs ? `Their ${option.label.toLowerCase()}` : option.label
+            }
+            data-tip={onHand === null ? undefined : option.label}
+            onClick={() => onHand?.(option.hand)}
+            className={`rounded-md p-1.5 transition-colors ${
+              hand === option.hand
+                ? "bg-accent text-void"
+                : "text-muted enabled:hover:text-text"
+            }`}
+          >
+            <option.icon className="size-3.5" aria-hidden="true" />
+          </button>
+        ))}
+      </fieldset>
 
       {simplified && onMelodyRate === null ? (
         <span

@@ -51,6 +51,7 @@ function song(notes: SongNote[], tracks: SongTrack[] = [track(0)]): Song {
     harmony: [],
     key: null,
     report: blankDigest("test"),
+    hands: new Map(),
   };
 }
 

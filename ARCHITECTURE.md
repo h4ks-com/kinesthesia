@@ -76,7 +76,8 @@ src/components/
                               it, put it online
   song-info-panel.tsx         tempo, key, meter, tracks and the chord
                               progression, read off the song already in memory
-  part-controls.tsx           tracks, simplify and note density for one side
+  part-controls.tsx           tracks, simplify, note density and hand for one
+                              side
   player-transport.tsx        play, clock, scrubber, speed, key and settings
   settings-menu.tsx           key size, octave, timing and input
   render-menu.tsx             render the watch view to a video or audio file
@@ -121,6 +122,8 @@ src/lib/
   midi/compose.ts             chord voicing, a 5x7 text font and note primitives
   midi/project.ts             an editable song: beat-timed tracks and the edit ops
   midi/part.ts                a side's tracks and the notes sounding right now
+  midi/hands.ts               which hand plays each note of a track, for a
+                              file that puts both hands on one
   midi/use-part-roll.ts       a part as the getters the roll draws with
   midi/palette.ts             per track and per pitch colours
   play/use-play-notes.ts      the notes play mode emits, rising from the keys
@@ -274,8 +277,11 @@ once. It has no timeline, so the transport bar keeps its height but stays empty.
 Their own half is the player they already know; the other half is
 `opponent-panel`, which is where the other player is set up, in order: the match
 type, then the part they get. Both halves draw the same `part-controls` — tracks,
-simplify, note density — so the two read as one instrument, and a side that is
-not yours to set shows them disabled rather than missing. A **battle** mirrors
+simplify, note density and hand — so the two read as one instrument, and a side
+that is not yours to set shows them disabled rather than missing. A `hand`
+narrows a chosen track to the left or right hand of it, for a file that puts
+both on one track; it is a filter on top of the track, not a track of its own,
+so both hands of one track keep that track's colour. A **battle** mirrors
 the host's own line onto their side and locks it; a **co-op** hands their part
 over to the host to build.
 
@@ -333,17 +339,19 @@ kinesthesia is, alongside each tool's own description.
 
 `search_midi` knows only what a source lists. `midi_info` downloads the file and
 parses it with the player's own parser, so a caller can say how long a song runs
-and which track to play rather than guess. It reports the song's tempo, meter,
-estimated key and chord progression too, from the same digest the browser
-computes when it opens the file and the song info panel reads straight off it:
-`midi_info`, `GET /api/midi/info` and the panel all show one report, so they
-cannot drift apart. `search_midi` returns a plain link
+and which track to play rather than guess, and reports per track whether it
+looks like it holds both hands. It reports the song's tempo, meter, estimated
+key and chord progression too, from the same digest the browser computes when it
+opens the file and the song info panel reads straight off it: `midi_info`,
+`GET /api/midi/info` and the panel all show one report, so they cannot drift
+apart. `search_midi` returns a plain link
 per mode. `player_link` builds one carrying
-the speed, key, tracks, simplify and focus a caller asks for, which is what
-makes those settings reachable by an agent at all: they live only in the query
-string and nothing else advertises them. It clamps through the same functions
-the player parses with, so a link it hands back cannot ask for a value the
-player would refuse. A setting the caller names is written down even at its
+the speed, key, tracks, a hand of them, simplify and focus a caller asks for,
+which is what makes those settings reachable by an agent at all: they live only
+in the query string and nothing else advertises them. It clamps through the
+same functions the player parses with, so a link it hands back cannot ask for a
+value the player would refuse. A setting the caller names is written down even
+at its
 default, since leaving it out would hand it to whatever the listener's device
 remembers for that song.
 
@@ -374,7 +382,7 @@ Signing in is optional. With no Logto values set, `authConfig` is null, the
 header renders no button and the app is fully anonymous with recents and
 favourites kept in the browser.
 
-Settings are remembered in the browser. Per song settings (speed, tracks,
+Settings are remembered in the browser. Per song settings (speed, tracks, hand,
 simplify and its note rate, key) come back when the song opens in any mode; global
 settings (key width, timing offset, the notation view) hold across every song.
 A link that states a song setting outright still wins, so a shared view

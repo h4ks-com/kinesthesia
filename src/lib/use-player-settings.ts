@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { clampLatency } from "@/lib/audio/latency";
+import type { Hand } from "@/lib/midi/hands";
 import { clampMelodyRate, type MelodyRate } from "@/lib/midi/melody";
 import {
   clampTranspose,
@@ -35,6 +36,7 @@ type SongSettingsValue = {
   speed: Speed;
   simplified: boolean;
   melodyRate: MelodyRate;
+  hand: Hand | null;
   transpose: Transpose;
 };
 type UrlChange = Partial<SongSettingsValue>;
@@ -63,6 +65,7 @@ export type PlayerSettings = {
   hasKeyboard: boolean;
   simplified: boolean;
   melodyRate: MelodyRate;
+  hand: Hand | null;
   transpose: Transpose;
   notationView: NotationView;
   /** True once the remembered settings have been read, so a default is only
@@ -77,6 +80,7 @@ export type PlayerSettings = {
   changePlainStyle: (next: boolean) => void;
   changeSimplified: (next: boolean) => void;
   changeMelodyRate: (next: number) => void;
+  changeHand: (next: Hand | null) => void;
   changeTranspose: (next: Transpose) => void;
   changeSpeed: (next: Speed) => void;
   changeNotationView: (next: NotationView) => void;
@@ -107,6 +111,7 @@ export function usePlayerSettings({
   const [hasKeyboard, setHasKeyboard] = useState(false);
   const [simplified, setSimplified] = useState(params.simplified);
   const [melodyRate, setMelodyRate] = useState(params.melodyRate);
+  const [hand, setHand] = useState(params.hand);
   const [transpose, setTranspose] = useState(params.transpose);
 
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -131,6 +136,7 @@ export function usePlayerSettings({
     speed,
     simplified,
     melodyRate,
+    hand,
     transpose,
   });
   settingsRef.current = {
@@ -138,6 +144,7 @@ export function usePlayerSettings({
     speed,
     simplified,
     melodyRate,
+    hand,
     transpose,
   };
 
@@ -148,6 +155,7 @@ export function usePlayerSettings({
       speed: next.speed ?? current.speed,
       simplified: next.simplified ?? current.simplified,
       melodyRate: next.melodyRate ?? current.melodyRate,
+      hand: next.hand === undefined ? current.hand : next.hand,
       transpose: next.transpose ?? current.transpose,
     };
   }, []);
@@ -221,6 +229,7 @@ export function usePlayerSettings({
           melodyRate: explicit.has("melodyRate")
             ? params.melodyRate
             : clampMelodyRate(stored.melodyRate),
+          hand: explicit.has("hand") ? params.hand : (stored.hand ?? null),
           transpose: explicit.has("transpose")
             ? params.transpose
             : clampTranspose(stored.transpose ?? defaultTranspose),
@@ -229,6 +238,7 @@ export function usePlayerSettings({
         setSpeed(next.speed);
         setSimplified(next.simplified);
         setMelodyRate(next.melodyRate);
+        setHand(next.hand);
         setTranspose(next.transpose);
         if (next.tracks !== null) {
           setPlayerTracks(new Set(next.tracks));
@@ -237,6 +247,7 @@ export function usePlayerSettings({
           speed: next.speed,
           simplified: next.simplified,
           melodyRate: next.melodyRate,
+          hand: next.hand,
           transpose: next.transpose,
           ...(next.tracks !== null && { tracks: next.tracks }),
         });
@@ -320,6 +331,11 @@ export function usePlayerSettings({
     settleCommit({ melodyRate: rate });
   }
 
+  function changeHand(next: Hand | null) {
+    setHand(next);
+    commit({ hand: next });
+  }
+
   function changeTranspose(next: Transpose) {
     setTranspose(next);
     settleCommit({ transpose: next });
@@ -354,6 +370,7 @@ export function usePlayerSettings({
     hasKeyboard,
     simplified,
     melodyRate,
+    hand,
     transpose,
     notationView,
     hydrated,
@@ -366,6 +383,7 @@ export function usePlayerSettings({
     changePlainStyle,
     changeSimplified,
     changeMelodyRate,
+    changeHand,
     changeTranspose,
     changeSpeed,
     changeNotationView,

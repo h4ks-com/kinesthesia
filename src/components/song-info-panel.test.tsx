@@ -24,6 +24,7 @@ const report: Digest = {
       percussion: false,
       notes: 48,
       range: ["C3", "G4"],
+      bothHands: false,
     },
     {
       index: 1,
@@ -32,6 +33,7 @@ const report: Digest = {
       percussion: true,
       notes: 16,
       range: ["C2", "C2"],
+      bothHands: false,
     },
   ],
   playedTrack: 0,

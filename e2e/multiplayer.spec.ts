@@ -59,6 +59,8 @@ test("the room stores the difficulty and the link stays short", async ({
   await page
     .getByRole("button", { name: "Simplify to one note at a time" })
     .click();
+  await page.getByRole("switch", { name: "Simplify" }).click();
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Invite a player" }).click();
 
   const invite = page.getByRole("button", { name: "Copy the invite link" });

@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 import { playerQuery, serveFixture, settingStored } from "./fixture";
 
 async function openHalf(page: import("@playwright/test").Page): Promise<void> {
-  await page.getByRole("button", { name: "Notation view" }).click();
-  await page.getByRole("button", { name: "Half", exact: true }).click();
+  await page.getByRole("button", { name: "View" }).click();
+  await page.getByRole("button", { name: "Split", exact: true }).click();
 }
 
 test("the notation view opens and draws real notation", async ({ page }) => {
@@ -31,8 +31,8 @@ test("switching to full replaces the roll with notation alone", async ({
   await page.goto(`/watch?${playerQuery()}`);
   await expect(page.locator("canvas")).toBeVisible();
 
-  await page.getByRole("button", { name: "Notation view" }).click();
-  await page.getByRole("button", { name: "Full", exact: true }).click();
+  await page.getByRole("button", { name: "View" }).click();
+  await page.getByRole("button", { name: "Sheet only", exact: true }).click();
 
   await expect(page.getByTestId("sheet-view")).toBeVisible();
   // The roll's canvas is gone entirely in full notation view.
@@ -211,9 +211,10 @@ test("half and full layouts", async ({ page }) => {
   expect(above?.y ?? 0).toBeLessThan(below?.y ?? 0);
   expect(above?.width ?? 0).toBeCloseTo(below?.width ?? 0, 0);
 
-  // The popover stays open after picking Half, so Full is already reachable.
-  await page.getByRole("button", { name: "Notation view" }).click();
-  await page.getByRole("button", { name: "Full", exact: true }).click();
+  // The popover stays open after picking Split, so Sheet only is already
+  // reachable.
+  await page.getByRole("button", { name: "View" }).click();
+  await page.getByRole("button", { name: "Sheet only", exact: true }).click();
   await expect(sheet).toBeVisible();
   await expect
     .poll(async () => sheet.locator("svg path").count())

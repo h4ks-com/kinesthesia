@@ -123,27 +123,26 @@ test("simplify reduces the part and ghosts the rest", async ({ page }) => {
   const full = await brightNotePixels(page);
 
   await page.getByRole("button", { name: "Simplify" }).click();
+  await page.getByRole("switch", { name: "Simplify" }).click();
   await expect(page).toHaveURL(/simple=1/);
   await expect
     .poll(async () => brightNotePixels(page))
     .toBeLessThan(full * 0.9);
 });
 
-test("the note density slider follows the simplify toggle", async ({
+test("the note density slider lives inside the simplify control", async ({
   page,
 }) => {
   await serveFixture(page);
   await page.goto(`/learn?${playerQuery()}`);
   await expect(page.locator("canvas")).toBeVisible();
 
-  // The density only means anything once the part is reduced, so it appears
-  // beside Simplify rather than in the settings menu.
-  await expect(page.getByRole("button", { name: "Note density" })).toHaveCount(
-    0,
-  );
-
+  // The density only means anything once the part is reduced, so it stays
+  // inside Simplify's own panel rather than appearing as a sibling button.
   await page.getByRole("button", { name: "Simplify" }).click();
-  await page.getByRole("button", { name: "Note density" }).click();
+  await expect(page.getByLabel("Maximum notes per second")).toHaveCount(0);
+
+  await page.getByRole("switch", { name: "Simplify" }).click();
   const rate = page.getByLabel("Maximum notes per second");
   await expect(rate).toBeVisible();
   await rate.fill("3");
@@ -156,10 +155,11 @@ test("multiplayer keeps the simplify setting fixed for both players", async ({
   await serveFixture(page);
   await page.goto(`/learn?${playerQuery()}`);
   await page.getByRole("button", { name: "Simplify" }).click();
+  await page.getByRole("switch", { name: "Simplify" }).click();
+  await page.keyboard.press("Escape");
 
-  const multiplayer = page.getByRole("link", {
-    name: "Switch to Multiplayer",
-  });
+  await page.getByRole("button", { name: "Mode: Learn" }).click();
+  const multiplayer = page.getByRole("link", { name: "Multiplayer" });
   await expect(multiplayer).toHaveAttribute("href", /simple=1/);
 });
 
@@ -203,12 +203,13 @@ test("space plays even when a control was just clicked", async ({ page }) => {
   await page.goto(`/learn?${playerQuery()}`);
   await expect(page.locator("canvas")).toBeVisible();
 
-  // Clicking Simplify leaves it focused; space must still start playback and
-  // must not toggle Simplify a second time.
-  const simplify = page.getByRole("button", { name: "Simplify" });
-  await simplify.click();
+  // Clicking the simplify switch leaves it focused; space must still start
+  // playback and must not toggle simplify a second time.
+  await page.getByRole("button", { name: "Simplify" }).click();
+  const toggle = page.getByRole("switch", { name: "Simplify" });
+  await toggle.click();
   await expect(page).toHaveURL(/simple=1/);
-  await expect(simplify).toBeFocused();
+  await expect(toggle).toBeFocused();
 
   await page.keyboard.press("Space");
   // Where the press lands is what this asserts. Starting the audio device is

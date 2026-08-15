@@ -1,9 +1,11 @@
 "use client";
 
-import { Columns2, Music2, PanelLeft, PanelRight } from "lucide-react";
+import { Hand as HandIcon, Music2 } from "lucide-react";
+import type { ReactNode } from "react";
 import { type SoundSharing, TrackMenu } from "@/components/track-menu";
 import { Popover } from "@/components/ui/popover";
 import { SliderRow } from "@/components/ui/slider-row";
+import { Toggle } from "@/components/ui/toggle";
 import type { SongVoicing, Voicing } from "@/lib/audio/voicing";
 import type { Hand } from "@/lib/midi/hands";
 import { type MelodyRate, melodyRateRange } from "@/lib/midi/melody";
@@ -35,15 +37,40 @@ type PartControlsProps = {
   lockedNote?: string;
 };
 
-const handOptions: readonly {
-  hand: Hand | null;
-  icon: typeof Columns2;
-  label: string;
-}[] = [
-  { hand: null, icon: Columns2, label: "Both hands" },
-  { hand: "left", icon: PanelLeft, label: "Left hand" },
-  { hand: "right", icon: PanelRight, label: "Right hand" },
+const handOptions: readonly { hand: Hand | null; label: string }[] = [
+  { hand: null, label: "Both hands" },
+  { hand: "left", label: "Left hand" },
+  { hand: "right", label: "Right hand" },
 ];
+
+/** Right hand is the glyph as drawn; left mirrors it; both hands composes two
+ * small copies, one of each, so a side is told apart by orientation rather
+ * than by hunting for three unrelated icons. */
+function HandGlyph({
+  hand,
+  className,
+}: {
+  hand: Hand | null;
+  className: string;
+}): ReactNode {
+  if (hand === "left") {
+    return (
+      <HandIcon className={`${className} scale-x-[-1]`} aria-hidden="true" />
+    );
+  }
+  if (hand === "right") {
+    return <HandIcon className={className} aria-hidden="true" />;
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className={`${className} inline-flex items-center justify-center`}
+    >
+      <HandIcon className="size-3 scale-x-[-1]" />
+      <HandIcon className="-ml-1.5 size-3" />
+    </span>
+  );
+}
 
 export function PartControls({
   tracks,
@@ -77,7 +104,6 @@ export function PartControls({
   const handGroupLabel = theirs ? "Their hand" : "Hand";
   const chosenHand = handOptions.find((option) => option.hand === hand) ?? {
     hand: null,
-    icon: Columns2,
     label: "Both hands",
   };
 
@@ -99,28 +125,80 @@ export function PartControls({
         onSolo={onSolo}
       />
 
-      <button
-        type="button"
-        data-tour="simplify"
-        disabled={onSimplified === null}
-        onClick={() => onSimplified?.(!simplified)}
-        aria-pressed={simplified}
-        aria-label={simplifyLabel}
-        data-tip={
-          onSimplified === null
-            ? (lockedNote ?? "Fixed for this match")
-            : simplified
-              ? "Play the full part"
-              : "One note at a time"
-        }
-        className={`shrink-0 rounded-lg border p-2 transition-colors disabled:opacity-50 ${
-          simplified
-            ? "border-accent bg-accent-soft text-accent"
-            : "border-line-strong text-muted enabled:hover:border-accent enabled:hover:text-accent"
-        }`}
-      >
-        <Music2 className="size-4" aria-hidden="true" />
-      </button>
+      {onSimplified === null ? (
+        <button
+          type="button"
+          data-tour="simplify"
+          disabled
+          aria-pressed={simplified}
+          aria-label={simplifyLabel}
+          data-tip={lockedNote ?? "Fixed for this match"}
+          className="shrink-0 rounded-lg border border-line-strong p-2 text-muted opacity-50"
+        >
+          <Music2 className="size-4" aria-hidden="true" />
+        </button>
+      ) : (
+        <Popover
+          label={simplifyLabel}
+          align="right"
+          trigger={(open) => (
+            <span
+              data-tour="simplify"
+              data-tip={simplifyLabel}
+              data-tip-align="right"
+              className={`inline-flex items-center rounded-lg border p-2 transition-colors ${
+                open || simplified
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-line-strong text-muted hover:border-accent hover:text-accent"
+              }`}
+            >
+              <Music2 className="size-4" aria-hidden="true" />
+            </span>
+          )}
+        >
+          <div className="flex w-56 flex-col gap-1 p-1 max-sm:w-full">
+            <Toggle
+              label={theirs ? "simplify their part" : "simplify"}
+              checked={simplified}
+              onChange={onSimplified}
+              tip={
+                simplified
+                  ? "Play the full part"
+                  : "Reduce this part to one note at a time"
+              }
+            />
+            {simplified ? (
+              <div className="border-line border-t pt-1">
+                <h3 className="label px-2">{density}</h3>
+                {onMelodyRate === null ? (
+                  <p
+                    data-tip={lockedNote ?? "Fixed for this match"}
+                    className="px-2 py-1.5 font-mono text-muted text-xs opacity-70"
+                  >
+                    <span className="sr-only">{density}: </span>
+                    {melodyRate}/s
+                  </p>
+                ) : (
+                  <>
+                    <SliderRow
+                      ariaLabel={rateLabel}
+                      min={melodyRateRange.min}
+                      max={melodyRateRange.max}
+                      step={1}
+                      value={melodyRate}
+                      valueText={`${melodyRate}/sec`}
+                      onChange={onMelodyRate}
+                    />
+                    <p className="px-2 pb-1 font-mono text-[0.7rem] text-faint leading-relaxed">
+                      Lower keeps the peaks of the tune and drops the rest.
+                    </p>
+                  </>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </Popover>
+      )}
 
       {onHand === null ? (
         <button
@@ -130,7 +208,7 @@ export function PartControls({
           data-tip={lockedNote ?? "Fixed for this match"}
           className="inline-flex shrink-0 items-center rounded-lg border border-line-strong p-2 text-muted opacity-50"
         >
-          <chosenHand.icon className="size-4" aria-hidden="true" />
+          <HandGlyph hand={chosenHand.hand} className="size-4" />
         </button>
       ) : (
         <Popover
@@ -146,7 +224,7 @@ export function PartControls({
                   : "border-line-strong text-muted hover:border-accent hover:text-accent"
               }`}
             >
-              <chosenHand.icon className="size-4" aria-hidden="true" />
+              <HandGlyph hand={chosenHand.hand} className="size-4" />
             </span>
           )}
         >
@@ -165,7 +243,7 @@ export function PartControls({
                     hand === option.hand ? "text-accent" : "text-text"
                   }`}
                 >
-                  <option.icon className="size-4 shrink-0" aria-hidden="true" />
+                  <HandGlyph hand={option.hand} className="size-4 shrink-0" />
                   {theirs
                     ? `Their ${option.label.toLowerCase()}`
                     : option.label}
@@ -175,51 +253,6 @@ export function PartControls({
           )}
         </Popover>
       )}
-
-      {simplified && onMelodyRate === null ? (
-        <span
-          data-tip={lockedNote ?? "Fixed for this match"}
-          className="inline-flex shrink-0 items-center rounded-lg border border-line-strong p-2 font-mono text-muted text-xs opacity-50"
-        >
-          <span className="sr-only">{density}: </span>
-          {melodyRate}/s
-        </span>
-      ) : null}
-
-      {simplified && onMelodyRate !== null ? (
-        <Popover
-          label={density}
-          align="right"
-          trigger={(open) => (
-            <span
-              data-tip={density}
-              className={`inline-flex items-center rounded-lg border p-2 font-mono text-xs transition-colors ${
-                open
-                  ? "border-accent text-accent"
-                  : "border-line-strong text-muted hover:border-accent hover:text-accent"
-              }`}
-            >
-              {melodyRate}/s
-            </span>
-          )}
-        >
-          <div className="w-56 p-1 max-sm:w-full">
-            <h3 className="label px-2">{density}</h3>
-            <SliderRow
-              ariaLabel={rateLabel}
-              min={melodyRateRange.min}
-              max={melodyRateRange.max}
-              step={1}
-              value={melodyRate}
-              valueText={`${melodyRate}/sec`}
-              onChange={(rate) => onMelodyRate?.(rate)}
-            />
-            <p className="px-2 pb-1 font-mono text-[0.7rem] text-faint leading-relaxed">
-              Lower keeps the peaks of the tune and drops the rest.
-            </p>
-          </div>
-        </Popover>
-      ) : null}
     </>
   );
 }

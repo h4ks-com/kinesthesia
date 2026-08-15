@@ -52,7 +52,9 @@ src/server/
     search.ts                 searches sources, proxies files and attaches links
     relevance.ts              orders results by what they carry of the query,
                               since a source ranks two words worse than one
-    analyse.ts                reads a .mid and reports what it holds
+    analyse.ts                reads a .mid with the player's own parser and
+                              hands back its report: the same one the song
+                              info panel shows
     inputs.ts                 the search and info inputs both surfaces validate
                               with
 src/components/
@@ -67,9 +69,17 @@ src/components/
   player.tsx                  composes the hooks below into a mode, and hosts a
                               match through its aside, overlay and footer slots
   player-header.tsx           the song menu, score, focus mode and mode switching
-  song-menu.tsx               what you can do with the open song: download it,
-                              copy its link, favourite it, put it online
-  part-controls.tsx           tracks, simplify and note density for one side
+  sheet-view.tsx              sheet music for the open song: two cursors that
+                              step with playback, an eased scroll that follows
+                              them, a seekable progress rail and an
+                              ink-on-paper option
+  song-menu.tsx               what you can do with the open song: see its
+                              analysis, download it, copy its link, favourite
+                              it, put it online
+  song-info-panel.tsx         tempo, key, meter, tracks and the chord
+                              progression, read off the song already in memory
+  part-controls.tsx           tracks, simplify, note density and hand for one
+                              side
   player-transport.tsx        play, clock, scrubber, speed, key and settings
   settings-menu.tsx           key size, octave, timing and input
   render-menu.tsx             render the watch view to a video or audio file
@@ -102,14 +112,20 @@ src/lib/
                               which way the notes travel
   search-params.ts            route search params to URLSearchParams
   format/clock.ts             seconds as m:ss
-  midi/song.ts                parses a .mid into a flat note list, moves it to another key
+  midi/song.ts                parses a .mid into a flat note list, moves it to
+                              another key, and carries its digest alongside it
   midi/sustain.ts             pedal spans, and how far past its end a note sounds under them
   midi/expression.ts          the bend and modulation wheels over time, per track
   midi/melody.ts              reduces a part to one playable note at a time
-  midi/analysis.ts            detects tempo, key and chords, and a compact digest
+  midi/analysis.ts            detects tempo, key and chords, and the digest
+                              that reports them: the one report the song info
+                              panel, midi_info and GET /api/midi/info all read,
+                              so the three can never drift apart
   midi/compose.ts             chord voicing, a 5x7 text font and note primitives
   midi/project.ts             an editable song: beat-timed tracks and the edit ops
   midi/part.ts                a side's tracks and the notes sounding right now
+  midi/hands.ts               which hand plays each note of a track, for a
+                              file that puts both hands on one
   midi/use-part-roll.ts       a part as the getters the roll draws with
   midi/palette.ts             per track and per pitch colours
   play/use-play-notes.ts      the notes play mode emits, rising from the keys
@@ -130,6 +146,20 @@ src/lib/
   audio/percussion.ts         drum note number to kit sample
   audio/use-playback-engine.ts  engine lifecycle, transport and speed
   midi/use-song.ts            loads and remembers a song
+  sheet/types.ts              the shapes the notation converter reads and
+                              writes, and the global notation view and colour
+                              theme settings
+  sheet/spelling.ts           a key's diatonic pitch spelling, table and
+                              fifths, and the chromatic notes it implies
+  sheet/staff-split.ts        notes onto the grand staff by their own pitch
+                              median, not a fixed line
+  sheet/notation.ts           quantises onto a 16th note grid, ties notes
+                              across a barline, and writes it all as MusicXML
+  sheet/convert.ts            the pure song to MusicXML pipeline the tests
+                              exercise directly
+  sheet/load.ts               rereads a file's own MIDI for the tempo, meter
+                              and key the converter needs, which `Song` does
+                              not carry
   tour/steps.ts               what the walkthrough points at, per mode
   tour/use-walkthrough.ts     first-run auto play and the replay it hands back
   render/keyboard.ts          key geometry, sizing and the pitch under a point
@@ -202,6 +232,50 @@ it, and the canvas reads it once per animation frame. Nothing measures time with
 `setTimeout`, so the drawing can never drift away from the audio or step
 backwards.
 
+## Notation view
+
+`sheet-view.tsx` shows the open song as sheet music, off, half above the
+falling notes, or full in their place. Notation reads across the page and the
+notes fall down it, so the two are stacked rather than set side by side and
+each keeps the whole width. `src/lib/sheet/` turns a song into MusicXML:
+`convert.ts` quantises every note onto a 16th note grid, splits the notes
+across the grand staff by the same hand assignment the player uses, spells each
+pitch from the key `midi/analysis.ts` already detects, and writes measures,
+rests and
+ties across a barline as plain MusicXML 3.1. It is pure and knows nothing of a
+live song; `load.ts` is the one place that rereads a file's own MIDI for the
+tempo, meter and key `Song` does not carry, and hands the converter a plain
+note list built from the notes already playing, transposed and past their
+runway.
+
+OpenSheetMusicDisplay, loaded only once the view opens, draws the MusicXML
+with two of its own cursors: the first highlights the notes sounding now, the
+second sits one onset ahead and marks what comes next as a short line, so the
+two never read as the same mark. Both are steppers with no way to seek, so
+the view keeps an index into the note onsets `convert.ts` reports and steps
+each cursor forward on every animation frame the song's own clock has crossed
+the next onset, resetting and fast-forwarding both back up to position on a
+seek backward.
+
+A vertical rail beside the notation reads the same clock: its fill and
+playhead move every frame, and dragging or clicking it seeks exactly like the
+transport's own scrubber. The panel keeps the current system in view by
+easing its own scroll toward a point a third of the way down rather than
+jumping to it, and it yields for a couple of seconds whenever the listener
+scrolls by hand before it resumes; OSMD's own built-in follow would fight
+this over the same scroll position, so it stays off, and the panel tells its
+own scroll apart from one the listener made by comparing against the value it
+last wrote itself.
+
+A small button in the notation panel's own corner inverts it to dark ink on
+light paper instead of the app's usual light on dark, the way printed
+notation reads. Its colours come from the same CSS custom properties the rest
+of the app defines (`--text` or `--ink`, `--accent`, `--warn`) rather than a
+second set of hex values. The notation view choice and this inversion are
+both global settings, remembered the way key width and timing offset are, so
+they hold across every song and every mode, including focus mode, which
+shares the same stage the roll and the notation split.
+
 ## Modes
 
 `watch` plays every track. `learn` and `multiplayer` hand the chosen tracks to
@@ -227,8 +301,11 @@ once. It has no timeline, so the transport bar keeps its height but stays empty.
 Their own half is the player they already know; the other half is
 `opponent-panel`, which is where the other player is set up, in order: the match
 type, then the part they get. Both halves draw the same `part-controls` — tracks,
-simplify, note density — so the two read as one instrument, and a side that is
-not yours to set shows them disabled rather than missing. A **battle** mirrors
+simplify, note density and hand — so the two read as one instrument, and a side
+that is not yours to set shows them disabled rather than missing. A `hand`
+narrows a chosen track to the left or right hand of it, for a file that puts
+both on one track; it is a filter on top of the track, not a track of its own,
+so both hands of one track keep that track's colour. A **battle** mirrors
 the host's own line onto their side and locks it; a **co-op** hands their part
 over to the host to build.
 
@@ -286,13 +363,19 @@ kinesthesia is, alongside each tool's own description.
 
 `search_midi` knows only what a source lists. `midi_info` downloads the file and
 parses it with the player's own parser, so a caller can say how long a song runs
-and which track to play rather than guess. `search_midi` returns a plain link
+and which track to play rather than guess, and reports per track whether it
+looks like it holds both hands. It reports the song's tempo, meter, estimated
+key and chord progression too, from the same digest the browser computes when it
+opens the file and the song info panel reads straight off it: `midi_info`,
+`GET /api/midi/info` and the panel all show one report, so they cannot drift
+apart. `search_midi` returns a plain link
 per mode. `player_link` builds one carrying
-the speed, key, tracks, simplify and focus a caller asks for, which is what
-makes those settings reachable by an agent at all: they live only in the query
-string and nothing else advertises them. It clamps through the same functions
-the player parses with, so a link it hands back cannot ask for a value the
-player would refuse. A setting the caller names is written down even at its
+the speed, key, tracks, a hand of them, simplify and focus a caller asks for,
+which is what makes those settings reachable by an agent at all: they live only
+in the query string and nothing else advertises them. It clamps through the
+same functions the player parses with, so a link it hands back cannot ask for a
+value the player would refuse. A setting the caller names is written down even
+at its
 default, since leaving it out would hand it to whatever the listener's device
 remembers for that song.
 
@@ -323,11 +406,13 @@ Signing in is optional. With no Logto values set, `authConfig` is null, the
 header renders no button and the app is fully anonymous with recents and
 favourites kept in the browser.
 
-Settings are remembered in the browser. Per song settings (speed, tracks,
+Settings are remembered in the browser. Per song settings (speed, tracks, hand,
 simplify and its note rate, key) come back when the song opens in any mode; global
-settings (key width, timing offset) hold across every song. A link that states
-a song setting outright still wins, so a shared view reproduces itself. A locked
-match neither reads nor writes this memory, since its part is the prepared one.
+settings (key width, timing offset, the notation view and its colour theme)
+hold across every song.
+A link that states a song setting outright still wins, so a shared view
+reproduces itself. A locked match neither reads nor writes this memory, since
+its part is the prepared one.
 
 How a song sounds is kept on the device that shaped it and shared from the
 account that saved it. Every edit lands in the browser as it settles, so a

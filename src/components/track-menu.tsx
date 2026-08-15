@@ -123,7 +123,7 @@ export function TrackMenu({
           data-tour="tracks"
           data-tip={
             single
-              ? "The instrument and shaping"
+              ? "Edit instrument"
               : managed
                 ? "Show or hide tracks"
                 : "Instruments"
@@ -237,7 +237,7 @@ export function TrackMenu({
                     onClick={() => onToggleMine?.(track.index)}
                     aria-pressed={claimed}
                     aria-label={`Play ${track.name} yourself`}
-                    data-tip="Play this one"
+                    data-tip="Play this part"
                     className={`shrink-0 rounded-lg p-1.5 transition-colors ${
                       claimed
                         ? "bg-accent text-void"
@@ -260,7 +260,7 @@ export function TrackMenu({
                     data-tour="track-sound"
                     onClick={() => setShaping(track.index)}
                     aria-label={`Change how ${track.name} sounds`}
-                    data-tip="How it sounds"
+                    data-tip="Edit instrument"
                     className={`shrink-0 rounded-lg p-1.5 transition-colors ${
                       isDefaultVoicing(
                         voicing.get(track.index) ?? defaultVoicing(track),
@@ -321,8 +321,8 @@ export function TrackMenu({
               <button
                 type="button"
                 onClick={sound.onReset}
-                aria-label="Back to the sounds in the file"
-                data-tip="Back to the sounds in the file"
+                aria-label="Reset all instruments"
+                data-tip="Reset all instruments"
                 className="shrink-0 rounded-lg p-1.5 text-faint transition-colors hover:bg-raised hover:text-accent"
               >
                 <RotateCcw className="size-4" aria-hidden="true" />

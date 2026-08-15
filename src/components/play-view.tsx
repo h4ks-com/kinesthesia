@@ -12,6 +12,7 @@ import type { SongVoicing, Voicing } from "@/lib/audio/voicing";
 import { keyLabelsFor, reachFor } from "@/lib/input/keyboard-map";
 import { useMidiShortcuts } from "@/lib/input/midi-shortcuts";
 import { type InputChannel, useNoteInput } from "@/lib/input/use-note-input";
+import { blankDigest } from "@/lib/midi/analysis";
 import { ExpressionTrail } from "@/lib/midi/expression";
 import type { Song, SongNote } from "@/lib/midi/song";
 import {
@@ -59,6 +60,8 @@ function playSong(parts: readonly PlayPart[]): Song {
     expression: new ExpressionTrail(),
     harmony: [],
     key: null,
+    report: blankDigest("Play"),
+    hands: new Map(),
   };
 }
 

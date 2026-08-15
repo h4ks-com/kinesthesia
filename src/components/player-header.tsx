@@ -3,6 +3,7 @@
 import {
   CircleHelp,
   Eye,
+  FileMusic,
   GraduationCap,
   Maximize,
   Piano,
@@ -13,8 +14,11 @@ import type { ReactNode } from "react";
 import { PartControls } from "@/components/part-controls";
 import { SongMenu } from "@/components/song-menu";
 import { type SoundSharing, TrackMenu } from "@/components/track-menu";
+import { Popover } from "@/components/ui/popover";
 import { ScoreReadout } from "@/components/ui/score-readout";
 import type { SongVoicing, Voicing } from "@/lib/audio/voicing";
+import type { Digest } from "@/lib/midi/analysis";
+import type { Hand } from "@/lib/midi/hands";
 import type { MelodyRate } from "@/lib/midi/melody";
 import type { SongNote, SongTrack } from "@/lib/midi/song";
 import {
@@ -23,6 +27,7 @@ import {
   playerPath,
 } from "@/lib/player-url";
 import { gotShare, type Score, scorePoints } from "@/lib/scoring/judge";
+import type { NotationView } from "@/lib/sheet/types";
 import { isDeviceLocal } from "@/lib/trusted-url";
 
 const modeCatalog = [
@@ -35,6 +40,12 @@ const modeCatalog = [
   icon: typeof Eye;
 }[];
 
+const notationChoices = [
+  { view: "off", label: "Off" },
+  { view: "half", label: "Half" },
+  { view: "full", label: "Full" },
+] as const satisfies readonly { view: NotationView; label: string }[];
+
 type PlayerHeaderProps = {
   mode: PlayerMode;
   params: PlayerParams;
@@ -46,6 +57,8 @@ type PlayerHeaderProps = {
   interactive: boolean;
   /** The song's name without its file extension. */
   title: string;
+  /** Tempo, key, meter and chords, computed once when the song was parsed. */
+  report: Digest;
   signedIn: boolean;
   shareEnabled: boolean;
   onPublished: (url: string) => void;
@@ -53,6 +66,8 @@ type PlayerHeaderProps = {
   onSimplified: (simplified: boolean) => void;
   melodyRate: MelodyRate;
   onMelodyRate: (rate: number) => void;
+  hand: Hand | null;
+  onHand: (hand: Hand | null) => void;
   editable: boolean;
   score: Score;
   /** How many notes the part asks for, so the tally can read as a share of the
@@ -68,6 +83,8 @@ type PlayerHeaderProps = {
   /** The render control, present only where a plain watch view can be captured
    * cleanly. */
   renderTool?: ReactNode;
+  notationView: NotationView;
+  onNotationView: (next: NotationView) => void;
   onFocus: () => void;
   onHelp: () => void;
 };
@@ -82,6 +99,7 @@ export function PlayerHeader({
   playerTracks,
   interactive,
   title,
+  report,
   signedIn,
   shareEnabled,
   onPublished,
@@ -89,6 +107,8 @@ export function PlayerHeader({
   onSimplified,
   melodyRate,
   onMelodyRate,
+  hand,
+  onHand,
   editable,
   score,
   owedNotes,
@@ -97,6 +117,8 @@ export function PlayerHeader({
   onVoicing,
   sound,
   renderTool = null,
+  notationView,
+  onNotationView,
   onFocus,
   onHelp,
   onToggleVisible,
@@ -104,6 +126,9 @@ export function PlayerHeader({
   onSolo,
 }: PlayerHeaderProps) {
   const local = isDeviceLocal(params.url);
+  const notationLabel =
+    notationChoices.find((choice) => choice.view === notationView)?.label ??
+    "Off";
   const switchable = modeCatalog.filter((entry) =>
     mode === "multiplayer" ? false : entry.mode !== mode,
   );
@@ -127,6 +152,7 @@ export function PlayerHeader({
           params={params}
           title={title}
           trackCount={tracks.length}
+          report={report}
           signedIn={signedIn}
           shareEnabled={shareEnabled}
           onPublished={onPublished}
@@ -167,6 +193,8 @@ export function PlayerHeader({
           onSimplified={editable ? onSimplified : null}
           melodyRate={melodyRate}
           onMelodyRate={editable ? onMelodyRate : null}
+          hand={hand}
+          onHand={editable ? onHand : null}
           whose="yours"
         />
       ) : (
@@ -189,11 +217,48 @@ export function PlayerHeader({
 
       {renderTool}
 
+      <Popover
+        label={`Notation view, ${notationLabel.toLowerCase()}`}
+        align="right"
+        trigger={(open) => (
+          <span
+            data-tip="Sheet music view"
+            data-tip-align="right"
+            className={`inline-flex items-center rounded-lg border p-2 transition-colors ${
+              open || notationView !== "off"
+                ? "border-accent text-accent"
+                : "border-line-strong text-muted hover:border-accent hover:text-accent"
+            }`}
+          >
+            <FileMusic className="size-4" aria-hidden="true" />
+          </span>
+        )}
+      >
+        <fieldset className="flex w-40 gap-1 p-1">
+          <legend className="sr-only">Notation view</legend>
+          {notationChoices.map(({ view, label }) => (
+            <button
+              key={view}
+              type="button"
+              aria-pressed={view === notationView}
+              onClick={() => onNotationView(view)}
+              className={`flex-1 rounded-lg border px-2 py-1.5 pointer-coarse:min-h-11 text-xs transition-colors ${
+                view === notationView
+                  ? "border-accent text-accent"
+                  : "border-line-strong text-muted hover:border-accent hover:text-accent"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </fieldset>
+      </Popover>
+
       <button
         type="button"
         data-tour="focus"
         onClick={onFocus}
-        data-tip="Just the keys and the notes"
+        data-tip="Focus mode"
         data-tip-align="right"
         aria-label="Focus mode"
         className="shrink-0 rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"
@@ -236,7 +301,7 @@ export function PlayerHeader({
       <button
         type="button"
         onClick={onHelp}
-        data-tip="Walk me through it"
+        data-tip="Tutorial"
         data-tip-align="right"
         aria-label="Tutorial"
         className="shrink-0 rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"

@@ -51,3 +51,5 @@ next-env.d.ts
 # local score file
 /data
 drizzle/meta/_journal.json.bak
+
+.claude/worktrees/

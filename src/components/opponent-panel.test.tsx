@@ -1,6 +1,7 @@
 import { render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OpponentPanel } from "@/components/opponent-panel";
+import { blankDigest } from "@/lib/midi/analysis";
 import { ExpressionTrail } from "@/lib/midi/expression";
 import type { Song, SongNote } from "@/lib/midi/song";
 import { noOpponent } from "@/lib/multiplayer/protocol";
@@ -53,9 +54,16 @@ const song: Song = {
   expression: new ExpressionTrail(),
   harmony: [],
   key: null,
+  report: blankDigest("Test"),
+  hands: new Map(),
 };
 
-const part = { simplified: false, melodyRate: 8, tracks: [0] } as const;
+const part = {
+  simplified: false,
+  melodyRate: 8,
+  tracks: [0],
+  hand: null,
+} as const;
 
 function show(theirKeys: () => ReadonlySet<number>) {
   return render(

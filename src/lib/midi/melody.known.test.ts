@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { blankDigest } from "@/lib/midi/analysis";
 import { ExpressionTrail } from "@/lib/midi/expression";
 import { type MelodyOptions, reduceToMelody } from "@/lib/midi/melody";
 import type { Song, SongNote, SongTrack } from "@/lib/midi/song";
@@ -75,6 +76,8 @@ function arrangement(
     expression: new ExpressionTrail(),
     harmony: [],
     key: null,
+    report: blankDigest("arrangement"),
+    hands: new Map(),
   };
 }
 
@@ -147,6 +150,8 @@ describe("reduceToMelody on tunes with a known shape", () => {
       expression: new ExpressionTrail(),
       harmony: [],
       key: null,
+      report: blankDigest("arpeggiated"),
+      hands: new Map(),
     };
     const atTuneSpeed: MelodyOptions = {
       tracks: new Set([0]),

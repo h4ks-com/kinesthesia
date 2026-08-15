@@ -1,6 +1,13 @@
 import type { Midi } from "@tonejs/midi";
-import { estimateKey, readMidi } from "@/lib/midi/analysis";
+import {
+  type Digest,
+  digest,
+  estimateKey,
+  readMidi,
+  trackLabel,
+} from "@/lib/midi/analysis";
 import { ExpressionTrail } from "@/lib/midi/expression";
+import { assignHandsForSong, type HandMap } from "@/lib/midi/hands";
 import { type HarmonySpan, nameChord, rootOf } from "@/lib/midi/harmony";
 import { pedalSpans, releaseAt } from "@/lib/midi/sustain";
 import type { SongKey } from "@/lib/skins/types";
@@ -105,6 +112,13 @@ export type Song = {
   readonly harmony: readonly HarmonySpan[];
   /** The key the whole song sits in, where one fits well enough to say. */
   readonly key: SongKey | null;
+  /** Tempo, meter, per-track detail and the chord progression, computed once
+   * here so the song info panel reads it straight off the parsed song instead
+   * of asking the server again for what this tab already worked out. */
+  readonly report: Digest;
+  /** Which hand plays each note, worked out once per track here because both
+   * sides of a match need to land on the identical split. */
+  readonly hands: HandMap;
 };
 
 /** How often the harmony is named. Short enough to catch a chord change, long
@@ -163,20 +177,6 @@ export function isBlackKey(pitch: number): boolean {
 
 export function noteName(pitch: number): string {
   return noteNames[pitch % 12] ?? "C";
-}
-
-function trackLabel(
-  trackName: string,
-  instrument: string,
-  position: number,
-): string {
-  if (trackName !== "") {
-    return trackName;
-  }
-  if (instrument !== "") {
-    return instrument;
-  }
-  return `Track ${position}`;
 }
 
 export function parseSong(data: ArrayBuffer, name: string): Song {
@@ -278,14 +278,23 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
   );
 
   const key = estimateKey(midi);
+  const duration = lastSound + endTail;
   return {
     name,
-    duration: lastSound + endTail,
-    harmony: harmonyOf(runwayNotes, lastSound + endTail),
+    duration,
+    harmony: harmonyOf(runwayNotes, duration),
     key: key === null ? null : { root: rootOf(key.tonic), mode: key.mode },
     notes: runwayNotes,
     tracks,
     expression,
+    // The file's own length leaves out the runway this parser adds at both
+    // ends, so reporting it would put a different figure in front of a reader
+    // from the one the clock beside it counts to.
+    report: {
+      ...digest(midi, name),
+      durationSeconds: Math.round(duration * 10) / 10,
+    },
+    hands: assignHandsForSong(runwayNotes),
   };
 }
 

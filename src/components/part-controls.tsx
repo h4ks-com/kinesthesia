@@ -1,10 +1,11 @@
 "use client";
 
-import { Music2 } from "lucide-react";
+import { Columns2, Music2, PanelLeft, PanelRight } from "lucide-react";
 import { type SoundSharing, TrackMenu } from "@/components/track-menu";
 import { Popover } from "@/components/ui/popover";
 import { SliderRow } from "@/components/ui/slider-row";
 import type { SongVoicing, Voicing } from "@/lib/audio/voicing";
+import type { Hand } from "@/lib/midi/hands";
 import { type MelodyRate, melodyRateRange } from "@/lib/midi/melody";
 import type { SongNote, SongTrack } from "@/lib/midi/song";
 
@@ -26,11 +27,23 @@ type PartControlsProps = {
   onSimplified: ((simplified: boolean) => void) | null;
   melodyRate: MelodyRate;
   onMelodyRate: ((rate: number) => void) | null;
+  hand: Hand | null;
+  onHand: ((hand: Hand | null) => void) | null;
   /** Whose part this is, so the labels read right on either half. */
   whose: "yours" | "theirs";
   /** Why their side is fixed, when it is. */
   lockedNote?: string;
 };
+
+const handOptions: readonly {
+  hand: Hand | null;
+  icon: typeof Columns2;
+  label: string;
+}[] = [
+  { hand: null, icon: Columns2, label: "Both hands" },
+  { hand: "left", icon: PanelLeft, label: "Left hand" },
+  { hand: "right", icon: PanelRight, label: "Right hand" },
+];
 
 export function PartControls({
   tracks,
@@ -48,6 +61,8 @@ export function PartControls({
   onSimplified,
   melodyRate,
   onMelodyRate,
+  hand,
+  onHand,
   whose,
   lockedNote,
 }: PartControlsProps) {
@@ -59,6 +74,12 @@ export function PartControls({
     ? "Their maximum notes per second"
     : "Maximum notes per second";
   const density = theirs ? "Their note density" : "Note density";
+  const handGroupLabel = theirs ? "Their hand" : "Hand";
+  const chosenHand = handOptions.find((option) => option.hand === hand) ?? {
+    hand: null,
+    icon: Columns2,
+    label: "Both hands",
+  };
 
   return (
     <>
@@ -100,6 +121,60 @@ export function PartControls({
       >
         <Music2 className="size-4" aria-hidden="true" />
       </button>
+
+      {onHand === null ? (
+        <button
+          type="button"
+          disabled
+          aria-label={`${handGroupLabel}, ${chosenHand.label.toLowerCase()}`}
+          data-tip={lockedNote ?? "Fixed for this match"}
+          className="inline-flex shrink-0 items-center rounded-lg border border-line-strong p-2 text-muted opacity-50"
+        >
+          <chosenHand.icon className="size-4" aria-hidden="true" />
+        </button>
+      ) : (
+        <Popover
+          label={`${handGroupLabel}, ${chosenHand.label.toLowerCase()}`}
+          align="right"
+          trigger={(open) => (
+            <span
+              data-tip="Which hand you play"
+              data-tip-align="right"
+              className={`inline-flex items-center rounded-lg border p-2 transition-colors ${
+                open || hand !== null
+                  ? "border-accent text-accent"
+                  : "border-line-strong text-muted hover:border-accent hover:text-accent"
+              }`}
+            >
+              <chosenHand.icon className="size-4" aria-hidden="true" />
+            </span>
+          )}
+        >
+          {(close) => (
+            <div className="flex w-44 flex-col gap-0.5">
+              {handOptions.map((option) => (
+                <button
+                  key={option.label}
+                  type="button"
+                  aria-pressed={hand === option.hand}
+                  onClick={() => {
+                    onHand(option.hand);
+                    close();
+                  }}
+                  className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 pointer-coarse:min-h-11 text-left text-sm transition-colors hover:bg-raised ${
+                    hand === option.hand ? "text-accent" : "text-text"
+                  }`}
+                >
+                  <option.icon className="size-4 shrink-0" aria-hidden="true" />
+                  {theirs
+                    ? `Their ${option.label.toLowerCase()}`
+                    : option.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </Popover>
+      )}
 
       {simplified && onMelodyRate === null ? (
         <span

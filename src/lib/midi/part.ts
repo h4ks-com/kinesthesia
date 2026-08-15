@@ -1,20 +1,27 @@
+import type { Hand } from "@/lib/midi/hands";
 import { type MelodyRate, reduceToMelody } from "@/lib/midi/melody";
 import type { Song, SongNote } from "@/lib/midi/song";
 
-/** One player's share of a song: which tracks they owe, and whether that share
- * is reduced to a single line. Both sides of a match derive their roll from
- * this, so a co-op can hand each side a different one. */
+/** One player's share of a song: which tracks they owe, whether that share is
+ * reduced to a single line, and which hand of it, where a track holds both.
+ * Both sides of a match derive their roll from this, so a co-op can hand each
+ * side a different one. */
 export type Part = {
   readonly simplified: boolean;
   readonly melodyRate: MelodyRate;
   readonly tracks: readonly number[];
+  /** Null plays both hands of the chosen tracks. */
+  readonly hand: Hand | null;
 };
 
 export function partLine(song: Song, part: Part): readonly SongNote[] {
   const tracks = new Set(part.tracks);
-  return part.simplified
+  const line = part.simplified
     ? reduceToMelody(song, { tracks, maxNotesPerSecond: part.melodyRate })
     : song.notes.filter((note) => tracks.has(note.track));
+  return part.hand === null
+    ? line
+    : line.filter((note) => song.hands.get(note.id) === part.hand);
 }
 
 export function soundingPitches(

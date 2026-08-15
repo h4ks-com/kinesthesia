@@ -76,6 +76,7 @@ function watchHref(song: SongLink): string {
     speed: defaultSpeed,
     simplified: false,
     melodyRate: defaultMelodyRate,
+    hand: null,
     transpose: defaultTranspose,
     focus: false,
     skin: null,

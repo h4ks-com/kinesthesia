@@ -1,5 +1,6 @@
 import { Midi } from "@tonejs/midi";
 import { describe, expect, it } from "vitest";
+import { blankDigest } from "@/lib/midi/analysis";
 import { ExpressionTrail } from "@/lib/midi/expression";
 import {
   clampTranspose,
@@ -49,6 +50,8 @@ const song: Song = {
   expression: new ExpressionTrail(),
   harmony: [],
   key: null,
+  report: blankDigest("Test"),
+  hands: new Map(),
 };
 
 function withLine(line: readonly number[]): Song {
@@ -82,6 +85,14 @@ describe("parseSong lead-in", () => {
     const parsed = parseSong(midiStartingAt(4), "x");
     const last = parsed.notes[parsed.notes.length - 1]?.end ?? 0;
     expect(parsed.duration).toBeCloseTo(last + 2.5);
+  });
+
+  // The report sits beside a clock counting to the song's own length, and the
+  // file's duration leaves out the runway added at both ends.
+  it("reports the length the clock counts to, not the file's own", () => {
+    const parsed = parseSong(midiStartingAt(0), "x");
+
+    expect(parsed.report.durationSeconds).toBeCloseTo(parsed.duration, 1);
   });
 });
 
@@ -118,6 +129,10 @@ describe("transposeSong", () => {
 
   it("returns the same song when nothing moves", () => {
     expect(transposeSong(song, 0)).toBe(song);
+  });
+
+  it("carries the hand split unchanged, since a uniform shift keeps every gap between notes the same", () => {
+    expect(transposeSong(song, 5).hands).toBe(song.hands);
   });
 
   it("keeps every note on the keyboard", () => {

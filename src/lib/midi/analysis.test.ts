@@ -4,6 +4,7 @@ import {
   detectChords,
   detectMeter,
   detectTempo,
+  digest,
   estimateKey,
 } from "@/lib/midi/analysis";
 
@@ -103,5 +104,64 @@ describe("detectChords", () => {
       build({ bpm: 100, meter: [4, 4], chords: [[60]] }),
     );
     expect(spans[0]?.chord).toBeNull();
+  });
+});
+
+function twoTrackMidi(): Midi {
+  const midi = new Midi();
+  const piano = midi.addTrack();
+  piano.instrument.number = 0;
+  for (let i = 0; i < 6; i += 1) {
+    piano.addNote({ midi: 60 + (i % 3), time: i * 0.5, duration: 0.4 });
+  }
+  const drums = midi.addTrack();
+  drums.channel = 9;
+  drums.addNote({ midi: 38, time: 0, duration: 0.1 });
+  drums.addNote({ midi: 38, time: 1, duration: 0.1 });
+  midi.header.update();
+  return new Midi(midi.toArray());
+}
+
+describe("digest", () => {
+  it("sums notes across tracks and names the busiest one", () => {
+    const report = digest(twoTrackMidi(), "Two Tracks");
+    expect(report.totalNotes).toBe(8);
+    expect(report.playedTrack).toBe(0);
+    expect(report.tracks[0]?.notes).toBe(6);
+    expect(report.tracks[1]?.notes).toBe(2);
+  });
+
+  it("spans the pitch range across every track, not just the busiest", () => {
+    const report = digest(twoTrackMidi(), "Two Tracks");
+    expect(report.lowestPitch).toBe(38);
+    expect(report.highestPitch).toBe(62);
+  });
+
+  it("reports notes per second as density", () => {
+    const report = digest(twoTrackMidi(), "Two Tracks");
+    expect(report.density).toBeCloseTo(
+      report.totalNotes / report.durationSeconds,
+      1,
+    );
+  });
+
+  it("carries the full meter rather than only a formatted string", () => {
+    const report = digest(build({ bpm: 100, meter: [3, 4], chords: [c] }), "x");
+    expect(report.meter).toEqual({
+      beats: 3,
+      value: 4,
+      explicit: true,
+      changes: 1,
+    });
+  });
+
+  it("has no busiest track and a zero pitch span for a file with no notes", () => {
+    const empty = new Midi();
+    empty.addTrack();
+    const report = digest(empty, "Empty");
+    expect(report.playedTrack).toBeNull();
+    expect(report.lowestPitch).toBe(0);
+    expect(report.highestPitch).toBe(0);
+    expect(report.totalNotes).toBe(0);
   });
 });

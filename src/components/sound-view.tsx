@@ -54,8 +54,8 @@ export function SoundView({
           <button
             type="button"
             onClick={() => onChange(defaultVoicing(track))}
-            aria-label="Back to the sound in the file"
-            data-tip="Back to the sound in the file"
+            aria-label="Reset instrument"
+            data-tip="Reset instrument"
             className="shrink-0 rounded-lg p-1.5 text-faint transition-colors hover:bg-raised hover:text-accent"
           >
             <RotateCcw className="size-4" aria-hidden="true" />

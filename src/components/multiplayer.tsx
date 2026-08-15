@@ -12,6 +12,7 @@ import { MultiplayerInvite } from "@/components/multiplayer-invite";
 import { OpponentPanel } from "@/components/opponent-panel";
 import { Player, type PlayerHandle } from "@/components/player";
 import { TransportBar } from "@/components/player-transport";
+import type { Hand } from "@/lib/midi/hands";
 import { clampMelodyRate, defaultMelodyRate } from "@/lib/midi/melody";
 import type { Part } from "@/lib/midi/part";
 import {
@@ -76,6 +77,7 @@ type RoomReply = {
   readonly speed: number;
   readonly simplified: boolean;
   readonly melodyRate: number;
+  readonly hand?: Hand | null;
   readonly transpose?: number;
   readonly coop: boolean;
 };
@@ -85,6 +87,7 @@ function matchKey(match: PlayerParams): string {
     match.url,
     match.simplified,
     match.melodyRate,
+    match.hand ?? "both",
     match.speed,
     match.transpose,
     (match.tracks ?? []).join(","),
@@ -135,6 +138,7 @@ export function Multiplayer({
     simplified: params?.simplified ?? false,
     melodyRate: params?.melodyRate ?? defaultMelodyRate,
     tracks: params?.tracks ?? [],
+    hand: params?.hand ?? null,
   }));
 
   const [phase, setPhase] = useState<Phase>("ready");
@@ -242,6 +246,7 @@ export function Multiplayer({
           simplified: mine?.simplified ?? false,
           melodyRate: mine?.melodyRate ?? defaultMelodyRate,
           tracks: mine?.tracks ?? [],
+          hand: mine?.hand ?? null,
         } satisfies MatchMessage);
       });
       link.on("data", (raw) => {
@@ -255,6 +260,7 @@ export function Multiplayer({
             simplified: raw.simplified ?? false,
             melodyRate: clampMelodyRate(raw.melodyRate ?? defaultMelodyRate),
             tracks: raw.tracks ?? [],
+            hand: raw.hand ?? null,
           });
         }
         if (raw.kind === "ready") {
@@ -464,6 +470,7 @@ export function Multiplayer({
         speed: asSpeed(room.speed),
         simplified: room.simplified,
         melodyRate: clampMelodyRate(room.melodyRate),
+        hand: room.hand ?? null,
         transpose: clampTranspose(room.transpose ?? defaultTranspose),
         focus: false,
         skin: null,
@@ -509,6 +516,7 @@ export function Multiplayer({
           tracks: settings.tracks ?? [],
           simplified: settings.simplified,
           melodyRate: settings.melodyRate,
+          hand: settings.hand,
         });
     peer.on("open", async (peerId) => {
       const response = await fetch("/api/multiplayer/rooms", {
@@ -523,6 +531,7 @@ export function Multiplayer({
           speed: settings.speed,
           simplified: theirs.simplified,
           melodyRate: theirs.melodyRate,
+          hand: theirs.hand,
           transpose: settings.transpose,
           coop,
         }),

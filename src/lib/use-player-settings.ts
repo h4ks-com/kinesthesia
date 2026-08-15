@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { clampLatency } from "@/lib/audio/latency";
+import type { Hand } from "@/lib/midi/hands";
 import { clampMelodyRate, type MelodyRate } from "@/lib/midi/melody";
 import {
   clampTranspose,
@@ -17,6 +18,12 @@ import {
   type Speed,
 } from "@/lib/player-url";
 import { clampKeyWidth, defaultKeyWidth } from "@/lib/render/keyboard";
+import {
+  clampNotationView,
+  clampSheetTheme,
+  type NotationView,
+  type SheetTheme,
+} from "@/lib/sheet/types";
 import type { BackgroundChoice } from "@/lib/skins/backdrop";
 import {
   type GlobalSettings,
@@ -34,6 +41,7 @@ type SongSettingsValue = {
   speed: Speed;
   simplified: boolean;
   melodyRate: MelodyRate;
+  hand: Hand | null;
   transpose: Transpose;
 };
 type UrlChange = Partial<SongSettingsValue>;
@@ -62,7 +70,10 @@ export type PlayerSettings = {
   hasKeyboard: boolean;
   simplified: boolean;
   melodyRate: MelodyRate;
+  hand: Hand | null;
   transpose: Transpose;
+  notationView: NotationView;
+  sheetTheme: SheetTheme;
   /** True once the remembered settings have been read, so a default is only
    * claimed against what this device already knows. */
   hydrated: boolean;
@@ -75,8 +86,11 @@ export type PlayerSettings = {
   changePlainStyle: (next: boolean) => void;
   changeSimplified: (next: boolean) => void;
   changeMelodyRate: (next: number) => void;
+  changeHand: (next: Hand | null) => void;
   changeTranspose: (next: Transpose) => void;
   changeSpeed: (next: Speed) => void;
+  changeNotationView: (next: NotationView) => void;
+  changeSheetTheme: (next: SheetTheme) => void;
   togglePlayerTrack: (index: number) => void;
 };
 
@@ -99,10 +113,13 @@ export function usePlayerSettings({
   const [showKeyLabels, setShowKeyLabels] = useState(true);
   const [showNoteNames, setShowNoteNames] = useState(true);
   const [plainStyle, setPlainStyle] = useState(false);
+  const [notationView, setNotationView] = useState<NotationView>("off");
+  const [sheetTheme, setSheetTheme] = useState<SheetTheme>("dark");
   // A device with no fine pointer has no keyboard to letter the keys for.
   const [hasKeyboard, setHasKeyboard] = useState(false);
   const [simplified, setSimplified] = useState(params.simplified);
   const [melodyRate, setMelodyRate] = useState(params.melodyRate);
+  const [hand, setHand] = useState(params.hand);
   const [transpose, setTranspose] = useState(params.transpose);
 
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -127,6 +144,7 @@ export function usePlayerSettings({
     speed,
     simplified,
     melodyRate,
+    hand,
     transpose,
   });
   settingsRef.current = {
@@ -134,6 +152,7 @@ export function usePlayerSettings({
     speed,
     simplified,
     melodyRate,
+    hand,
     transpose,
   };
 
@@ -144,6 +163,7 @@ export function usePlayerSettings({
       speed: next.speed ?? current.speed,
       simplified: next.simplified ?? current.simplified,
       melodyRate: next.melodyRate ?? current.melodyRate,
+      hand: next.hand === undefined ? current.hand : next.hand,
       transpose: next.transpose ?? current.transpose,
     };
   }, []);
@@ -197,6 +217,8 @@ export function usePlayerSettings({
         setShowKeyLabels(stored.showKeyLabels ?? true);
         setShowNoteNames(stored.showNoteNames ?? true);
         setPlainStyle(stored.plainStyle ?? false);
+        setNotationView(clampNotationView(stored.notationView));
+        setSheetTheme(clampSheetTheme(stored.sheetTheme));
       }
     });
     if (locked) {
@@ -216,6 +238,7 @@ export function usePlayerSettings({
           melodyRate: explicit.has("melodyRate")
             ? params.melodyRate
             : clampMelodyRate(stored.melodyRate),
+          hand: explicit.has("hand") ? params.hand : (stored.hand ?? null),
           transpose: explicit.has("transpose")
             ? params.transpose
             : clampTranspose(stored.transpose ?? defaultTranspose),
@@ -224,6 +247,7 @@ export function usePlayerSettings({
         setSpeed(next.speed);
         setSimplified(next.simplified);
         setMelodyRate(next.melodyRate);
+        setHand(next.hand);
         setTranspose(next.transpose);
         if (next.tracks !== null) {
           setPlayerTracks(new Set(next.tracks));
@@ -232,6 +256,7 @@ export function usePlayerSettings({
           speed: next.speed,
           simplified: next.simplified,
           melodyRate: next.melodyRate,
+          hand: next.hand,
           transpose: next.transpose,
           ...(next.tracks !== null && { tracks: next.tracks }),
         });
@@ -299,6 +324,16 @@ export function usePlayerSettings({
     settleGlobal({ plainStyle: next });
   }
 
+  function changeNotationView(next: NotationView) {
+    setNotationView(next);
+    settleGlobal({ notationView: next });
+  }
+
+  function changeSheetTheme(next: SheetTheme) {
+    setSheetTheme(next);
+    settleGlobal({ sheetTheme: next });
+  }
+
   function changeSimplified(next: boolean) {
     setSimplified(next);
     commit({ simplified: next });
@@ -308,6 +343,11 @@ export function usePlayerSettings({
     const rate = clampMelodyRate(next);
     setMelodyRate(rate);
     settleCommit({ melodyRate: rate });
+  }
+
+  function changeHand(next: Hand | null) {
+    setHand(next);
+    commit({ hand: next });
   }
 
   function changeTranspose(next: Transpose) {
@@ -344,7 +384,10 @@ export function usePlayerSettings({
     hasKeyboard,
     simplified,
     melodyRate,
+    hand,
     transpose,
+    notationView,
+    sheetTheme,
     hydrated,
     claimTrack,
     updateUrl,
@@ -355,8 +398,11 @@ export function usePlayerSettings({
     changePlainStyle,
     changeSimplified,
     changeMelodyRate,
+    changeHand,
     changeTranspose,
     changeSpeed,
+    changeNotationView,
+    changeSheetTheme,
     togglePlayerTrack,
   };
 }

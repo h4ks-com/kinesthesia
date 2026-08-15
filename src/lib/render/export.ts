@@ -1,6 +1,7 @@
 import type { SongVoicing } from "@/lib/audio/voicing";
 import type { Song } from "@/lib/midi/song";
 import type { Frame, SkinReport } from "@/lib/render/piano-roll";
+import type { RenderNotation } from "@/lib/render/sheet";
 import type { BackdropSource, NoteDirection } from "@/lib/skins/types";
 
 /** The watch view exactly as it stands, handed to an offline render. Nothing
@@ -22,6 +23,10 @@ export type RenderConfig = {
   readonly quality: RenderQuality;
   /** Whether the notes carry their names, as they do on screen. */
   readonly noteNames: boolean;
+  /** The notation stacked above the notes, or in their place. Null is the
+   * notation turned off, and is also where a song that cannot be engraved ends
+   * up, which leaves the render on the falling notes alone. */
+  readonly notation: RenderNotation | null;
 };
 
 export type RenderQuality = "720p" | "1080p" | "1080p60";

@@ -60,26 +60,40 @@ test("the current and next cursors move as playback advances, one onset apart", 
   expect(nowBox?.width ?? 0).toBeGreaterThan(nextBox?.width ?? 0);
   expect(nextBox?.x ?? 0).toBeGreaterThan(nowBox?.x ?? 0);
 
+  // A stylesheet rule for images outranks the `height` attribute OSMD sizes
+  // its cursors with, which leaves a marker one pixel tall.
+  expect(nowBox?.height ?? 0).toBeGreaterThan(40);
+  expect(nextBox?.height ?? 0).toBeCloseTo(nowBox?.height ?? 0, 0);
+
   const seek = page.getByRole("slider", { name: "Song position" });
   const leftOf = (marker: typeof now): Promise<number> =>
     marker.evaluate((node) => Number.parseFloat(node.style.left));
-
-  // The two markers are different shapes, so the same onset puts them at
-  // different offsets. Both clamp to the last onset at the end of the song,
-  // which is where that difference can be read on its own.
-  await seek.fill("12");
-  await expect.poll(async () => leftOf(next)).toBeGreaterThan(0);
-  const shapeGap = (await leftOf(next)) - (await leftOf(now));
+  // A seek lands on a later frame than the fill that asked for it, so a
+  // reading taken straight after one can still be the position it is leaving.
+  // Two readings that agree are a marker that has arrived.
+  const settled = async (marker: typeof now): Promise<number> => {
+    let last = Number.NaN;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const reading = await leftOf(marker);
+      if (reading === last) {
+        return reading;
+      }
+      last = reading;
+      await page.waitForTimeout(120);
+    }
+    return last;
+  };
 
   await seek.fill("0");
-  const startLeft = await leftOf(now);
-  const promised = await leftOf(next);
+  const startLeft = await settled(now);
+  const promised = await settled(next);
 
   // Crept forward rather than played, so the reading lands on the first onset
   // crossed instead of wherever playback had reached by the time it was read.
-  // In steps small enough that no one of them can cross two onsets: this
-  // fixture puts a note every quarter second, and a coarser creep would land
-  // two notes on and read as the gap this is here to measure.
+  // In steps small enough that no one of them can cross two onsets: the
+  // closest this fixture writes two are an eighth of a second apart, and a
+  // coarser creep would land two notes on and read as the gap this is here to
+  // measure. The step matches the slider's own, which refuses a finer one.
   for (let at = 1; at <= 80; at += 1) {
     await seek.fill(String(Number((at * 0.05).toFixed(2))));
     if ((await leftOf(now)) !== startLeft) {
@@ -89,10 +103,10 @@ test("the current and next cursors move as playback advances, one onset apart", 
 
   // One note on, what is sounding stands where the marker for what was coming
   // stood. Two onsets apart, this lands a note short.
-  expect(await leftOf(now)).toBeCloseTo(promised - shapeGap, 1);
+  expect(await settled(now)).toBeCloseTo(promised, 1);
 });
 
-test("the notation view follows playback with a smooth, pausable scroll", async ({
+test("the notation belongs to the music while it plays and to the reader once it stops", async ({
   page,
 }) => {
   await serveFixture(page);
@@ -118,16 +132,44 @@ test("the notation view follows playback with a smooth, pausable scroll", async 
   await expect.poll(readTop, { timeout: 15_000 }).toBeGreaterThan(0);
   await page.screenshot({ path: "/tmp/sheet-follow.png" });
 
-  // Scrolling by hand yields: the position the listener chose has to hold
-  // for a while rather than being immediately overridden.
-  await scroller.evaluate((node) => {
-    node.scrollTop = 0;
-  });
-  await page.waitForTimeout(700);
-  expect(await readTop()).toBeLessThan(30);
+  // Playing, a hand on the notation is refused outright, so the follow never
+  // has anything to fight.
+  await expect(scroller).toHaveCSS("pointer-events", "none");
+  const box = await scroller.boundingBox();
+  expect(box).not.toBeNull();
+  if (box !== null) {
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, 600);
+  }
+  await page.waitForTimeout(400);
+  const followed = await readTop();
 
-  // Once the pause window elapses, following resumes on its own.
-  await expect.poll(readTop, { timeout: 6_000 }).toBeGreaterThan(30);
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  // Stopping keeps the page where the music left it rather than throwing the
+  // reader back to the first bar.
+  await expect(scroller).not.toHaveCSS("pointer-events", "none");
+  await page.waitForTimeout(600);
+  expect(Math.abs((await readTop()) - followed)).toBeLessThan(80);
+
+  // Stopped, a scroll by hand stays where it was put. Asked for beyond the end
+  // of the score the browser clamps it, so the reading, not the request, is
+  // what the wait is measured against.
+  const chosen = await scroller.evaluate((node, to: number) => {
+    node.scrollTop = to;
+    return node.scrollTop;
+  }, followed + 400);
+  expect(chosen).toBeGreaterThan(followed);
+  await page.waitForTimeout(3_000);
+  expect(Math.abs((await readTop()) - chosen)).toBeLessThan(80);
+
+  // Asking for a bar in the same breath as moving the page by hand still takes
+  // the reader there, rather than leaving them on a system with no marker on
+  // it: the two windows overlap, and the scroll must not swallow the seek.
+  await scroller.evaluate((node) => {
+    node.scrollTop = node.scrollHeight;
+  });
+  await page.getByRole("slider", { name: "Notation position" }).fill("0");
+  await expect.poll(readTop, { timeout: 6_000 }).toBeLessThan(100);
 });
 
 test("the vertical progress rail reflects and drives playback position", async ({

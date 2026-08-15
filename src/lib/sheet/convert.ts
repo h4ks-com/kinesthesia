@@ -3,6 +3,7 @@ import {
   buildMusicXml,
   divisions,
   quantizeNotes,
+  type StaffEvent,
   sequenceStaff,
 } from "@/lib/sheet/notation";
 import { keySpelling } from "@/lib/sheet/spelling";
@@ -55,11 +56,66 @@ export function songToSheetMusic(source: SheetSource): SheetMusic {
     signature,
   });
 
-  const cursorOnsets = [
-    ...new Set([...trebleEvents, ...bassEvents].map((event) => event.start)),
-  ]
-    .sort((left, right) => left - right)
-    .map((units) => units / unitsPerSecond);
+  return {
+    musicXml,
+    cursorOnsets: onsetSeconds(
+      [...trebleEvents, ...bassEvents],
+      unitsPerSecond,
+    ),
+  };
+}
 
-  return { musicXml, cursorOnsets };
+/** When each written moment is heard. The grid is one tempo because that is
+ * what reads well, so it is never the clock: each note anchors its own moment
+ * and a rest is placed proportionally between its neighbours. */
+function onsetSeconds(
+  events: readonly StaffEvent[],
+  unitsPerSecond: number,
+): number[] {
+  const anchors = new Map<number, number>();
+  for (const event of events) {
+    if (event.at !== null) {
+      anchors.set(
+        event.start,
+        Math.min(anchors.get(event.start) ?? event.at, event.at),
+      );
+    }
+  }
+  const anchored = [...anchors].sort(([left], [right]) => left - right);
+  const units = [...new Set(events.map((event) => event.start))].sort(
+    (left, right) => left - right,
+  );
+
+  const onsets: number[] = [];
+  let reached = 0;
+  for (const unit of units) {
+    const known = anchors.get(unit);
+    if (known !== undefined) {
+      onsets.push(known);
+      continue;
+    }
+    while (
+      reached < anchored.length &&
+      (anchored[reached]?.[0] ?? Number.POSITIVE_INFINITY) < unit
+    ) {
+      reached += 1;
+    }
+    const before = anchored[reached - 1];
+    const after = anchored[reached];
+    if (before === undefined) {
+      onsets.push(
+        after === undefined
+          ? unit / unitsPerSecond
+          : Math.max(0, after[1] - (after[0] - unit) / unitsPerSecond),
+      );
+      continue;
+    }
+    if (after === undefined) {
+      onsets.push(before[1] + (unit - before[0]) / unitsPerSecond);
+      continue;
+    }
+    const share = (unit - before[0]) / (after[0] - before[0]);
+    onsets.push(before[1] + share * (after[1] - before[1]));
+  }
+  return onsets;
 }

@@ -22,6 +22,7 @@ type SheetViewProps = {
    * accessible label; the rail's own smooth motion still reads getPosition
    * on every frame, the same split SongMinimap uses. */
   elapsed: number;
+  playing: boolean;
   onSeek: ((position: number) => void) | null;
   theme: SheetTheme;
   onTheme: (next: SheetTheme) => void;
@@ -44,6 +45,7 @@ export function SheetView({
   transpose,
   getPosition,
   elapsed,
+  playing,
   onSeek,
   theme,
   onTheme,
@@ -96,6 +98,7 @@ export function SheetView({
       duration={song.duration}
       getPosition={getPosition}
       elapsed={elapsed}
+      playing={playing}
       onSeek={onSeek}
       theme={theme}
       onTheme={onTheme}
@@ -116,9 +119,31 @@ const followBand = 1 / 3;
 /** How long a scroll the user made by hand keeps following paused. */
 const followResumeMs = 2200;
 
+/** How long following chases a seek made while the music is stopped, which is
+ * the one thing that moves the notation when nobody is playing. */
+const followSeekMs = 1200;
+
 /** Exponential time constant for the eased catch-up scroll, so it glides
  * rather than snapping even across a big jump. */
 const followTauMs = 220;
+
+/** Puts a cursor's height back after the stylesheet's `img { height: auto }`
+ * reset takes it away. OSMD draws a one pixel tall image and stretches it to
+ * the staff with the `height` attribute, which any rule at all outranks, so the
+ * marker collapses to that single pixel. Mirroring the attribute inline is the
+ * one place nothing else can reach. */
+function fitCursor(element: HTMLImageElement | null): void {
+  if (element === null) {
+    return;
+  }
+  const height = element.getAttribute("height");
+  if (height === null) {
+    return;
+  }
+  if (element.style.height !== `${height}px`) {
+    element.style.height = `${height}px`;
+  }
+}
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement)
@@ -131,6 +156,7 @@ function Notation({
   duration,
   getPosition,
   elapsed,
+  playing,
   onSeek,
   theme,
   onTheme,
@@ -139,10 +165,12 @@ function Notation({
   duration: number;
   getPosition: () => number;
   elapsed: number;
+  playing: boolean;
   onSeek: ((position: number) => void) | null;
   theme: SheetTheme;
   onTheme: (next: SheetTheme) => void;
 }) {
+  const isLocked = playing && onSeek !== null;
   const hostRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
@@ -177,13 +205,16 @@ function Notation({
             {
               type: CursorType.Standard,
               color: cssVar(theme === "light" ? "--accent-ink" : "--accent"),
-              alpha: 0.25,
+              alpha: theme === "light" ? 0.4 : 0.3,
               follow: false,
             },
+            // Ink on paper takes more of the colour to read as strongly as it
+            // does on a dark ground, and what to play next has to be legible
+            // as a mark in its own right.
             {
-              type: CursorType.ShortThinTopLeft,
+              type: CursorType.ThinLeft,
               color: cssVar(theme === "light" ? "--warn-ink" : "--warn"),
-              alpha: 0.6,
+              alpha: theme === "light" ? 0.85 : 0.7,
               follow: false,
             },
           ],
@@ -236,6 +267,10 @@ function Notation({
         osmd.render();
         osmd.cursor.show();
         osmd.cursors[1]?.show();
+        // Laid out again, the cursor is somewhere else on the page entirely,
+        // so the panel goes and finds it even with the music stopped.
+        chaseUntil.current = performance.now() + followSeekMs;
+        lastManualScroll.current = Number.NEGATIVE_INFINITY;
       }, 120);
     });
     observer.observe(host);
@@ -258,11 +293,31 @@ function Notation({
   const expectedScrollTop = useRef(0);
   const lastManualScroll = useRef(Number.NEGATIVE_INFINITY);
   const lastFrameTime = useRef(0);
+  const followedIndex = useRef(-1);
+  const chaseUntil = useRef(Number.NEGATIVE_INFINITY);
+  // Read inside the frame loop rather than listed as a dependency: restarting
+  // that effect zeroes the cursor counters while the drawn cursors stay where
+  // they stood, so every play and pause would leave the notation a few notes
+  // behind the music.
+  const playingRef = useRef(playing);
+  useEffect(() => {
+    playingRef.current = playing;
+    if (playing) {
+      lastManualScroll.current = Number.NEGATIVE_INFINITY;
+      return;
+    }
+    // Stopping stops the scroll with it, rather than letting the chase from
+    // the last onset crossed carry the page on for another second.
+    chaseUntil.current = Number.NEGATIVE_INFINITY;
+  }, [playing]);
   useEffect(() => {
     if (!ready) {
       return;
     }
     const scrollEl = scrollRef.current;
+    // A scroll still arrives from the keyboard while the pointer is refused,
+    // and it is honoured on the same terms as any other: yielded to, rather
+    // than dragged back on the next frame.
     const onScroll = (): void => {
       if (scrollEl === null) {
         return;
@@ -276,6 +331,7 @@ function Notation({
     cursorIndex.current = 0;
     nextCursorIndex.current = 0;
     lastFrameTime.current = 0;
+    followedIndex.current = -1;
     // Emptied and redrawn, the panel is briefly short enough that the browser
     // clamps how far it was scrolled, which arrives as a scroll nobody made.
     // Taking the position as it stands now is what keeps that from reading as
@@ -312,6 +368,8 @@ function Notation({
           osmd.cursors[1]?.next();
           nextCursorIndex.current += 1;
         }
+        fitCursor(osmd.cursor.cursorElement);
+        fitCursor(osmd.cursors[1]?.cursorElement ?? null);
 
         if (scrollEl !== null) {
           const cursorEl = osmd.cursor.cursorElement;
@@ -327,8 +385,19 @@ function Notation({
               0,
               Math.min(maxScroll, cursorTop - hostBox.height * followBand),
             );
-            const isPaused = now - lastManualScroll.current < followResumeMs;
-            if (!isPaused) {
+            if (followedIndex.current !== cursorIndex.current) {
+              followedIndex.current = cursorIndex.current;
+              chaseUntil.current = now + followSeekMs;
+              // Asking for a bar is asking to be taken to it, so a seek
+              // outranks a scroll made a moment earlier. The two windows
+              // overlap, and the older one would otherwise swallow it.
+              if (!playingRef.current) {
+                lastManualScroll.current = Number.NEGATIVE_INFINITY;
+              }
+            }
+            const hasYielded = now - lastManualScroll.current < followResumeMs;
+            const isFollowing = playingRef.current || now < chaseUntil.current;
+            if (!hasYielded && isFollowing) {
               const alpha = 1 - Math.exp(-dt / followTauMs);
               scrollEl.scrollTop += (target - scrollEl.scrollTop) * alpha;
               expectedScrollTop.current = scrollEl.scrollTop;
@@ -354,12 +423,17 @@ function Notation({
         onSeek={onSeek}
         theme={theme}
       />
+      {/* A scroll container that stops being one loses where it was scrolled
+          to, so the lock refuses the wheel and the finger and leaves the
+          scrolling in place. Locked only while the reader can stop the music:
+          a match hides the transport and disables the rail, and taking the
+          page as well would leave nothing that moves the score at all. */}
       <div
         ref={scrollRef}
         data-testid="sheet-scroll"
         className={`relative h-full min-w-0 flex-1 overflow-auto ${
-          theme === "light" ? "bg-paper" : "bg-panel"
-        }`}
+          isLocked ? "pointer-events-none" : ""
+        } ${theme === "light" ? "bg-paper" : "bg-panel"}`}
       >
         {error === null ? null : (
           <div className={shellClass(theme)}>

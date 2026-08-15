@@ -688,6 +688,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                   transpose={transpose}
                   getPosition={playback.getPosition}
                   elapsed={playback.elapsed}
+                  playing={playback.playing}
                   onSeek={matchActive ? null : seek}
                   theme={sheetTheme}
                   onTheme={changeSheetTheme}

@@ -10,6 +10,9 @@ export type QuantizedNote = {
   readonly pitch: number;
   readonly start: number;
   readonly duration: number;
+  /** When the note sounds, in seconds, carried alongside its place on the
+   * grid. */
+  readonly at: number;
 };
 
 /** Snaps note starts and durations onto the 16th-note grid. Tempo changes are
@@ -27,7 +30,12 @@ export function quantizeNotes(
       start + 1,
       Math.round((note.start + note.duration) * unitsPerSecond),
     );
-    quantized.push({ pitch: note.pitch, start, duration: end - start });
+    quantized.push({
+      pitch: note.pitch,
+      start,
+      duration: end - start,
+      at: note.start,
+    });
   }
   return quantized;
 }
@@ -37,60 +45,87 @@ export type StaffEvent = {
   readonly duration: number;
   /** Empty for a rest. */
   readonly pitches: readonly number[];
+  /** When this sounds, in seconds. Null for a rest, which is a gap the writing
+   * needs and not a moment anything is heard at. */
+  readonly at: number | null;
 };
 
-/** Reduces a staff's quantized notes to one monophonic-with-chords timeline
- * covering every unit from 0 to `totalUnits`, inserting rests for the gaps.
- * Notes sharing a start are stacked into a chord at the shortest of their
- * durations, so a simultaneous longer note is truncated to the chord rather
- * than smearing into whatever starts next; a note that merely overlaps one
- * already sounding, without sharing its start, is clipped to begin where the
- * earlier one ends, or dropped if nothing of it would remain. One voice per
- * staff for v1, so two genuinely independent overlapping lines are not both
- * kept: the later one simply takes over. */
+/**
+ * Reduces a staff's quantized notes to one timeline of chords and rests
+ * covering every unit from 0 to `totalUnits`.
+ *
+ * A note the score never carries is a note the cursor can never stop on, which
+ * is why every onset gets an event: on a real piano piece, dropping the ones
+ * that overlap loses more than a third of them.
+ */
 export function sequenceStaff(
   notes: readonly QuantizedNote[],
   totalUnits: number,
 ): StaffEvent[] {
-  const chordPitches = new Map<number, number[]>();
-  const chordDuration = new Map<number, number>();
-  for (const note of notes) {
-    const pitches = chordPitches.get(note.start) ?? [];
-    pitches.push(note.pitch);
-    chordPitches.set(note.start, pitches);
-    const shortest = Math.min(
-      chordDuration.get(note.start) ?? note.duration,
-      note.duration,
-    );
-    chordDuration.set(note.start, shortest);
+  if (notes.length === 0) {
+    return [{ start: 0, duration: totalUnits, pitches: [], at: null }];
   }
+  const onsets = [...new Set(notes.map((note) => note.start))].sort(
+    (left, right) => left - right,
+  );
+  const bounds = [
+    ...new Set([
+      ...onsets,
+      ...notes.map((note) => note.start + note.duration),
+      totalUnits,
+    ]),
+  ]
+    .filter((unit) => unit <= totalUnits)
+    .sort((left, right) => left - right);
 
-  const starts = [...chordPitches.keys()].sort((left, right) => left - right);
+  // Swept rather than searched: the notes and the bounds are both in order, so
+  // each note is admitted once as the cursor reaches it and dropped once as it
+  // passes, which keeps a dense piece linear in its note count.
+  const byStart = [...notes].sort((left, right) => left.start - right.start);
+  const sounding: QuantizedNote[] = [];
   const events: StaffEvent[] = [];
+  let admitted = 0;
   let cursor = 0;
-  for (const start of starts) {
-    if (start > cursor) {
-      events.push({ start: cursor, duration: start - cursor, pitches: [] });
-      cursor = start;
-    }
-    const pitches = [...new Set(chordPitches.get(start) ?? [])].sort(
-      (left, right) => right - left,
-    );
-    const duration = chordDuration.get(start) ?? 1;
-    if (start < cursor) {
-      const clipped = duration - (cursor - start);
-      if (clipped <= 0) {
-        continue;
-      }
-      events.push({ start: cursor, duration: clipped, pitches });
-      cursor += clipped;
+  for (const bound of bounds) {
+    if (bound <= cursor) {
       continue;
     }
-    events.push({ start, duration, pitches });
-    cursor += duration;
+    let startedHere: number | null = null;
+    while (admitted < byStart.length) {
+      const note = byStart[admitted];
+      if (note === undefined || note.start > cursor) {
+        break;
+      }
+      sounding.push(note);
+      if (note.start === cursor) {
+        startedHere =
+          startedHere === null ? note.at : Math.min(startedHere, note.at);
+      }
+      admitted += 1;
+    }
+    for (let index = sounding.length - 1; index >= 0; index -= 1) {
+      const note = sounding[index];
+      if (note !== undefined && note.start + note.duration <= cursor) {
+        sounding.splice(index, 1);
+      }
+    }
+    events.push({
+      start: cursor,
+      duration: bound - cursor,
+      pitches: [...new Set(sounding.map((note) => note.pitch))].sort(
+        (left, right) => right - left,
+      ),
+      at: startedHere,
+    });
+    cursor = bound;
   }
   if (cursor < totalUnits) {
-    events.push({ start: cursor, duration: totalUnits - cursor, pitches: [] });
+    events.push({
+      start: cursor,
+      duration: totalUnits - cursor,
+      pitches: [],
+      at: null,
+    });
   }
   return events;
 }

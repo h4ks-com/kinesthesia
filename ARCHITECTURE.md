@@ -72,7 +72,8 @@ src/components/
                               for mode and notation view
   sheet-view.tsx              sheet music for the open song: two cursors that
                               step with playback, an eased scroll that follows
-                              them, a seekable progress rail and an
+                              them while it plays and yields to the reader when
+                              it stops, a seekable progress rail and an
                               ink-on-paper option
   song-menu.tsx               what you can do with the open song: see its
                               analysis, download it, copy its link, favourite
@@ -156,8 +157,10 @@ src/lib/
                               fifths, and the chromatic notes it implies
   sheet/staff-split.ts        notes onto the grand staff by their own pitch
                               median, not a fixed line
-  sheet/notation.ts           quantises onto a 16th note grid, ties notes
-                              across a barline, and writes it all as MusicXML
+  sheet/notation.ts           quantises onto a 16th note grid, carries each
+                              written moment's heard time through the
+                              reduction, ties notes across a barline, and
+                              writes it all as MusicXML
   sheet/convert.ts            the pure song to MusicXML pipeline the tests
                               exercise directly
   sheet/load.ts               rereads a file's own MIDI for the tempo, meter
@@ -247,7 +250,11 @@ each keeps the whole width. `src/lib/sheet/` turns a song into MusicXML:
 across the grand staff by the same hand assignment the player uses, spells each
 pitch from the key `midi/analysis.ts` already detects, and writes measures,
 rests and
-ties across a barline as plain MusicXML 3.1. It is pure and knows nothing of a
+ties across a barline as plain MusicXML 3.1. Every onset earns an event, so a
+note struck while another is still ringing is written into the chord that
+follows rather than dropped, which is busier than an engraver would set it and
+is what lets the cursor stop on every note that sounds. It is pure and knows
+nothing of a
 live song; `load.ts` is the one place that rereads a file's own MIDI for the
 tempo, meter and key `Song` does not carry, and hands the converter a plain
 note list built from the notes already playing, transposed and past their
@@ -255,22 +262,25 @@ runway.
 
 OpenSheetMusicDisplay, loaded only once the view opens, draws the MusicXML
 with two of its own cursors: the first highlights the notes sounding now, the
-second sits one onset ahead and marks what comes next as a short line, so the
-two never read as the same mark. Both are steppers with no way to seek, so
-the view keeps an index into the note onsets `convert.ts` reports and steps
-each cursor forward on every animation frame the song's own clock has crossed
-the next onset, resetting and fast-forwarding both back up to position on a
-seek backward.
+second sits one onset ahead and marks what comes next as a narrow bar in the
+warning colour, so the two read apart at a glance. Both are steppers with no
+way to seek, so the view keeps an index into the note onsets `convert.ts`
+reports and steps each cursor forward on every animation frame the song's own
+clock has crossed the next onset, resetting and fast-forwarding both back up to
+position on a seek backward. Those onsets are the seconds the notes are heard
+at, carried through the reduction beside their place on the grid: the grid
+holds one tempo because that is what reads well, so it is never the clock a
+performance keeps.
 
 A vertical rail beside the notation reads the same clock: its fill and
 playhead move every frame, and dragging or clicking it seeks exactly like the
-transport's own scrubber. The panel keeps the current system in view by
-easing its own scroll toward a point a third of the way down rather than
-jumping to it, and it yields for a couple of seconds whenever the listener
-scrolls by hand before it resumes; OSMD's own built-in follow would fight
-this over the same scroll position, so it stays off, and the panel tells its
-own scroll apart from one the listener made by comparing against the value it
-last wrote itself.
+transport's own scrubber. While the song plays the notation belongs to it: the
+panel refuses pointer input and keeps the current system in view by easing its
+own scroll toward a point a third of the way down rather than jumping to it.
+Stopped, it belongs to the reader, holds wherever they leave it, and moves only
+to chase a seek. OSMD's own built-in follow would fight this over the same
+scroll position, so it stays off, and the panel tells its own scroll apart from
+one the reader made by comparing against the value it last wrote itself.
 
 A small button in the notation panel's own corner inverts it to dark ink on
 light paper instead of the app's usual light on dark, the way printed

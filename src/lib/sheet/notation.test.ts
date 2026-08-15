@@ -14,7 +14,7 @@ describe("quantizeNotes", () => {
       [{ pitch: 60, start: 0.5, duration: 0.125 }],
       120,
     );
-    expect(note).toEqual({ pitch: 60, start: 4, duration: 1 });
+    expect(note).toEqual({ pitch: 60, start: 4, duration: 1, at: 0.5 });
   });
 
   it("never quantizes a real note down to zero duration", () => {
@@ -29,50 +29,79 @@ describe("quantizeNotes", () => {
 describe("sequenceStaff", () => {
   it("fills a silent staff with one rest covering the whole span", () => {
     expect(sequenceStaff([], 16)).toEqual([
-      { start: 0, duration: 16, pitches: [] },
+      { start: 0, duration: 16, pitches: [], at: null },
     ]);
   });
 
   it("inserts a rest before the first note", () => {
-    const events = sequenceStaff([{ pitch: 60, start: 4, duration: 4 }], 16);
-    expect(events[0]).toEqual({ start: 0, duration: 4, pitches: [] });
-    expect(events[1]).toEqual({ start: 4, duration: 4, pitches: [60] });
-    expect(events[2]).toEqual({ start: 8, duration: 8, pitches: [] });
+    const events = sequenceStaff(
+      [{ pitch: 60, start: 4, duration: 4, at: 1 }],
+      16,
+    );
+    expect(events[0]).toEqual({ start: 0, duration: 4, pitches: [], at: null });
+    expect(events[1]).toEqual({
+      start: 4,
+      duration: 4,
+      pitches: [60],
+      at: 1,
+    });
+    expect(events[2]).toEqual({ start: 8, duration: 8, pitches: [], at: null });
   });
 
   it("stacks simultaneous notes into one chord at the shortest duration", () => {
     const events = sequenceStaff(
       [
-        { pitch: 60, start: 0, duration: 8 },
-        { pitch: 64, start: 0, duration: 4 },
-        { pitch: 67, start: 0, duration: 4 },
+        { pitch: 60, start: 0, duration: 8, at: 0 },
+        { pitch: 64, start: 0, duration: 4, at: 0 },
+        { pitch: 67, start: 0, duration: 4, at: 0 },
       ],
       16,
     );
-    expect(events[0]).toEqual({ start: 0, duration: 4, pitches: [67, 64, 60] });
+    expect(events[0]).toEqual({
+      start: 0,
+      duration: 4,
+      pitches: [67, 64, 60],
+      at: 0,
+    });
   });
 
-  it("clips a note that overlaps one already sounding", () => {
+  it("writes a note struck while another is still sounding", () => {
     const events = sequenceStaff(
       [
-        { pitch: 60, start: 0, duration: 8 },
-        { pitch: 64, start: 4, duration: 8 },
+        { pitch: 60, start: 0, duration: 8, at: 0 },
+        { pitch: 64, start: 4, duration: 8, at: 0.5 },
       ],
       16,
     );
-    expect(events[0]).toEqual({ start: 0, duration: 8, pitches: [60] });
-    expect(events[1]).toEqual({ start: 8, duration: 4, pitches: [64] });
+
+    expect(events[0]).toEqual({
+      start: 0,
+      duration: 4,
+      pitches: [60],
+      at: 0,
+    });
+    expect(events[1]).toEqual({
+      start: 4,
+      duration: 4,
+      pitches: [64, 60],
+      at: 0.5,
+    });
+    expect(events[2]?.pitches).toEqual([64]);
   });
 
-  it("drops a note fully swallowed by one already sounding", () => {
+  it("keeps a note wholly inside another rather than losing it", () => {
     const events = sequenceStaff(
       [
-        { pitch: 60, start: 0, duration: 16 },
-        { pitch: 64, start: 2, duration: 2 },
+        { pitch: 60, start: 0, duration: 16, at: 0 },
+        { pitch: 64, start: 2, duration: 2, at: 0.25 },
       ],
       16,
     );
-    expect(events).toEqual([{ start: 0, duration: 16, pitches: [60] }]);
+
+    const heard = events.find((event) => event.pitches.includes(64));
+    expect(heard?.start).toBe(2);
+    expect(heard?.at).toBe(0.25);
+    expect(heard?.pitches).toContain(60);
   });
 });
 
@@ -94,7 +123,7 @@ describe("decomposeDuration", () => {
 
 describe("buildInstructions", () => {
   it("ties a note split across a measure boundary", () => {
-    const events = [{ start: 14, duration: 4, pitches: [60] }];
+    const events = [{ start: 14, duration: 4, pitches: [60], at: null }];
     const instructions = buildInstructions(events, 16, 1);
     expect(instructions).toEqual([
       {
@@ -117,7 +146,7 @@ describe("buildInstructions", () => {
   });
 
   it("never ties a rest", () => {
-    const events = [{ start: 14, duration: 4, pitches: [] }];
+    const events = [{ start: 14, duration: 4, pitches: [], at: null }];
     const instructions = buildInstructions(events, 16, 2);
     expect(
       instructions.every(
@@ -127,7 +156,7 @@ describe("buildInstructions", () => {
   });
 
   it("ties every chunk of a duration too long for one note value", () => {
-    const events = [{ start: 0, duration: 5, pitches: [60] }];
+    const events = [{ start: 0, duration: 5, pitches: [60], at: null }];
     const instructions = buildInstructions(events, 16, 1);
     expect(
       instructions.map((instruction) => instruction.durationUnits),

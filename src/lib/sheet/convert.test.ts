@@ -280,3 +280,86 @@ describe("a song whose name is markup", () => {
     expect(Math.abs(Number(fifths))).toBeLessThanOrEqual(7);
   });
 });
+
+// The cursor used to be timed off the written grid at one tempo, so it walked
+// away from the music: a note quantised onto the grid is not heard when it is
+// written, and a song that changes tempo drifts further with every change.
+describe("when each written moment is heard", () => {
+  it("times a chord from when it sounds, not from where it is written", () => {
+    // Played late against the grid, the way a rolled or rubato chord is.
+    const { cursorOnsets } = songToSheetMusic(
+      baseSource({
+        notes: [
+          { pitch: 60, start: 0, duration: 0.5 },
+          { pitch: 72, start: 1.37, duration: 0.5 },
+        ],
+        duration: 4,
+      }),
+    );
+
+    expect(cursorOnsets).toContain(1.37);
+  });
+
+  it("keeps up with playing that does not sit on the grid", () => {
+    // Times no 16th-note grid at this tempo lands on, which is what rubato and
+    // a tempo change both produce. Reading the clock off the grid rounds every
+    // one of these to the wrong moment.
+    const notes = [0, 0.47, 0.91, 1.33, 1.52, 1.68, 1.81].map((start) => ({
+      pitch: 60,
+      start,
+      duration: 0.2,
+    }));
+
+    const { cursorOnsets } = songToSheetMusic(
+      baseSource({ notes, duration: 3 }),
+    );
+
+    for (const note of notes) {
+      expect(
+        cursorOnsets.some((onset) => Math.abs(onset - note.start) < 0.001),
+      ).toBe(true);
+    }
+  });
+
+  it("places a rest between the notes it falls between", () => {
+    const { cursorOnsets } = songToSheetMusic(
+      baseSource({
+        notes: [
+          { pitch: 60, start: 0, duration: 0.25 },
+          { pitch: 64, start: 2, duration: 0.25 },
+        ],
+        duration: 4,
+      }),
+    );
+
+    const between = cursorOnsets.filter((onset) => onset > 0 && onset < 2);
+    for (const onset of between) {
+      expect(onset).toBeGreaterThan(0);
+      expect(onset).toBeLessThan(2);
+    }
+    expect(cursorOnsets).toEqual([...cursorOnsets].sort((a, b) => a - b));
+  });
+
+  // Overlapping notes are how a piano is played, so a reduction that dropped
+  // them left the cursor with nothing to stand on for a third of a real piece.
+  it("gives every note a moment to be marked, however they overlap", () => {
+    const notes = [
+      { pitch: 60, start: 0, duration: 3 },
+      { pitch: 64, start: 0.4, duration: 2 },
+      { pitch: 67, start: 0.75, duration: 0.2 },
+      { pitch: 72, start: 1.1, duration: 0.9 },
+      { pitch: 48, start: 0.2, duration: 2.5 },
+      { pitch: 55, start: 1.6, duration: 0.3 },
+    ];
+    const { cursorOnsets } = songToSheetMusic(
+      baseSource({ notes, duration: 4 }),
+    );
+
+    for (const note of notes) {
+      const nearest = Math.min(
+        ...cursorOnsets.map((onset) => Math.abs(onset - note.start)),
+      );
+      expect(nearest).toBeLessThan(0.001);
+    }
+  });
+});

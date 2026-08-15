@@ -2,6 +2,7 @@ import type { StoredVoicing } from "@/lib/audio/voicing";
 import type { MidiShortcut } from "@/lib/input/midi-shortcuts";
 import type { Transpose } from "@/lib/midi/song";
 import { defaultKeyWidth } from "@/lib/render/keyboard";
+import type { NotationView } from "@/lib/sheet/types";
 import type { BackgroundChoice } from "@/lib/skins/backdrop";
 import { run, stores } from "@/lib/storage/idb";
 import { entryKey } from "@/lib/storage/library";
@@ -42,6 +43,8 @@ export type GlobalSettings = {
    * device since a physical button always means the same thing to the hands in
    * front of it, and played back whichever mode is running. */
   readonly midiShortcuts?: readonly MidiShortcut[];
+  /** Absent on rows written before the notation view existed. */
+  readonly notationView?: NotationView;
 };
 
 const globalKey = "global";

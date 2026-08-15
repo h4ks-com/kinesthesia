@@ -203,6 +203,7 @@ export function PartControls({
       {onHand === null ? (
         <button
           type="button"
+          data-tour="hand"
           disabled
           aria-label={`${handGroupLabel}, ${chosenHand.label.toLowerCase()}`}
           data-tip={lockedNote ?? "Fixed for this match"}
@@ -216,6 +217,7 @@ export function PartControls({
           align="right"
           trigger={(open) => (
             <span
+              data-tour="hand"
               data-tip="Which hand you play"
               data-tip-align="right"
               className={`inline-flex items-center rounded-lg border p-2 transition-colors ${

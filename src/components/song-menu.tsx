@@ -140,6 +140,7 @@ export function SongMenu({
         align="left"
         trigger={(open) => (
           <span
+            data-tour="song-menu"
             className={`flex min-w-0 items-center gap-1 rounded-lg px-1.5 py-1 text-sm transition-colors ${
               open ? "text-text" : "text-muted hover:text-text"
             }`}

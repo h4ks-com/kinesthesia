@@ -25,14 +25,14 @@ const watch: readonly TourStep[] = [
     body: "Open a track to pick its instrument and shape how it sounds.",
   },
   {
-    anchor: "speed",
-    title: "Speed",
-    body: "Slow a fast song down to follow it, or push it faster.",
+    anchor: "view",
+    title: "Sheet music",
+    body: "Switch between the falling notes, the sheet, or both at once.",
   },
   {
-    anchor: "transpose",
-    title: "Key",
-    body: "Shift the whole song up or down to a key that suits you.",
+    anchor: "song-menu",
+    title: "This song",
+    body: "Click the title for song info, the MIDI file, a link to copy, or to save it as a favorite.",
   },
   {
     anchor: "focus",
@@ -42,7 +42,7 @@ const watch: readonly TourStep[] = [
   {
     anchor: "modes",
     title: "Play it yourself",
-    body: "Switch to Learn to play along at your own pace, or Multiplayer to play with someone.",
+    body: "One control for the mode. Pick Learn to play along at your own pace, or Multiplayer to play with someone.",
   },
 ];
 
@@ -57,7 +57,7 @@ const learn: readonly TourStep[] = [
     anchor: "track-claim",
     open: "tracks",
     title: "Pick what you play",
-    body: "The hand marks the track you play. The rest play themselves.",
+    body: "A hand marks the track you play. The rest play themselves.",
   },
   {
     anchor: "track-sound",
@@ -71,14 +71,14 @@ const learn: readonly TourStep[] = [
     body: "Reduce your part to one note at a time when a passage has too many.",
   },
   {
+    anchor: "hand",
+    title: "Practice one hand",
+    body: "Play just the left hand, just the right, or both together.",
+  },
+  {
     anchor: "play",
     title: "It waits for you",
     body: "Press play, or the space bar. The song holds at each note until you hit the right key.",
-  },
-  {
-    anchor: "speed",
-    title: "Speed",
-    body: "Slow it down while a passage is still new.",
   },
   {
     anchor: "modes",

@@ -221,6 +221,7 @@ export function PlayerHeader({
         align="right"
         trigger={(open) => (
           <span
+            data-tour="view"
             data-tip="View"
             data-tip-align="right"
             className={`inline-flex items-center rounded-lg border p-2 transition-colors ${

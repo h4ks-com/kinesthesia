@@ -18,7 +18,12 @@ import {
   type Speed,
 } from "@/lib/player-url";
 import { clampKeyWidth, defaultKeyWidth } from "@/lib/render/keyboard";
-import { clampNotationView, type NotationView } from "@/lib/sheet/types";
+import {
+  clampNotationView,
+  clampSheetTheme,
+  type NotationView,
+  type SheetTheme,
+} from "@/lib/sheet/types";
 import type { BackgroundChoice } from "@/lib/skins/backdrop";
 import {
   type GlobalSettings,
@@ -68,6 +73,7 @@ export type PlayerSettings = {
   hand: Hand | null;
   transpose: Transpose;
   notationView: NotationView;
+  sheetTheme: SheetTheme;
   /** True once the remembered settings have been read, so a default is only
    * claimed against what this device already knows. */
   hydrated: boolean;
@@ -84,6 +90,7 @@ export type PlayerSettings = {
   changeTranspose: (next: Transpose) => void;
   changeSpeed: (next: Speed) => void;
   changeNotationView: (next: NotationView) => void;
+  changeSheetTheme: (next: SheetTheme) => void;
   togglePlayerTrack: (index: number) => void;
 };
 
@@ -107,6 +114,7 @@ export function usePlayerSettings({
   const [showNoteNames, setShowNoteNames] = useState(true);
   const [plainStyle, setPlainStyle] = useState(false);
   const [notationView, setNotationView] = useState<NotationView>("off");
+  const [sheetTheme, setSheetTheme] = useState<SheetTheme>("dark");
   // A device with no fine pointer has no keyboard to letter the keys for.
   const [hasKeyboard, setHasKeyboard] = useState(false);
   const [simplified, setSimplified] = useState(params.simplified);
@@ -210,6 +218,7 @@ export function usePlayerSettings({
         setShowNoteNames(stored.showNoteNames ?? true);
         setPlainStyle(stored.plainStyle ?? false);
         setNotationView(clampNotationView(stored.notationView));
+        setSheetTheme(clampSheetTheme(stored.sheetTheme));
       }
     });
     if (locked) {
@@ -320,6 +329,11 @@ export function usePlayerSettings({
     settleGlobal({ notationView: next });
   }
 
+  function changeSheetTheme(next: SheetTheme) {
+    setSheetTheme(next);
+    settleGlobal({ sheetTheme: next });
+  }
+
   function changeSimplified(next: boolean) {
     setSimplified(next);
     commit({ simplified: next });
@@ -373,6 +387,7 @@ export function usePlayerSettings({
     hand,
     transpose,
     notationView,
+    sheetTheme,
     hydrated,
     claimTrack,
     updateUrl,
@@ -387,6 +402,7 @@ export function usePlayerSettings({
     changeTranspose,
     changeSpeed,
     changeNotationView,
+    changeSheetTheme,
     togglePlayerTrack,
   };
 }

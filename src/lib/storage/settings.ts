@@ -3,7 +3,7 @@ import type { MidiShortcut } from "@/lib/input/midi-shortcuts";
 import type { Hand } from "@/lib/midi/hands";
 import type { Transpose } from "@/lib/midi/song";
 import { defaultKeyWidth } from "@/lib/render/keyboard";
-import type { NotationView } from "@/lib/sheet/types";
+import type { NotationView, SheetTheme } from "@/lib/sheet/types";
 import type { BackgroundChoice } from "@/lib/skins/backdrop";
 import { run, stores } from "@/lib/storage/idb";
 import { entryKey } from "@/lib/storage/library";
@@ -48,6 +48,8 @@ export type GlobalSettings = {
   readonly midiShortcuts?: readonly MidiShortcut[];
   /** Absent on rows written before the notation view existed. */
   readonly notationView?: NotationView;
+  /** Absent on rows written before the notation view could invert. */
+  readonly sheetTheme?: SheetTheme;
 };
 
 const globalKey = "global";

@@ -15,6 +15,10 @@
   --danger: #ff6b6b;
   --good: #4ade80;
   --warn: #fbbf24;
+  /* A printed page's own colours, for the notation view's inverted look:
+     dark ink on light paper rather than this app's usual light-on-dark. */
+  --paper: #f3efe4;
+  --ink: #211d16;
 }
 
 @theme inline {
@@ -32,6 +36,8 @@
   --color-danger: var(--danger);
   --color-good: var(--good);
   --color-warn: var(--warn);
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
   --font-sans: var(--font-archivo);
   --font-mono: var(--font-mono-data);
 }

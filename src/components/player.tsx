@@ -163,6 +163,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     hand,
     transpose,
     notationView,
+    sheetTheme,
     hydrated,
     claimTrack,
     updateUrl,
@@ -177,6 +178,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     changeTranspose,
     changeSpeed,
     changeNotationView,
+    changeSheetTheme,
     togglePlayerTrack,
   } = usePlayerSettings({ mode, params, locked, getFocus, getView });
 
@@ -685,6 +687,10 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                   song={song}
                   transpose={transpose}
                   getPosition={playback.getPosition}
+                  elapsed={playback.elapsed}
+                  onSeek={matchActive ? null : seek}
+                  theme={sheetTheme}
+                  onTheme={changeSheetTheme}
                 />
               </div>
             )}

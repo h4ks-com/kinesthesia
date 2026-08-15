@@ -42,3 +42,12 @@ export type NotationView = "off" | "half" | "full";
 export function clampNotationView(value: unknown): NotationView {
   return value === "half" || value === "full" ? value : "off";
 }
+
+/** Ink on the panel's own dark background, or dark ink on a light paper
+ * background, the way printed notation reads. A global setting, like the
+ * notation view itself. */
+export type SheetTheme = "dark" | "light";
+
+export function clampSheetTheme(value: unknown): SheetTheme {
+  return value === "light" ? "light" : "dark";
+}

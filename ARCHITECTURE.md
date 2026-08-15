@@ -69,8 +69,10 @@ src/components/
   player.tsx                  composes the hooks below into a mode, and hosts a
                               match through its aside, overlay and footer slots
   player-header.tsx           the song menu, score, focus mode and mode switching
-  sheet-view.tsx              sheet music for the open song, its cursor stepping
-                              with playback
+  sheet-view.tsx              sheet music for the open song: two cursors that
+                              step with playback, an eased scroll that follows
+                              them, a seekable progress rail and an
+                              ink-on-paper option
   song-menu.tsx               what you can do with the open song: see its
                               analysis, download it, copy its link, favourite
                               it, put it online
@@ -147,7 +149,8 @@ src/lib/
   audio/use-playback-engine.ts  engine lifecycle, transport and speed
   midi/use-song.ts            loads and remembers a song
   sheet/types.ts              the shapes the notation converter reads and
-                              writes, and the global notation view setting
+                              writes, and the global notation view and colour
+                              theme settings
   sheet/spelling.ts           a key's diatonic pitch spelling, table and
                               fifths, and the chromatic notes it implies
   sheet/staff-split.ts        notes onto the grand staff by their own pitch
@@ -247,15 +250,33 @@ tempo, meter and key `Song` does not carry, and hands the converter a plain
 note list built from the notes already playing, transposed and past their
 runway.
 
-OpenSheetMusicDisplay, loaded only once the view opens, draws the MusicXML and
-owns a cursor that can only step forward one entry at a time, with no way to
-seek. The view keeps an index into the note onsets `convert.ts` reports
-alongside the MusicXML and calls `cursor.next()` on every animation frame the
-song's own clock has crossed the next one, resetting and stepping back up to
-position on a seek backward. It is a global setting, remembered the way key
-width and timing offset are, so it holds across every song and every mode,
-including focus mode, which shares the same stage the roll and the notation
-split.
+OpenSheetMusicDisplay, loaded only once the view opens, draws the MusicXML
+with two of its own cursors: the first highlights the notes sounding now, the
+second sits one onset ahead and marks what comes next as a short line, so the
+two never read as the same mark. Both are steppers with no way to seek, so
+the view keeps an index into the note onsets `convert.ts` reports and steps
+each cursor forward on every animation frame the song's own clock has crossed
+the next onset, resetting and fast-forwarding both back up to position on a
+seek backward.
+
+A vertical rail beside the notation reads the same clock: its fill and
+playhead move every frame, and dragging or clicking it seeks exactly like the
+transport's own scrubber. The panel keeps the current system in view by
+easing its own scroll toward a point a third of the way down rather than
+jumping to it, and it yields for a couple of seconds whenever the listener
+scrolls by hand before it resumes; OSMD's own built-in follow would fight
+this over the same scroll position, so it stays off, and the panel tells its
+own scroll apart from one the listener made by comparing against the value it
+last wrote itself.
+
+A small button in the notation panel's own corner inverts it to dark ink on
+light paper instead of the app's usual light on dark, the way printed
+notation reads. Its colours come from the same CSS custom properties the rest
+of the app defines (`--text` or `--ink`, `--accent`, `--warn`) rather than a
+second set of hex values. The notation view choice and this inversion are
+both global settings, remembered the way key width and timing offset are, so
+they hold across every song and every mode, including focus mode, which
+shares the same stage the roll and the notation split.
 
 ## Modes
 
@@ -389,7 +410,8 @@ favourites kept in the browser.
 
 Settings are remembered in the browser. Per song settings (speed, tracks, hand,
 simplify and its note rate, key) come back when the song opens in any mode; global
-settings (key width, timing offset, the notation view) hold across every song.
+settings (key width, timing offset, the notation view and its colour theme)
+hold across every song.
 A link that states a song setting outright still wins, so a shared view
 reproduces itself. A locked match neither reads nor writes this memory, since
 its part is the prepared one.

@@ -601,6 +601,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
               playerTracks={playerTracks}
               interactive={interactive}
               title={songTitle}
+              report={song.report}
               signedIn={viewerId !== null}
               shareEnabled={shareEnabled}
               // The file now answers to an address anyone can fetch, so the page

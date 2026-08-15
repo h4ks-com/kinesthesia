@@ -52,7 +52,9 @@ src/server/
     search.ts                 searches sources, proxies files and attaches links
     relevance.ts              orders results by what they carry of the query,
                               since a source ranks two words worse than one
-    analyse.ts                reads a .mid and reports what it holds
+    analyse.ts                reads a .mid with the player's own parser and
+                              hands back its report: the same one the song
+                              info panel shows
     inputs.ts                 the search and info inputs both surfaces validate
                               with
 src/components/
@@ -67,8 +69,11 @@ src/components/
   player.tsx                  composes the hooks below into a mode, and hosts a
                               match through its aside, overlay and footer slots
   player-header.tsx           the song menu, score, focus mode and mode switching
-  song-menu.tsx               what you can do with the open song: download it,
-                              copy its link, favourite it, put it online
+  song-menu.tsx               what you can do with the open song: see its
+                              analysis, download it, copy its link, favourite
+                              it, put it online
+  song-info-panel.tsx         tempo, key, meter, tracks and the chord
+                              progression, read off the song already in memory
   part-controls.tsx           tracks, simplify and note density for one side
   player-transport.tsx        play, clock, scrubber, speed, key and settings
   settings-menu.tsx           key size, octave, timing and input
@@ -102,11 +107,15 @@ src/lib/
                               which way the notes travel
   search-params.ts            route search params to URLSearchParams
   format/clock.ts             seconds as m:ss
-  midi/song.ts                parses a .mid into a flat note list, moves it to another key
+  midi/song.ts                parses a .mid into a flat note list, moves it to
+                              another key, and carries its digest alongside it
   midi/sustain.ts             pedal spans, and how far past its end a note sounds under them
   midi/expression.ts          the bend and modulation wheels over time, per track
   midi/melody.ts              reduces a part to one playable note at a time
-  midi/analysis.ts            detects tempo, key and chords, and a compact digest
+  midi/analysis.ts            detects tempo, key and chords, and the digest
+                              that reports them: the one report the song info
+                              panel, midi_info and GET /api/midi/info all read,
+                              so the three can never drift apart
   midi/compose.ts             chord voicing, a 5x7 text font and note primitives
   midi/project.ts             an editable song: beat-timed tracks and the edit ops
   midi/part.ts                a side's tracks and the notes sounding right now
@@ -286,7 +295,11 @@ kinesthesia is, alongside each tool's own description.
 
 `search_midi` knows only what a source lists. `midi_info` downloads the file and
 parses it with the player's own parser, so a caller can say how long a song runs
-and which track to play rather than guess. `search_midi` returns a plain link
+and which track to play rather than guess. It reports the song's tempo, meter,
+estimated key and chord progression too, from the same digest the browser
+computes when it opens the file and the song info panel reads straight off it:
+`midi_info`, `GET /api/midi/info` and the panel all show one report, so they
+cannot drift apart. `search_midi` returns a plain link
 per mode. `player_link` builds one carrying
 the speed, key, tracks, simplify and focus a caller asks for, which is what
 makes those settings reachable by an agent at all: they live only in the query

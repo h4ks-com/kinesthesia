@@ -221,19 +221,44 @@ export type HarmonySpan = {
 
 /** The whole file boiled down to what an agent needs to reason about it, held
  * to a fixed size no matter how many notes the file has: one summary per track
- * and a run-length-encoded chord timeline. */
+ * and a run-length-encoded chord timeline. The same shape the song info panel,
+ * midi_info and GET /api/midi/info all show, so the three can never drift. */
 export type Digest = {
   readonly name: string;
   readonly durationSeconds: number;
+  readonly totalNotes: number;
   readonly tempo: Tempo;
-  readonly meter: string;
+  readonly meter: Meter;
   readonly key: KeyEstimate | null;
   readonly tracks: readonly DigestTrack[];
+  /** The track with the most notes, or null where the file has none. */
+  readonly playedTrack: number | null;
+  /** MIDI note numbers across every track, 0 where the file has no notes. */
+  readonly lowestPitch: number;
+  readonly highestPitch: number;
+  /** Notes per second across the whole file, as a sense of how busy it is. */
+  readonly density: number;
   readonly harmony: readonly HarmonySpan[];
 };
 
 function noteName(pitch: number): string {
   return Note.fromMidi(pitch);
+}
+
+/** What to call a track that names itself nothing: its instrument, or failing
+ * that its position, so a track never reads as blank. */
+export function trackLabel(
+  trackName: string,
+  instrument: string,
+  position: number,
+): string {
+  if (trackName !== "") {
+    return trackName;
+  }
+  if (instrument !== "") {
+    return instrument;
+  }
+  return `Track ${position}`;
 }
 
 function harmonyRuns(spans: readonly ChordSpan[]): HarmonySpan[] {
@@ -263,30 +288,75 @@ function harmonyRuns(spans: readonly ChordSpan[]): HarmonySpan[] {
   return runs;
 }
 
+/** A report for a song with nothing to say yet, so a fixture that does not
+ * care about tempo, key or chords can still satisfy `Song.report`. */
+export function blankDigest(name: string): Digest {
+  return {
+    name,
+    durationSeconds: 0,
+    totalNotes: 0,
+    tempo: { bpm: 120, explicit: false, changes: 0 },
+    meter: { beats: 4, value: 4, explicit: false, changes: 0 },
+    key: null,
+    tracks: [],
+    playedTrack: null,
+    lowestPitch: 0,
+    highestPitch: 0,
+    density: 0,
+    harmony: [],
+  };
+}
+
+function playedTrackOf(tracks: readonly DigestTrack[]): number | null {
+  let best: DigestTrack | null = null;
+  for (const track of tracks) {
+    if (best === null || track.notes > best.notes) {
+      best = track;
+    }
+  }
+  return best?.index ?? null;
+}
+
 export function digest(midi: Midi, name: string): Digest {
   const tracks: DigestTrack[] = [];
+  let totalNotes = 0;
+  let lowestPitch = Infinity;
+  let highestPitch = -Infinity;
   midi.tracks.forEach((track, index) => {
     if (track.notes.length === 0) {
       return;
     }
     const pitches = track.notes.map((note) => note.midi);
+    const low = Math.min(...pitches);
+    const high = Math.max(...pitches);
+    lowestPitch = Math.min(lowestPitch, low);
+    highestPitch = Math.max(highestPitch, high);
+    totalNotes += track.notes.length;
     tracks.push({
       index,
-      name: track.name,
+      name: trackLabel(track.name, track.instrument.name, tracks.length + 1),
       instrument: track.instrument.name,
       percussion: track.instrument.percussion,
       notes: track.notes.length,
-      range: [noteName(Math.min(...pitches)), noteName(Math.max(...pitches))],
+      range: [noteName(low), noteName(high)],
     });
   });
-  const meter = detectMeter(midi);
+  const durationSeconds = Math.round(midi.duration * 10) / 10;
   return {
     name,
-    durationSeconds: Math.round(midi.duration * 10) / 10,
+    durationSeconds,
+    totalNotes,
     tempo: detectTempo(midi),
-    meter: `${meter.beats}/${meter.value}`,
+    meter: detectMeter(midi),
     key: estimateKey(midi),
     tracks,
+    playedTrack: playedTrackOf(tracks),
+    lowestPitch: Number.isFinite(lowestPitch) ? lowestPitch : 0,
+    highestPitch: Number.isFinite(highestPitch) ? highestPitch : 0,
+    density:
+      durationSeconds <= 0
+        ? 0
+        : Math.round((totalNotes / durationSeconds) * 10) / 10,
     harmony: harmonyRuns(detectChords(midi)),
   };
 }

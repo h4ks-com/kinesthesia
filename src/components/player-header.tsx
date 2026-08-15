@@ -15,6 +15,7 @@ import { SongMenu } from "@/components/song-menu";
 import { type SoundSharing, TrackMenu } from "@/components/track-menu";
 import { ScoreReadout } from "@/components/ui/score-readout";
 import type { SongVoicing, Voicing } from "@/lib/audio/voicing";
+import type { Digest } from "@/lib/midi/analysis";
 import type { MelodyRate } from "@/lib/midi/melody";
 import type { SongNote, SongTrack } from "@/lib/midi/song";
 import {
@@ -46,6 +47,8 @@ type PlayerHeaderProps = {
   interactive: boolean;
   /** The song's name without its file extension. */
   title: string;
+  /** Tempo, key, meter and chords, computed once when the song was parsed. */
+  report: Digest;
   signedIn: boolean;
   shareEnabled: boolean;
   onPublished: (url: string) => void;
@@ -82,6 +85,7 @@ export function PlayerHeader({
   playerTracks,
   interactive,
   title,
+  report,
   signedIn,
   shareEnabled,
   onPublished,
@@ -127,6 +131,7 @@ export function PlayerHeader({
           params={params}
           title={title}
           trackCount={tracks.length}
+          report={report}
           signedIn={signedIn}
           shareEnabled={shareEnabled}
           onPublished={onPublished}

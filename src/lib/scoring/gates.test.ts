@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { blankDigest } from "@/lib/midi/analysis";
 import { ExpressionTrail } from "@/lib/midi/expression";
 import type { Song, SongNote } from "@/lib/midi/song";
 import {
@@ -40,6 +41,7 @@ function song(notes: SongNote[]): Song {
     expression: new ExpressionTrail(),
     harmony: [],
     key: null,
+    report: blankDigest("test"),
   };
 }
 

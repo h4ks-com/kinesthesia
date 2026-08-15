@@ -1,5 +1,11 @@
 import type { Midi } from "@tonejs/midi";
-import { estimateKey, readMidi } from "@/lib/midi/analysis";
+import {
+  type Digest,
+  digest,
+  estimateKey,
+  readMidi,
+  trackLabel,
+} from "@/lib/midi/analysis";
 import { ExpressionTrail } from "@/lib/midi/expression";
 import { type HarmonySpan, nameChord, rootOf } from "@/lib/midi/harmony";
 import { pedalSpans, releaseAt } from "@/lib/midi/sustain";
@@ -105,6 +111,10 @@ export type Song = {
   readonly harmony: readonly HarmonySpan[];
   /** The key the whole song sits in, where one fits well enough to say. */
   readonly key: SongKey | null;
+  /** Tempo, meter, per-track detail and the chord progression, computed once
+   * here so the song info panel reads it straight off the parsed song instead
+   * of asking the server again for what this tab already worked out. */
+  readonly report: Digest;
 };
 
 /** How often the harmony is named. Short enough to catch a chord change, long
@@ -163,20 +173,6 @@ export function isBlackKey(pitch: number): boolean {
 
 export function noteName(pitch: number): string {
   return noteNames[pitch % 12] ?? "C";
-}
-
-function trackLabel(
-  trackName: string,
-  instrument: string,
-  position: number,
-): string {
-  if (trackName !== "") {
-    return trackName;
-  }
-  if (instrument !== "") {
-    return instrument;
-  }
-  return `Track ${position}`;
 }
 
 export function parseSong(data: ArrayBuffer, name: string): Song {
@@ -286,6 +282,7 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
     notes: runwayNotes,
     tracks,
     expression,
+    report: digest(midi, name),
   };
 }
 

@@ -16,7 +16,11 @@ import type { Score } from "@/server/db/schema";
 import { sourceFetch } from "@/server/http/fetch";
 import { mcpAuthorized, mcpHandler } from "@/server/mcp";
 import { analyseMidi } from "@/server/midi/analyse";
-import { infoInputShape, searchInputShape } from "@/server/midi/inputs";
+import {
+  digestSchema,
+  infoInputShape,
+  searchInputShape,
+} from "@/server/midi/inputs";
 import {
   midiSourceIds,
   midiSources,
@@ -95,50 +99,17 @@ const searchRoute = createRoute({
   },
 });
 
-const trackSummarySchema = z.object({
-  index: z
-    .number()
-    .int()
-    .describe("Track number, for the tracks player option"),
-  name: z.string(),
-  instrument: z.string(),
-  percussion: z.boolean().describe("A drum kit, which is never transposed"),
-  notes: z.number().int(),
-});
-
-const midiSummarySchema = z.object({
-  name: z.string(),
-  duration: z.number().describe("How long the song runs, in seconds"),
-  notes: z.number().int().describe("Notes in the whole file"),
-  tracks: z.array(trackSummarySchema),
-  playedTrack: z
-    .number()
-    .int()
-    .describe("The track the player claims unless told otherwise"),
-  lowestPitch: z
-    .number()
-    .int()
-    .describe("MIDI note number, 21 is the lowest key"),
-  highestPitch: z
-    .number()
-    .int()
-    .describe("MIDI note number, 108 is the highest key"),
-  density: z
-    .number()
-    .describe("Notes per second across the file, as a sense of how busy it is"),
-});
-
 const infoRoute = createRoute({
   method: "get",
   path: "/midi/info",
   summary: "Read a MIDI file",
   description:
-    "Reads a source's file and reports how long it runs, how many notes it holds and what is on each track. Take the source and id from a search result.",
+    "Reads a source's file and reports its duration, tempo, time signature, estimated key, chord progression and what is on each track. The same report the song info panel and the midi_info MCP tool show. Take the source and id from a search result.",
   request: { query: z.object(infoInputShape) },
   responses: {
     200: {
       description: "What the file holds",
-      content: { "application/json": { schema: midiSummarySchema } },
+      content: { "application/json": { schema: digestSchema } },
     },
     502: {
       description: "The file could not be downloaded or read",
@@ -200,7 +171,17 @@ api.openapi(infoRoute, async (c) => {
   }
   try {
     const summary = await analyseMidi(fileUrl, name);
-    return c.json({ ...summary, tracks: [...summary.tracks] }, 200);
+    return c.json(
+      {
+        ...summary,
+        tracks: summary.tracks.map((track) => ({
+          ...track,
+          range: [track.range[0], track.range[1]],
+        })),
+        harmony: [...summary.harmony],
+      },
+      200,
+    );
   } catch (error) {
     return c.json(
       { error: error instanceof Error ? error.message : "Unreadable MIDI" },

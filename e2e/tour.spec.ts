@@ -1,4 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
+import type { PlayerMode } from "@/lib/player-url";
+import { tourFor } from "@/lib/tour/steps";
 import { playerQuery, serveFixture, songName, songUrl } from "./fixture";
 
 const skip = (page: Page) =>
@@ -195,3 +197,31 @@ test("on a phone the walkthrough fits and never covers what it points at", async
     await leftStep(page, showing);
   }
 });
+
+const modes: readonly PlayerMode[] = ["watch", "learn", "multiplayer"];
+
+/** Walks every step a mode's tour defines and checks the control it names is
+ * really on the page, so a renamed or removed control fails this test instead
+ * of shipping a tour that points at nothing. */
+for (const mode of modes) {
+  test(`every step of the ${mode} tour points at a real, visible control`, async ({
+    page,
+  }) => {
+    await serveFixture(page, { tour: true });
+    await page.goto(`/${mode}?${playerQuery()}`);
+    await expect(skip(page)).toBeVisible({ timeout: 15_000 });
+
+    for (const expected of tourFor(mode)) {
+      await expect(page.locator("#walkthrough-title")).toHaveText(
+        expected.title,
+      );
+      await expect(
+        page.locator(`[data-tour="${expected.anchor}"]`).first(),
+      ).toBeVisible();
+      const showing = await step(page);
+      await page.getByRole("button", { name: /^(Next|Done)$/ }).click();
+      await leftStep(page, showing);
+    }
+    await expect(page.locator("#walkthrough-title")).toHaveCount(0);
+  });
+}

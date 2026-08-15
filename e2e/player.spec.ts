@@ -257,6 +257,26 @@ test("the octave keys move the reach marker over the keyboard", async ({
   await expect.poll(async () => reachBarLeft(page)).toBe(start);
 });
 
+test("the octave keys still reach the keyboard after clicking the minimap to seek", async ({
+  page,
+}) => {
+  await serveFixture(page);
+  await page.goto(`/learn?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+  await expect.poll(async () => reachBarLeft(page)).not.toBeNull();
+  const start = await reachBarLeft(page);
+
+  const minimap = page.getByRole("slider", { name: "Song position" });
+  const box = await minimap.boundingBox();
+  expect(box).not.toBeNull();
+  if (box !== null) {
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  }
+
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(async () => reachBarLeft(page)).toBeGreaterThan(start ?? 0);
+});
+
 test("transposing holds your place in the song", async ({ page }) => {
   await serveFixture(page);
   await page.goto(`/learn?${playerQuery()}`);

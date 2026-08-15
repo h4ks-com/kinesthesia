@@ -56,15 +56,3 @@ test("the playhead moves between frames while playing", async ({ page }) => {
 
   expect(new Set(positions).size).toBeGreaterThan(2);
 });
-
-test("seeking by the keyboard moves the song", async ({ page }) => {
-  await openWatch(page);
-  const seek = page.getByRole("slider", { name: "Song position" });
-
-  await seek.focus();
-  for (let press = 0; press < 6; press += 1) {
-    await seek.press("ArrowRight");
-  }
-
-  await expect(page.getByText(/0:0[1-9]/)).toBeVisible();
-});

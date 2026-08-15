@@ -9,23 +9,12 @@ import { drawSongMap, pitchSpan } from "@/lib/render/minimap";
  * second to the next. */
 const seekStep = 0.05;
 
-/** A keyboard gets its own distances, because one step of the drag resolution
- * per press would take twenty presses to cross a second. */
-const keySteps: Readonly<Record<string, number>> = {
-  ArrowLeft: -1,
-  ArrowRight: 1,
-  ArrowDown: -1,
-  ArrowUp: 1,
-  PageDown: -10,
-  PageUp: 10,
-};
-
 type SongMinimapProps = {
   song: Song;
   hiddenTracks: ReadonlySet<number>;
-  /** For the range underneath, which is the thing a screen reader and a keyboard
-   * operate. The playhead runs off the clock instead, because a position held in
-   * React state can only move as often as the component re-renders. */
+  /** For the range underneath, which is the thing a click or a drag operates.
+   * The playhead runs off the clock instead, because a position held in React
+   * state can only move as often as the component re-renders. */
   elapsed: number;
   getPosition: () => number;
   onSeek: ((position: number) => void) | null;
@@ -131,8 +120,8 @@ export function SongMinimap({
   return (
     <div
       ref={frameRef}
-      className={`relative h-9 min-w-0 flex-1 overflow-hidden rounded-md bg-raised ring-accent has-[:focus-visible]:ring-2 ${
-        onSeek === null ? "opacity-50" : ""
+      className={`relative h-9 min-w-0 flex-1 overflow-hidden rounded-md bg-raised${
+        onSeek === null ? " opacity-50" : ""
       }`}
     >
       {layers === null ? null : (
@@ -155,9 +144,10 @@ export function SongMinimap({
         aria-hidden="true"
         className="absolute inset-y-0 left-0 w-0.5 bg-accent shadow-[0_0_6px_var(--accent)]"
       />
-      {/* A real range carries the semantics, the keyboard and the drag; the map
-          is drawn behind it. A div given a slider role is operable by neither a
-          screen reader nor an arrow key without rebuilding both by hand. */}
+      {/* A real range carries the seek semantics and the drag; the map is
+          drawn behind it. It never keeps keyboard focus: ArrowLeft and
+          ArrowRight are the computer keyboard's octave shift, and ordinary Tab
+          order or a lingering focus ring here would steal them from it. */}
       <input
         type="range"
         min={0}
@@ -165,22 +155,9 @@ export function SongMinimap({
         step={seekStep}
         value={Math.min(elapsed, duration)}
         disabled={onSeek === null}
+        tabIndex={-1}
         onChange={(event) => onSeek?.(Number(event.target.value))}
-        onKeyDown={(event) => {
-          if (onSeek === null) {
-            return;
-          }
-          const step = keySteps[event.key];
-          const target =
-            step === undefined
-              ? { Home: 0, End: duration }[event.key]
-              : getPosition() + step;
-          if (target === undefined) {
-            return;
-          }
-          event.preventDefault();
-          onSeek(Math.max(0, Math.min(duration, target)));
-        }}
+        onPointerUp={(event) => event.currentTarget.blur()}
         aria-label="Song position"
         aria-valuetext={formatClock(elapsed)}
         className="absolute inset-0 size-full cursor-pointer appearance-none bg-transparent opacity-0 outline-none disabled:cursor-default"

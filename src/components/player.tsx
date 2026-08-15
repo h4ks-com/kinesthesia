@@ -17,6 +17,7 @@ import { PianoRollView } from "@/components/piano-roll-view";
 import { PlayerHeader } from "@/components/player-header";
 import { PlayerTransport, TransportBar } from "@/components/player-transport";
 import { RenderMenu } from "@/components/render-menu";
+import { SheetView } from "@/components/sheet-view";
 import { SkinPicker } from "@/components/skin-picker";
 import { TimingRail } from "@/components/timing-rail";
 import { Walkthrough } from "@/components/walkthrough";
@@ -160,6 +161,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     simplified,
     melodyRate,
     transpose,
+    notationView,
     hydrated,
     claimTrack,
     updateUrl,
@@ -172,6 +174,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     changeMelodyRate,
     changeTranspose,
     changeSpeed,
+    changeNotationView,
     togglePlayerTrack,
   } = usePlayerSettings({ mode, params, locked, getFocus, getView });
 
@@ -649,6 +652,8 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                   />
                 ) : null
               }
+              notationView={notationView}
+              onNotationView={changeNotationView}
               onFocus={() => changeFocus(true)}
               onHelp={tour.start}
             />
@@ -657,61 +662,85 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
           <div
             ref={stage}
             tabIndex={-1}
-            className="relative min-h-0 flex-1 outline-none"
+            className="relative flex min-h-0 flex-1 outline-none"
           >
-            {pickingSkin ? (
-              <SkinPicker
-                chosen={background.chosen}
-                available={background.offered}
-                onChoose={background.choose}
-                onClose={() => setPickingSkin(false)}
-                shortcuts={skinShortcuts}
-              />
-            ) : null}
-            <PianoRollView
-              skin={background.source}
-              direction={background.direction}
-              song={song}
-              hiddenTracks={hiddenTracks}
-              keyWidth={keyWidth}
-              focusPitch={focusPitch}
-              // Only where there is a part to play: watching reduces nothing,
-              // so there would be no single note to come to, and the view
-              // would wander the song.
-              follow={simplified && interactive}
-              // Watching has nobody at the keys, so every note the shown parts
-              // sound presses its own key. Anywhere a hand plays, a key going
-              // down has to mean that hand put it there.
-              songPresses={!interactive}
-              getPosition={playback.getPosition}
-              getPressed={input.pressed}
-              getOwed={gates.owed}
-              getYours={yours}
-              rate={speed}
-              playTrack={ownedTrack}
-              reach={interactive ? reachFor(input.octave) : null}
-              keyLabels={
-                interactive && hasKeyboard && showKeyLabels
-                  ? keyLabelsFor(input.octave)
-                  : null
-              }
-              noteNames={showNoteNames}
-              plain={plainStyle}
-              onStrike={(pitch) => input.press(pitch, 0.8)}
-              onRelease={input.release}
-            />
-            {interactive ? <HitFlag hit={gates.lastHit} /> : null}
-            {interactive ? <TimingRail hit={gates.lastHit} /> : null}
-            {gates.waiting ? (
-              <p className="rise -translate-x-1/2 absolute top-6 left-1/2 rounded-full border border-accent/40 bg-panel/90 px-4 py-1.5 font-mono text-accent text-xs backdrop-blur">
-                waiting for you
-              </p>
-            ) : null}
-            {playback.soundReady || mode === "multiplayer" ? null : (
-              <p className="-translate-x-1/2 absolute top-6 left-1/2 flex items-center gap-2 whitespace-nowrap rounded-full border border-line-strong bg-panel/90 px-4 py-1.5 text-muted text-xs backdrop-blur">
-                <Volume2 className="size-3.5 shrink-0" aria-hidden="true" />
-                press play to start the sound
-              </p>
+            {notationView === "full" ? null : (
+              <div
+                className={`relative min-h-0 min-w-0 flex-1 ${
+                  notationView === "half" ? "border-line border-r" : ""
+                }`}
+              >
+                {pickingSkin ? (
+                  <SkinPicker
+                    chosen={background.chosen}
+                    available={background.offered}
+                    onChoose={background.choose}
+                    onClose={() => setPickingSkin(false)}
+                    shortcuts={skinShortcuts}
+                  />
+                ) : null}
+                <PianoRollView
+                  skin={background.source}
+                  direction={background.direction}
+                  song={song}
+                  hiddenTracks={hiddenTracks}
+                  keyWidth={keyWidth}
+                  focusPitch={focusPitch}
+                  // Only where there is a part to play: watching reduces
+                  // nothing, so there would be no single note to come to,
+                  // and the view would wander the song.
+                  follow={simplified && interactive}
+                  // Watching has nobody at the keys, so every note the shown
+                  // parts sound presses its own key. Anywhere a hand plays,
+                  // a key going down has to mean that hand put it there.
+                  songPresses={!interactive}
+                  getPosition={playback.getPosition}
+                  getPressed={input.pressed}
+                  getOwed={gates.owed}
+                  getYours={yours}
+                  rate={speed}
+                  playTrack={ownedTrack}
+                  reach={interactive ? reachFor(input.octave) : null}
+                  keyLabels={
+                    interactive && hasKeyboard && showKeyLabels
+                      ? keyLabelsFor(input.octave)
+                      : null
+                  }
+                  noteNames={showNoteNames}
+                  plain={plainStyle}
+                  onStrike={(pitch) => input.press(pitch, 0.8)}
+                  onRelease={input.release}
+                />
+                {interactive ? <HitFlag hit={gates.lastHit} /> : null}
+                {interactive ? <TimingRail hit={gates.lastHit} /> : null}
+                {gates.waiting ? (
+                  <p className="rise -translate-x-1/2 absolute top-6 left-1/2 rounded-full border border-accent/40 bg-panel/90 px-4 py-1.5 font-mono text-accent text-xs backdrop-blur">
+                    waiting for you
+                  </p>
+                ) : null}
+                {playback.soundReady || mode === "multiplayer" ? null : (
+                  <p className="-translate-x-1/2 absolute top-6 left-1/2 flex items-center gap-2 whitespace-nowrap rounded-full border border-line-strong bg-panel/90 px-4 py-1.5 text-muted text-xs backdrop-blur">
+                    <Volume2 className="size-3.5 shrink-0" aria-hidden="true" />
+                    press play to start the sound
+                  </p>
+                )}
+              </div>
+            )}
+            {notationView === "off" ? null : (
+              <div
+                className={
+                  notationView === "half"
+                    ? "min-h-0 w-1/2 shrink-0"
+                    : "min-h-0 min-w-0 flex-1"
+                }
+              >
+                <SheetView
+                  url={params.url}
+                  song={song}
+                  transpose={transpose}
+                  getPosition={playback.getPosition}
+                />
+              </div>
             )}
           </div>
           {overlay}

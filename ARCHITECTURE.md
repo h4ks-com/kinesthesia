@@ -67,6 +67,8 @@ src/components/
   player.tsx                  composes the hooks below into a mode, and hosts a
                               match through its aside, overlay and footer slots
   player-header.tsx           the song menu, score, focus mode and mode switching
+  sheet-view.tsx              sheet music for the open song, its cursor stepping
+                              with playback
   song-menu.tsx               what you can do with the open song: download it,
                               copy its link, favourite it, put it online
   part-controls.tsx           tracks, simplify and note density for one side
@@ -130,6 +132,19 @@ src/lib/
   audio/percussion.ts         drum note number to kit sample
   audio/use-playback-engine.ts  engine lifecycle, transport and speed
   midi/use-song.ts            loads and remembers a song
+  sheet/types.ts              the shapes the notation converter reads and
+                              writes, and the global notation view setting
+  sheet/spelling.ts           a key's diatonic pitch spelling, table and
+                              fifths, and the chromatic notes it implies
+  sheet/staff-split.ts        notes onto the grand staff by their own pitch
+                              median, not a fixed line
+  sheet/notation.ts           quantises onto a 16th note grid, ties notes
+                              across a barline, and writes it all as MusicXML
+  sheet/convert.ts            the pure song to MusicXML pipeline the tests
+                              exercise directly
+  sheet/load.ts               rereads a file's own MIDI for the tempo, meter
+                              and key the converter needs, which `Song` does
+                              not carry
   tour/steps.ts               what the walkthrough points at, per mode
   tour/use-walkthrough.ts     first-run auto play and the replay it hands back
   render/keyboard.ts          key geometry, sizing and the pitch under a point
@@ -201,6 +216,29 @@ position from it, the engine schedules notes a fifth of a second ahead against
 it, and the canvas reads it once per animation frame. Nothing measures time with
 `setTimeout`, so the drawing can never drift away from the audio or step
 backwards.
+
+## Notation view
+
+`sheet-view.tsx` shows the open song as sheet music, off, half beside the
+falling notes, or full in its place. `src/lib/sheet/` turns a song into
+MusicXML: `convert.ts` quantises every note onto a 16th note grid, splits the
+notes across the grand staff by their own pitch median, spells each pitch from
+the key `midi/analysis.ts` already detects, and writes measures, rests and
+ties across a barline as plain MusicXML 3.1. It is pure and knows nothing of a
+live song; `load.ts` is the one place that rereads a file's own MIDI for the
+tempo, meter and key `Song` does not carry, and hands the converter a plain
+note list built from the notes already playing, transposed and past their
+runway.
+
+OpenSheetMusicDisplay, loaded only once the view opens, draws the MusicXML and
+owns a cursor that can only step forward one entry at a time, with no way to
+seek. The view keeps an index into the note onsets `convert.ts` reports
+alongside the MusicXML and calls `cursor.next()` on every animation frame the
+song's own clock has crossed the next one, resetting and stepping back up to
+position on a seek backward. It is a global setting, remembered the way key
+width and timing offset are, so it holds across every song and every mode,
+including focus mode, which shares the same stage the roll and the notation
+split.
 
 ## Modes
 
@@ -325,9 +363,10 @@ favourites kept in the browser.
 
 Settings are remembered in the browser. Per song settings (speed, tracks,
 simplify and its note rate, key) come back when the song opens in any mode; global
-settings (key width, timing offset) hold across every song. A link that states
-a song setting outright still wins, so a shared view reproduces itself. A locked
-match neither reads nor writes this memory, since its part is the prepared one.
+settings (key width, timing offset, the notation view) hold across every song.
+A link that states a song setting outright still wins, so a shared view
+reproduces itself. A locked match neither reads nor writes this memory, since
+its part is the prepared one.
 
 How a song sounds is kept on the device that shaped it and shared from the
 account that saved it. Every edit lands in the browser as it settles, so a

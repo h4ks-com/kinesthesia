@@ -3,6 +3,7 @@
 import {
   CircleHelp,
   Eye,
+  FileMusic,
   GraduationCap,
   Maximize,
   Piano,
@@ -13,6 +14,7 @@ import type { ReactNode } from "react";
 import { PartControls } from "@/components/part-controls";
 import { SongMenu } from "@/components/song-menu";
 import { type SoundSharing, TrackMenu } from "@/components/track-menu";
+import { Popover } from "@/components/ui/popover";
 import { ScoreReadout } from "@/components/ui/score-readout";
 import type { SongVoicing, Voicing } from "@/lib/audio/voicing";
 import type { MelodyRate } from "@/lib/midi/melody";
@@ -23,6 +25,7 @@ import {
   playerPath,
 } from "@/lib/player-url";
 import { gotShare, type Score, scorePoints } from "@/lib/scoring/judge";
+import type { NotationView } from "@/lib/sheet/types";
 import { isDeviceLocal } from "@/lib/trusted-url";
 
 const modeCatalog = [
@@ -34,6 +37,12 @@ const modeCatalog = [
   label: string;
   icon: typeof Eye;
 }[];
+
+const notationChoices = [
+  { view: "off", label: "Off" },
+  { view: "half", label: "Half" },
+  { view: "full", label: "Full" },
+] as const satisfies readonly { view: NotationView; label: string }[];
 
 type PlayerHeaderProps = {
   mode: PlayerMode;
@@ -68,6 +77,8 @@ type PlayerHeaderProps = {
   /** The render control, present only where a plain watch view can be captured
    * cleanly. */
   renderTool?: ReactNode;
+  notationView: NotationView;
+  onNotationView: (next: NotationView) => void;
   onFocus: () => void;
   onHelp: () => void;
 };
@@ -97,6 +108,8 @@ export function PlayerHeader({
   onVoicing,
   sound,
   renderTool = null,
+  notationView,
+  onNotationView,
   onFocus,
   onHelp,
   onToggleVisible,
@@ -188,6 +201,43 @@ export function PlayerHeader({
       )}
 
       {renderTool}
+
+      <Popover
+        label="Notation view"
+        align="right"
+        trigger={(open) => (
+          <span
+            data-tip="Sheet music view"
+            data-tip-align="right"
+            className={`inline-flex items-center rounded-lg border p-2 transition-colors ${
+              open || notationView !== "off"
+                ? "border-accent text-accent"
+                : "border-line-strong text-muted hover:border-accent hover:text-accent"
+            }`}
+          >
+            <FileMusic className="size-4" aria-hidden="true" />
+          </span>
+        )}
+      >
+        <fieldset className="flex w-40 gap-1 p-1">
+          <legend className="sr-only">Notation view</legend>
+          {notationChoices.map(({ view, label }) => (
+            <button
+              key={view}
+              type="button"
+              aria-pressed={view === notationView}
+              onClick={() => onNotationView(view)}
+              className={`flex-1 rounded-lg border px-2 py-1.5 text-xs transition-colors ${
+                view === notationView
+                  ? "border-accent text-accent"
+                  : "border-line-strong text-muted hover:border-accent hover:text-accent"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </fieldset>
+      </Popover>
 
       <button
         type="button"

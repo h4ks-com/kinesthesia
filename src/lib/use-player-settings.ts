@@ -17,6 +17,7 @@ import {
   type Speed,
 } from "@/lib/player-url";
 import { clampKeyWidth, defaultKeyWidth } from "@/lib/render/keyboard";
+import { clampNotationView, type NotationView } from "@/lib/sheet/types";
 import type { BackgroundChoice } from "@/lib/skins/backdrop";
 import {
   type GlobalSettings,
@@ -63,6 +64,7 @@ export type PlayerSettings = {
   simplified: boolean;
   melodyRate: MelodyRate;
   transpose: Transpose;
+  notationView: NotationView;
   /** True once the remembered settings have been read, so a default is only
    * claimed against what this device already knows. */
   hydrated: boolean;
@@ -77,6 +79,7 @@ export type PlayerSettings = {
   changeMelodyRate: (next: number) => void;
   changeTranspose: (next: Transpose) => void;
   changeSpeed: (next: Speed) => void;
+  changeNotationView: (next: NotationView) => void;
   togglePlayerTrack: (index: number) => void;
 };
 
@@ -99,6 +102,7 @@ export function usePlayerSettings({
   const [showKeyLabels, setShowKeyLabels] = useState(true);
   const [showNoteNames, setShowNoteNames] = useState(true);
   const [plainStyle, setPlainStyle] = useState(false);
+  const [notationView, setNotationView] = useState<NotationView>("off");
   // A device with no fine pointer has no keyboard to letter the keys for.
   const [hasKeyboard, setHasKeyboard] = useState(false);
   const [simplified, setSimplified] = useState(params.simplified);
@@ -197,6 +201,7 @@ export function usePlayerSettings({
         setShowKeyLabels(stored.showKeyLabels ?? true);
         setShowNoteNames(stored.showNoteNames ?? true);
         setPlainStyle(stored.plainStyle ?? false);
+        setNotationView(clampNotationView(stored.notationView));
       }
     });
     if (locked) {
@@ -299,6 +304,11 @@ export function usePlayerSettings({
     settleGlobal({ plainStyle: next });
   }
 
+  function changeNotationView(next: NotationView) {
+    setNotationView(next);
+    settleGlobal({ notationView: next });
+  }
+
   function changeSimplified(next: boolean) {
     setSimplified(next);
     commit({ simplified: next });
@@ -345,6 +355,7 @@ export function usePlayerSettings({
     simplified,
     melodyRate,
     transpose,
+    notationView,
     hydrated,
     claimTrack,
     updateUrl,
@@ -357,6 +368,7 @@ export function usePlayerSettings({
     changeMelodyRate,
     changeTranspose,
     changeSpeed,
+    changeNotationView,
     togglePlayerTrack,
   };
 }

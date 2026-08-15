@@ -137,10 +137,10 @@ test("the mode, view and simplify controls fit the header and stay reachable", a
   await expect(page.locator("canvas")).toBeVisible();
 
   const header = page.locator("header");
-  const overflow = await header.evaluate(
+  const hasOverflow = await header.evaluate(
     (node) => node.scrollWidth > node.clientWidth + 1,
   );
-  expect(overflow).toBe(false);
+  expect(hasOverflow).toBe(false);
 
   const mode = page.getByRole("button", { name: "Mode: Learn" });
   await expect(mode).toBeVisible();

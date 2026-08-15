@@ -667,8 +667,8 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             />
           )}
 
-          {/* Stacked rather than side by side: notation reads across the page
-              and the notes fall down it, so each gets the whole width. */}
+          {/* Notation reads across the page and the notes fall down it, so each
+              keeps the whole width. */}
           <div
             ref={stage}
             tabIndex={-1}

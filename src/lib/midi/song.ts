@@ -289,11 +289,10 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
     notes: runwayNotes,
     tracks,
     expression,
-    // The file's own length leaves out the runway this parser adds at both
-    // ends, so reporting it would put a different figure in front of a reader
-    // from the one the clock beside it counts to. The timeline is replaced
-    // too: the digest's own is bar-windowed off the raw file, while this one
-    // is named off the same runway- and pedal-aware notes the roll draws.
+    // The length and the progression both come from what this parser produced:
+    // the file's own length leaves out the runway added at both ends, and its
+    // own chords are read off the raw file, so either would put a figure in
+    // front of a reader that the roll beside it disagrees with.
     report: {
       ...digest(midi, name),
       durationSeconds: Math.round(duration * 10) / 10,

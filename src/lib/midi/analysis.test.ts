@@ -229,3 +229,23 @@ describe("readableProgression", () => {
     expect(readableProgression([], 10)).toEqual([]);
   });
 });
+
+// Two tools hand back a `Digest.timeline` under one field name and one type,
+// so a caller has no way to tell a coarser reading from a folded one.
+describe("digest timeline", () => {
+  it("is folded the same way the parsed song's is", () => {
+    const midi = build({ bpm: 120, meter: [4, 4], chords: [c, g, c, g] });
+
+    const report = digest(midi, "x");
+
+    for (let index = 0; index < report.timeline.length - 1; index += 1) {
+      const held =
+        (report.timeline[index + 1]?.at ?? 0) -
+        (report.timeline[index]?.at ?? 0);
+      expect(held).toBeGreaterThan(0);
+    }
+    expect(report.timeline).toEqual(
+      readableProgression(report.timeline, report.durationSeconds),
+    );
+  });
+});

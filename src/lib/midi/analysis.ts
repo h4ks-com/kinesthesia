@@ -477,7 +477,7 @@ export function digest(midi: Midi, name: string): Digest {
         ? 0
         : Math.round((totalNotes / durationSeconds) * 10) / 10,
     harmony: harmonyRuns(chordSpans),
-    timeline: timelineOf(chordSpans),
+    timeline: readableProgression(timelineOf(chordSpans), durationSeconds),
   };
 }
 

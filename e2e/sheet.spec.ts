@@ -60,19 +60,33 @@ test("the current and next cursors move as playback advances, one onset apart", 
   expect(nowBox?.width ?? 0).toBeGreaterThan(nextBox?.width ?? 0);
   expect(nextBox?.x ?? 0).toBeGreaterThan(nowBox?.x ?? 0);
 
-  const startLeft = await now.evaluate((node) => node.style.left);
+  const seek = page.getByRole("slider", { name: "Song position" });
+  const leftOf = (marker: typeof now): Promise<number> =>
+    marker.evaluate((node) => Number.parseFloat(node.style.left));
 
-  await page.getByRole("button", { name: "Play", exact: true }).click();
-  await expect
-    .poll(async () => now.evaluate((node) => node.style.left), {
-      timeout: 20_000,
-    })
-    .not.toBe(startLeft);
+  // The two markers are different shapes, so the same onset puts them at
+  // different offsets. Both clamp to the last onset at the end of the song,
+  // which is where that difference can be read on its own.
+  await seek.fill("12");
+  await expect.poll(async () => leftOf(next)).toBeGreaterThan(0);
+  const shapeGap = (await leftOf(next)) - (await leftOf(now));
 
-  // The next cursor keeps leading rather than falling in step with it.
-  const nowLeft = await now.evaluate((node) => node.style.left);
-  const nextLeft = await next.evaluate((node) => node.style.left);
-  expect(nowLeft).not.toBe(nextLeft);
+  await seek.fill("0");
+  const startLeft = await leftOf(now);
+  const promised = await leftOf(next);
+
+  // Crept forward rather than played, so the reading lands on the first onset
+  // crossed instead of wherever playback had reached by the time it was read.
+  for (let at = 1; at <= 12; at += 1) {
+    await seek.fill(String(at * 0.25));
+    if ((await leftOf(now)) !== startLeft) {
+      break;
+    }
+  }
+
+  // One note on, what is sounding stands where the marker for what was coming
+  // stood. Two onsets apart, this lands a note short.
+  expect(await leftOf(now)).toBeCloseTo(promised - shapeGap, 1);
 });
 
 test("the notation view follows playback with a smooth, pausable scroll", async ({

@@ -195,10 +195,11 @@ function Notation({
         }
         osmd.render();
         osmd.cursor.show();
-        // The second cursor starts one onset ahead, so it always marks the
-        // note or chord about to sound rather than the one already under it.
+        // Shown where it stands and moved only by the frame loop below, which
+        // counts its own steps: advancing it here as well puts the real cursor
+        // a step ahead of that count, and it marks two notes on rather than the
+        // one about to sound.
         osmd.cursors[1]?.show();
-        osmd.cursors[1]?.next();
         osmdRef.current = osmd;
         setReady(true);
       })
@@ -275,6 +276,12 @@ function Notation({
     cursorIndex.current = 0;
     nextCursorIndex.current = 0;
     lastFrameTime.current = 0;
+    // Emptied and redrawn, the panel is briefly short enough that the browser
+    // clamps how far it was scrolled, which arrives as a scroll nobody made.
+    // Taking the position as it stands now is what keeps that from reading as
+    // a listener scrolling by hand and pausing the follow.
+    expectedScrollTop.current = scrollEl?.scrollTop ?? 0;
+    lastManualScroll.current = Number.NEGATIVE_INFINITY;
     let frame = 0;
     const step = (): void => {
       const osmd = osmdRef.current;
@@ -320,8 +327,8 @@ function Notation({
               0,
               Math.min(maxScroll, cursorTop - hostBox.height * followBand),
             );
-            const paused = now - lastManualScroll.current < followResumeMs;
-            if (!paused) {
+            const isPaused = now - lastManualScroll.current < followResumeMs;
+            if (!isPaused) {
               const alpha = 1 - Math.exp(-dt / followTauMs);
               scrollEl.scrollTop += (target - scrollEl.scrollTop) * alpha;
               expectedScrollTop.current = scrollEl.scrollTop;

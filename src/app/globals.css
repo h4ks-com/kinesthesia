@@ -15,8 +15,8 @@
   --danger: #ff6b6b;
   --good: #4ade80;
   --warn: #fbbf24;
-  /* A printed page's own colours, for the notation view's inverted look:
-     dark ink on light paper rather than this app's usual light-on-dark. */
+  /* Ink on paper, for the notation view's inverted look: the colours printed
+     music is read in. */
   --paper: #f3efe4;
   --ink: #211d16;
 }

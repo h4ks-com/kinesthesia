@@ -258,7 +258,7 @@ export function PlayerHeader({
         type="button"
         data-tour="focus"
         onClick={onFocus}
-        data-tip="Just the keys and the notes"
+        data-tip="Focus mode"
         data-tip-align="right"
         aria-label="Focus mode"
         className="shrink-0 rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"

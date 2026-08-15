@@ -126,6 +126,9 @@ export function PlayerHeader({
   onSolo,
 }: PlayerHeaderProps) {
   const local = isDeviceLocal(params.url);
+  const viewLabel =
+    notationChoices.find((choice) => choice.view === notationView)?.label ??
+    "Notes";
   const currentModeEntry =
     modeCatalog.find((entry) => entry.mode === mode) ?? modeCatalog[0];
 
@@ -214,7 +217,7 @@ export function PlayerHeader({
       {renderTool}
 
       <Popover
-        label="View"
+        label={`View: ${viewLabel}`}
         align="right"
         trigger={(open) => (
           <span

@@ -19,6 +19,10 @@
      music is read in. */
   --paper: #f3efe4;
   --ink: #211d16;
+  /* The two cursors again, dark enough to be seen on paper: the shades that
+     carry them on a dark panel wash out to nothing against it. */
+  --accent-ink: #1a4f8a;
+  --warn-ink: #8a5200;
 }
 
 @theme inline {

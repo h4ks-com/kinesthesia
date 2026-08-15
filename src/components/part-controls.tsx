@@ -64,10 +64,10 @@ function HandGlyph({
   return (
     <span
       aria-hidden="true"
-      className={`${className} inline-flex items-center justify-center`}
+      className={`${className} inline-flex w-5 items-center justify-center`}
     >
       <HandIcon className="size-3 scale-x-[-1]" />
-      <HandIcon className="-ml-1.5 size-3" />
+      <HandIcon className="-ml-0.5 size-3" />
     </span>
   );
 }
@@ -139,7 +139,7 @@ export function PartControls({
         </button>
       ) : (
         <Popover
-          label={simplifyLabel}
+          label={`${simplifyLabel}, ${simplified ? "on" : "off"}`}
           align="right"
           trigger={(open) => (
             <span

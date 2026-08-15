@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { ChordTimeline } from "@/components/chord-timeline";
 
@@ -14,7 +14,7 @@ describe("ChordTimeline", () => {
       />,
     );
 
-    const bars = container.querySelectorAll('[aria-hidden="true"] > div');
+    const bars = container.querySelectorAll('[role="listbox"] > div');
     expect(bars).toHaveLength(2);
     // The held C spans 8 of the 10 seconds, four times the G that follows it.
     const first = (bars[0] as HTMLElement).style.flexGrow;
@@ -23,7 +23,9 @@ describe("ChordTimeline", () => {
     expect(Number(second)).toBeCloseTo(2);
   });
 
-  it("lists the whole progression as a screen-reader-only list of chord and time", () => {
+  // Every chord is named to a screen reader, including the crowded ones the
+  // bar has no room to print.
+  it("names every chord and its span, whether or not the bar prints it", () => {
     render(
       <ChordTimeline
         timeline={[
@@ -34,8 +36,12 @@ describe("ChordTimeline", () => {
       />,
     );
 
-    expect(screen.getByText("C, 0:00 to 0:08")).toBeTruthy();
-    expect(screen.getByText("G, 0:08 to 0:10")).toBeTruthy();
+    expect(
+      screen.getByRole("option", { name: "C, 0:00 to 0:08" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("option", { name: "G, 0:08 to 0:10" }),
+    ).toBeTruthy();
   });
 
   it("names a chord on the bar once it holds enough of the timeline to read", () => {
@@ -49,7 +55,7 @@ describe("ChordTimeline", () => {
       />,
     );
 
-    const bar = container.querySelector('[aria-hidden="true"]') as HTMLElement;
+    const bar = container.querySelector('[role="listbox"]') as HTMLElement;
     expect(within(bar).getByText("C")).toBeTruthy();
     expect(within(bar).getByText("G")).toBeTruthy();
   });
@@ -66,10 +72,12 @@ describe("ChordTimeline", () => {
       <ChordTimeline timeline={timeline} duration={100} />,
     );
 
-    const bar = container.querySelector('[aria-hidden="true"]') as HTMLElement;
+    const bar = container.querySelector('[role="listbox"]') as HTMLElement;
     expect(within(bar).queryByText("F")).toBeNull();
     // Still readable in full, off the visible bar.
-    expect(screen.getByText("F, 1:30 to 1:30")).toBeTruthy();
+    expect(
+      screen.getByRole("option", { name: "F, 1:30 to 1:30" }),
+    ).toBeTruthy();
   });
 
   it("draws silence distinctly from a named chord", () => {
@@ -83,8 +91,10 @@ describe("ChordTimeline", () => {
       />,
     );
 
-    expect(screen.getByText("Silence, 0:00 to 0:05")).toBeTruthy();
-    const bar = container.querySelector('[aria-hidden="true"]') as HTMLElement;
+    expect(
+      screen.getByRole("option", { name: "Silence, 0:00 to 0:05" }),
+    ).toBeTruthy();
+    const bar = container.querySelector('[role="listbox"]') as HTMLElement;
     const silent = bar.firstElementChild as HTMLElement;
     expect(silent.style.background).toBe("var(--color-raised)");
   });
@@ -99,5 +109,34 @@ describe("ChordTimeline", () => {
     render(<ChordTimeline timeline={[{ at: 0, chord: "C" }]} duration={0} />);
 
     expect(screen.getByText("No chords detected.")).toBeTruthy();
+  });
+
+  // A crowded stretch prints no name on the bar, so without this a listener
+  // with no mouse cannot read one at all: the tooltip the pointer gets never
+  // reaches a keyboard.
+  it("reads a chord out by the arrow keys, not only under the pointer", () => {
+    const { container } = render(
+      <ChordTimeline
+        timeline={[
+          { at: 0, chord: "C" },
+          { at: 4, chord: "G7" },
+        ]}
+        duration={8}
+      />,
+    );
+    const bar = screen.getByRole("listbox", { name: "Chord progression" });
+    const readout = container.querySelector('[aria-live="polite"]');
+
+    expect(readout?.textContent).toContain("0:00");
+
+    fireEvent.keyDown(bar, { key: "ArrowRight" });
+    expect(readout?.textContent).toContain("C");
+
+    fireEvent.keyDown(bar, { key: "ArrowRight" });
+    expect(readout?.textContent).toContain("G7");
+    expect(readout?.textContent).toContain("0:04 to 0:08");
+
+    fireEvent.blur(bar);
+    expect(readout?.textContent).toContain("0:00");
   });
 });

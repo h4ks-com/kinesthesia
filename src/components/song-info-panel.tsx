@@ -9,6 +9,16 @@ import { formatClock } from "@/lib/format/clock";
 import type { Digest } from "@/lib/midi/analysis";
 import { trackColor } from "@/lib/midi/palette";
 
+/** Keys a control inside the panel reads for itself. */
+const handledInside = new Set([
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
+  "Home",
+  "End",
+]);
+
 type SongInfoPanelProps = {
   /** The song's own name, without its file extension. */
   title: string;
@@ -33,7 +43,16 @@ export function SongInfoPanel({ title, report, onClose }: SongInfoPanelProps) {
   // player's own shortcuts sit behind this on the same keys.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      event.stopPropagation();
+      // Stopped in the capture phase, which is the only way to beat the
+      // player's own listeners on the same keys. That also stops it short of
+      // whatever holds focus in here, so a control inside the panel keeps the
+      // keys it reads and only the page behind is kept quiet.
+      const inside =
+        event.target instanceof Node &&
+        panel.current?.contains(event.target) === true;
+      if (!inside || !handledInside.has(event.key)) {
+        event.stopPropagation();
+      }
       if (event.key === "Escape") {
         onClose();
         return;

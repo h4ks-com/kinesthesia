@@ -77,8 +77,11 @@ test("the current and next cursors move as playback advances, one onset apart", 
 
   // Crept forward rather than played, so the reading lands on the first onset
   // crossed instead of wherever playback had reached by the time it was read.
-  for (let at = 1; at <= 12; at += 1) {
-    await seek.fill(String(at * 0.25));
+  // In steps small enough that no one of them can cross two onsets: this
+  // fixture puts a note every quarter second, and a coarser creep would land
+  // two notes on and read as the gap this is here to measure.
+  for (let at = 1; at <= 80; at += 1) {
+    await seek.fill(String(Number((at * 0.05).toFixed(2))));
     if ((await leftOf(now)) !== startLeft) {
       break;
     }

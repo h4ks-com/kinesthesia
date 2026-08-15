@@ -176,13 +176,13 @@ function Notation({
           cursorsOptions: [
             {
               type: CursorType.Standard,
-              color: cssVar("--accent"),
+              color: cssVar(theme === "light" ? "--accent-ink" : "--accent"),
               alpha: 0.25,
               follow: false,
             },
             {
               type: CursorType.ShortThinTopLeft,
-              color: cssVar("--warn"),
+              color: cssVar(theme === "light" ? "--warn-ink" : "--warn"),
               alpha: 0.6,
               follow: false,
             },
@@ -391,7 +391,7 @@ function Notation({
           data-tip={theme === "light" ? "Switch to dark" : "Switch to paper"}
           data-tip-side="top"
           data-tip-align="right"
-          className={`rounded-lg border p-1.5 backdrop-blur transition-colors hover:border-accent hover:text-accent ${
+          className={`rounded-lg border p-1.5 pointer-coarse:min-h-11 pointer-coarse:min-w-11 backdrop-blur transition-colors hover:border-accent hover:text-accent ${
             theme === "light"
               ? "border-ink/20 bg-paper/70 text-ink/60"
               : "border-line-strong bg-panel/60 text-muted"
@@ -459,7 +459,7 @@ function SheetProgress({
   return (
     <div
       ref={railRef}
-      className={`relative w-7 shrink-0 self-stretch overflow-hidden rounded-md ${
+      className={`relative w-7 pointer-coarse:w-9 shrink-0 self-stretch overflow-hidden rounded-md ${
         theme === "light" ? "bg-ink/10" : "bg-raised"
       } ${onSeek === null ? "opacity-50" : ""}`}
     >

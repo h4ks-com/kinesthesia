@@ -117,8 +117,8 @@ describe("SongMenu", () => {
 
   it("remembers the song and says so", async () => {
     open();
-    fireEvent.click(screen.getByRole("button", { name: /^Favorite/ }));
-    await screen.findByRole("button", { name: /Remove favorite/ });
+    fireEvent.click(screen.getByRole("button", { name: /Add as favorite/ }));
+    await screen.findByRole("button", { name: /Remove from favorites/ });
     expect([...(tables.get("favourite")?.keys() ?? [])]).toEqual([
       "bitmidi:https://bitmidi.com/uploads/87216.mid",
     ]);

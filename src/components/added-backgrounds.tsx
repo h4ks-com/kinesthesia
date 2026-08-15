@@ -108,7 +108,9 @@ export function AddedBackgrounds({
 
   return (
     <>
-      <h3 className="mt-4 mb-2.5 font-semibold text-sm text-text">Added</h3>
+      <h3 className="mt-4 mb-2.5 font-semibold text-sm text-text">
+        Added skins
+      </h3>
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
         {added.map((skin) => (
           <AddedTile

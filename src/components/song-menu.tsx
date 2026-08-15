@@ -167,7 +167,7 @@ export function SongMenu({
 
         <Row
           icon={Star}
-          label={starred ? "Remove favorite" : "Favorite"}
+          label={starred ? "Remove from favorites" : "Add as favorite"}
           filled={starred}
           onClick={() =>
             void toggleFavourite({

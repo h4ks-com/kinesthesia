@@ -236,7 +236,7 @@ export function PlayerHeader({
       <button
         type="button"
         onClick={onHelp}
-        data-tip="Walk me through it"
+        data-tip="Tutorial"
         data-tip-align="right"
         aria-label="Tutorial"
         className="shrink-0 rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"

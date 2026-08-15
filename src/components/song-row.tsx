@@ -151,8 +151,8 @@ export function SongRow({
           type="button"
           onClick={onToggleFavorite}
           aria-pressed={favorite}
-          aria-label={favorite ? "Remove from favorites" : "Add to favorites"}
-          data-tip={favorite ? "Remove favorite" : "Favorite"}
+          aria-label={favorite ? "Remove from favorites" : "Add as favorite"}
+          data-tip={favorite ? "Remove from favorites" : "Add as favorite"}
           data-tip-side="top"
           className="rounded-lg p-2 text-muted transition-colors hover:bg-raised hover:text-accent"
         >

@@ -6,7 +6,6 @@ import type {
   OpenSheetMusicDisplay,
 } from "opensheetmusicdisplay";
 import { useEffect, useRef, useState } from "react";
-import { formatClock } from "@/lib/format/clock";
 import type { Song, Transpose } from "@/lib/midi/song";
 import { loadSheetMusic } from "@/lib/sheet/load";
 import type { SheetMusic, SheetTheme } from "@/lib/sheet/types";
@@ -18,10 +17,6 @@ type SheetViewProps = {
   /** The song position in seconds, read every animation frame: the same
    * clock the falling notes read, so the notation cursor tracks it exactly. */
   getPosition: () => number;
-  /** Coarse position for the progress rail's controlled value and its
-   * accessible label; the rail's own smooth motion still reads getPosition
-   * on every frame, the same split SongMinimap uses. */
-  elapsed: number;
   playing: boolean;
   onSeek: ((position: number) => void) | null;
   theme: SheetTheme;
@@ -44,7 +39,6 @@ export function SheetView({
   song,
   transpose,
   getPosition,
-  elapsed,
   playing,
   onSeek,
   theme,
@@ -95,9 +89,7 @@ export function SheetView({
   return (
     <Notation
       sheet={state.sheet}
-      duration={song.duration}
       getPosition={getPosition}
-      elapsed={elapsed}
       playing={playing}
       onSeek={onSeek}
       theme={theme}
@@ -153,18 +145,14 @@ function cssVar(name: string): string {
 
 function Notation({
   sheet,
-  duration,
   getPosition,
-  elapsed,
   playing,
   onSeek,
   theme,
   onTheme,
 }: {
   sheet: SheetMusic;
-  duration: number;
   getPosition: () => number;
-  elapsed: number;
   playing: boolean;
   onSeek: ((position: number) => void) | null;
   theme: SheetTheme;
@@ -416,18 +404,11 @@ function Notation({
 
   return (
     <div data-testid="sheet-view" className="relative flex h-full">
-      <SheetProgress
-        duration={duration}
-        elapsed={elapsed}
-        getPosition={getPosition}
-        onSeek={onSeek}
-        theme={theme}
-      />
       {/* A scroll container that stops being one loses where it was scrolled
           to, so the lock refuses the wheel and the finger and leaves the
           scrolling in place. Locked only while the reader can stop the music:
-          a match hides the transport and disables the rail, and taking the
-          page as well would leave nothing that moves the score at all. */}
+          a match hides the transport, and taking the page as well would leave
+          nothing that moves the score at all. */}
       <div
         ref={scrollRef}
         data-testid="sheet-scroll"
@@ -474,113 +455,6 @@ function Notation({
           <Contrast className="size-3.5" aria-hidden="true" />
         </button>
       </div>
-    </div>
-  );
-}
-
-const railSteps: Readonly<Record<string, number>> = {
-  ArrowUp: -1,
-  ArrowDown: 1,
-  PageUp: -10,
-  PageDown: 10,
-};
-
-function SheetProgress({
-  duration,
-  elapsed,
-  getPosition,
-  onSeek,
-  theme,
-}: {
-  duration: number;
-  elapsed: number;
-  getPosition: () => number;
-  onSeek: ((position: number) => void) | null;
-  theme: SheetTheme;
-}) {
-  const railRef = useRef<HTMLDivElement | null>(null);
-  const fillRef = useRef<HTMLDivElement | null>(null);
-  const headRef = useRef<HTMLDivElement | null>(null);
-  const [length, setLength] = useState(0);
-  const safeDuration = Math.max(duration, 0.001);
-
-  useEffect(() => {
-    const rail = railRef.current;
-    if (rail === null) {
-      return;
-    }
-    const measure = (): void => setLength(rail.getBoundingClientRect().height);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(rail);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    let frame = requestAnimationFrame(function loop() {
-      const share = Math.max(0, Math.min(1, getPosition() / safeDuration));
-      if (fillRef.current !== null) {
-        fillRef.current.style.clipPath = `inset(0 0 ${(1 - share) * 100}% 0)`;
-      }
-      if (headRef.current !== null) {
-        headRef.current.style.top = `${share * 100}%`;
-      }
-      frame = requestAnimationFrame(loop);
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [safeDuration, getPosition]);
-
-  return (
-    <div
-      ref={railRef}
-      className={`relative w-7 pointer-coarse:w-9 shrink-0 self-stretch overflow-hidden rounded-md ${
-        theme === "light" ? "bg-ink/10" : "bg-raised"
-      } ${onSeek === null ? "opacity-50" : ""}`}
-    >
-      <div
-        ref={fillRef}
-        aria-hidden="true"
-        className="absolute inset-0 bg-accent/35"
-      />
-      <div
-        ref={headRef}
-        aria-hidden="true"
-        className="-translate-x-1/2 -translate-y-1/2 absolute left-1/2 h-1 w-4 rounded-full bg-accent shadow-[0_0_6px_var(--accent)]"
-      />
-      {/* A real range carries the semantics, the keyboard and the drag; it is
-          a horizontal input rotated upright, since a vertical writing-mode
-          range renders inconsistently across browsers while a rotated
-          horizontal one behaves exactly like the proven one on the transport
-          bar. Its own width becomes the rail's measured height once turned. */}
-      <input
-        type="range"
-        min={0}
-        max={Math.max(1, safeDuration)}
-        step={0.05}
-        value={Math.min(elapsed, safeDuration)}
-        disabled={onSeek === null}
-        onChange={(event) => onSeek?.(Number(event.target.value))}
-        onKeyDown={(event) => {
-          if (onSeek === null) {
-            return;
-          }
-          const step = railSteps[event.key];
-          const target =
-            step === undefined
-              ? { Home: 0, End: safeDuration }[event.key]
-              : getPosition() + step;
-          if (target === undefined) {
-            return;
-          }
-          event.preventDefault();
-          onSeek(Math.max(0, Math.min(safeDuration, target)));
-        }}
-        aria-label="Notation position"
-        aria-orientation="vertical"
-        aria-valuetext={formatClock(elapsed)}
-        style={{ width: length, transform: "rotate(90deg)" }}
-        className="-translate-x-1/2 -translate-y-1/2 absolute top-1/2 left-1/2 h-7 cursor-pointer appearance-none bg-transparent opacity-0 outline-none disabled:cursor-default"
-      />
     </div>
   );
 }

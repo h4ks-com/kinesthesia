@@ -73,8 +73,7 @@ src/components/
   sheet-view.tsx              sheet music for the open song: two cursors that
                               step with playback, an eased scroll that follows
                               them while it plays and yields to the reader when
-                              it stops, a seekable progress rail and an
-                              ink-on-paper option
+                              it stops, and an ink-on-paper option
   song-menu.tsx               what you can do with the open song: see its
                               analysis, download it, copy its link, favourite
                               it, put it online
@@ -272,15 +271,14 @@ at, carried through the reduction beside their place on the grid: the grid
 holds one tempo because that is what reads well, so it is never the clock a
 performance keeps.
 
-A vertical rail beside the notation reads the same clock: its fill and
-playhead move every frame, and dragging or clicking it seeks exactly like the
-transport's own scrubber. While the song plays the notation belongs to it: the
-panel refuses pointer input and keeps the current system in view by easing its
-own scroll toward a point a third of the way down rather than jumping to it.
-Stopped, it belongs to the reader, holds wherever they leave it, and moves only
-to chase a seek. OSMD's own built-in follow would fight this over the same
-scroll position, so it stays off, and the panel tells its own scroll apart from
-one the reader made by comparing against the value it last wrote itself.
+While the song plays the notation belongs to it: the panel refuses pointer
+input and keeps the current system in view by easing its own scroll toward a
+point a third of the way down rather than jumping to it. Stopped, it belongs to
+the reader, holds wherever they leave it, and moves only to chase a seek.
+OSMD's own built-in follow would fight this over the same scroll position, so
+it stays off, and the panel tells its own scroll apart from one the reader made
+by comparing against the value it last wrote itself. The transport's own
+scrubber is the one seek control; the notation has none of its own.
 
 A small button in the notation panel's own corner inverts it to dark ink on
 light paper instead of the app's usual light on dark, the way printed

@@ -168,38 +168,8 @@ test("the notation belongs to the music while it plays and to the reader once it
   await scroller.evaluate((node) => {
     node.scrollTop = node.scrollHeight;
   });
-  await page.getByRole("slider", { name: "Notation position" }).fill("0");
+  await page.getByRole("slider", { name: "Song position" }).fill("0");
   await expect.poll(readTop, { timeout: 6_000 }).toBeLessThan(100);
-});
-
-test("the vertical progress rail reflects and drives playback position", async ({
-  page,
-}) => {
-  await serveFixture(page);
-  await page.goto(`/watch?${playerQuery()}`);
-  await expect(page.locator("canvas")).toBeVisible();
-  await openHalf(page);
-
-  const rail = page.getByRole("slider", { name: "Notation position" });
-  await expect(rail).toBeVisible();
-  expect(await rail.inputValue()).toBe("0");
-
-  await page.getByRole("button", { name: "Play", exact: true }).click();
-  await expect
-    .poll(async () => Number(await rail.inputValue()), { timeout: 10_000 })
-    .toBeGreaterThan(0.4);
-
-  // Dragging near the far end of the rail seeks there: a click near its
-  // bottom (the rail reads top to bottom, like the page it stands beside)
-  // jumps position far past where playback had otherwise reached.
-  const box = await rail.boundingBox();
-  expect(box).not.toBeNull();
-  if (box !== null) {
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height - 4);
-  }
-  await expect
-    .poll(async () => Number(await rail.inputValue()), { timeout: 5_000 })
-    .toBeGreaterThan(5);
 });
 
 test("inverting the notation colours flips to a paper look and survives a reload", async ({
@@ -297,9 +267,6 @@ test("the notation view works on a phone-width screen", async ({ page }) => {
 
   const box = await sheet.boundingBox();
   expect(box?.width ?? 0).toBeLessThanOrEqual(390);
-  await expect(
-    page.getByRole("slider", { name: "Notation position" }),
-  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Invert notation colours" }),
   ).toBeVisible();

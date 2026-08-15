@@ -353,6 +353,50 @@ function timelineOf(spans: readonly ChordSpan[]): TimelineChord[] {
   return points;
 }
 
+/** How long a chord holds before it counts as one somebody played rather than
+ * one the analysis passed through. */
+const shortestChord = 1.5;
+
+/**
+ * The progression as somebody would write it down, from a reading taken every
+ * half second.
+ *
+ * Naming whatever sounds in each window is right for a background asking what
+ * is under the playhead now, and wrong for a progression: a melody crossing a
+ * held harmony renames it several times a bar, so an arrangement comes out as
+ * hundreds of chords nobody played. Anything that does not hold is folded into
+ * the chord it interrupted.
+ */
+export function readableProgression(
+  timeline: readonly TimelineChord[],
+  duration: number,
+): TimelineChord[] {
+  const kept: TimelineChord[] = [];
+  for (let index = 0; index < timeline.length; index += 1) {
+    const point = timeline[index];
+    if (point === undefined) {
+      continue;
+    }
+    const previous = kept[kept.length - 1];
+    if (previous?.chord === point.chord) {
+      continue;
+    }
+    // Folded into the chord it interrupted, and only into a chord: letting a
+    // silence absorb what follows would report a whole dense passage as a gap
+    // in the music, since nothing in one holds long enough to survive alone.
+    const holds = (timeline[index + 1]?.at ?? duration) - point.at;
+    if (
+      holds < shortestChord &&
+      previous !== undefined &&
+      previous.chord !== null
+    ) {
+      continue;
+    }
+    kept.push(point);
+  }
+  return kept;
+}
+
 /** A report for a song with nothing to say yet, so a fixture that does not
  * care about tempo, key or chords can still satisfy `Song.report`. */
 export function blankDigest(name: string): Digest {

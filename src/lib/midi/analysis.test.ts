@@ -6,6 +6,7 @@ import {
   detectTempo,
   digest,
   estimateKey,
+  readableProgression,
 } from "@/lib/midi/analysis";
 
 type Build = {
@@ -178,5 +179,53 @@ describe("digest", () => {
     expect(report.lowestPitch).toBe(0);
     expect(report.highestPitch).toBe(0);
     expect(report.totalNotes).toBe(0);
+  });
+});
+
+describe("readableProgression", () => {
+  // Naming what sounds every half second is right for a background asking what
+  // is under the playhead and wrong for a progression: a melody crossing a held
+  // harmony renames it several times a bar.
+  it("folds a passing chord into the one it interrupted", () => {
+    const timeline = [
+      { at: 0, chord: "C" },
+      { at: 4, chord: "Am7" },
+      { at: 4.5, chord: "C" },
+      { at: 10, chord: "F" },
+    ];
+
+    expect(readableProgression(timeline, 20)).toEqual([
+      { at: 0, chord: "C" },
+      { at: 10, chord: "F" },
+    ]);
+  });
+
+  it("keeps a chord that holds", () => {
+    const timeline = [
+      { at: 0, chord: "C" },
+      { at: 4, chord: "G" },
+    ];
+
+    expect(readableProgression(timeline, 8)).toEqual(timeline);
+  });
+
+  // Nothing in a dense passage holds on its own, so letting silence absorb what
+  // follows would report the loudest stretch of a song as a gap in it.
+  it("never lets a silence swallow the music after it", () => {
+    const timeline = [
+      { at: 0, chord: null },
+      { at: 1, chord: "C" },
+      { at: 1.5, chord: "G" },
+      { at: 2, chord: "Am" },
+    ];
+
+    const kept = readableProgression(timeline, 3);
+
+    expect(kept.length).toBeGreaterThan(1);
+    expect(kept[1]?.chord).toBe("C");
+  });
+
+  it("says nothing about a song with no chords in it", () => {
+    expect(readableProgression([], 10)).toEqual([]);
   });
 });

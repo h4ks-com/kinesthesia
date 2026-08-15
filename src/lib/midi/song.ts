@@ -3,6 +3,7 @@ import {
   type Digest,
   digest,
   estimateKey,
+  readableProgression,
   readMidi,
   trackLabel,
 } from "@/lib/midi/analysis";
@@ -296,10 +297,13 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
     report: {
       ...digest(midi, name),
       durationSeconds: Math.round(duration * 10) / 10,
-      timeline: harmony.map((span) => ({
-        at: span.at,
-        chord: span.chord?.name ?? null,
-      })),
+      timeline: readableProgression(
+        harmony.map((span) => ({
+          at: span.at,
+          chord: span.chord?.name ?? null,
+        })),
+        duration,
+      ),
     },
     hands: assignHandsForSong(runwayNotes),
   };

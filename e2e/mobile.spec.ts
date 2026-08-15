@@ -127,3 +127,39 @@ test("the roll opens on the part being played, not the lowest keys", async ({
   // leave the player staring at an empty roll.
   await expect.poll(async () => brightNotePixels(page)).toBeGreaterThan(1000);
 });
+
+test("the mode, view and simplify controls fit the header and stay reachable", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await serveFixture(page);
+  await page.goto(`/learn?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  const header = page.locator("header");
+  const overflow = await header.evaluate(
+    (node) => node.scrollWidth > node.clientWidth + 1,
+  );
+  expect(overflow).toBe(false);
+
+  const mode = page.getByRole("button", { name: "Mode: Learn" });
+  await expect(mode).toBeVisible();
+  await mode.click();
+  const watch = page.getByRole("link", { name: "Watch" });
+  await expect(watch).toBeVisible();
+  expect((await watch.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await page.keyboard.press("Escape");
+
+  const view = page.getByRole("button", { name: "View" });
+  await view.click();
+  const split = page.getByRole("button", { name: "Split" });
+  await expect(split).toBeVisible();
+  expect((await split.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "Simplify" }).click();
+  const toggle = page.getByRole("switch", { name: "Simplify" });
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+  await expect(page.getByLabel("Maximum notes per second")).toBeVisible();
+});

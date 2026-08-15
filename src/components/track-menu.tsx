@@ -139,7 +139,7 @@ export function TrackMenu({
           ) : (
             <>
               <Layers className="size-4" aria-hidden="true" />
-              <span className="font-mono text-faint text-xs">
+              <span className="hidden font-mono text-faint text-xs sm:inline">
                 {managed
                   ? `${tracks.length - hidden.size}/${tracks.length}`
                   : tracks.length}

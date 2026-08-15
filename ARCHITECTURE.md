@@ -68,7 +68,8 @@ src/components/
   library-section.tsx         preview, expand and bound a saved list
   player.tsx                  composes the hooks below into a mode, and hosts a
                               match through its aside, overlay and footer slots
-  player-header.tsx           the song menu, score, focus mode and mode switching
+  player-header.tsx           the song menu, score, focus, and one control each
+                              for mode and notation view
   sheet-view.tsx              sheet music for the open song, its cursor stepping
                               with playback
   song-menu.tsx               what you can do with the open song: see its
@@ -232,7 +233,9 @@ backwards.
 ## Notation view
 
 `sheet-view.tsx` shows the open song as sheet music, off, half above the
-falling notes, or full in their place. Notation reads across the page and the
+falling notes, or full in their place. The header's View control, one eye
+icon, opens a vertical list naming the three: Notes, Split, Sheet only.
+Notation reads across the page and the
 notes fall down it, so the two are stacked rather than set side by side and
 each keeps the whole width. `src/lib/sheet/` turns a song into MusicXML:
 `convert.ts` quantises every note onto a 16th note grid, splits the notes
@@ -256,6 +259,12 @@ including focus mode, which shares the same stage the roll and the notation
 split.
 
 ## Modes
+
+The header's Mode control, one popover, opens a vertical list naming all
+three, Watch first since it is the default, then Learn, then Multiplayer; the
+current one shows as selected and the others are real links. Multiplayer is
+disabled in the list for a device local file, which cannot be shared, and the
+whole control disappears once inside a match, since a match's mode is fixed.
 
 `watch` plays every track. `learn` and `multiplayer` hand the chosen tracks to
 the player: the notes they owe are muted and the roll shows only them. Simplify

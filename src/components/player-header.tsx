@@ -3,9 +3,9 @@
 import {
   CircleHelp,
   Eye,
-  FileMusic,
   GraduationCap,
   Maximize,
+  Monitor,
   Piano,
   Swords,
 } from "lucide-react";
@@ -31,19 +31,19 @@ import type { NotationView } from "@/lib/sheet/types";
 import { isDeviceLocal } from "@/lib/trusted-url";
 
 const modeCatalog = [
-  { mode: "watch", label: "Watch", icon: Eye },
+  { mode: "watch", label: "Watch", icon: Monitor },
   { mode: "learn", label: "Learn", icon: GraduationCap },
   { mode: "multiplayer", label: "Multiplayer", icon: Swords },
 ] as const satisfies readonly {
   mode: PlayerMode;
   label: string;
-  icon: typeof Eye;
+  icon: typeof Monitor;
 }[];
 
 const notationChoices = [
-  { view: "off", label: "Off" },
-  { view: "half", label: "Half" },
-  { view: "full", label: "Full" },
+  { view: "off", label: "Notes" },
+  { view: "half", label: "Split" },
+  { view: "full", label: "Sheet only" },
 ] as const satisfies readonly { view: NotationView; label: string }[];
 
 type PlayerHeaderProps = {
@@ -126,12 +126,8 @@ export function PlayerHeader({
   onSolo,
 }: PlayerHeaderProps) {
   const local = isDeviceLocal(params.url);
-  const notationLabel =
-    notationChoices.find((choice) => choice.view === notationView)?.label ??
-    "Off";
-  const switchable = modeCatalog.filter((entry) =>
-    mode === "multiplayer" ? false : entry.mode !== mode,
-  );
+  const currentModeEntry =
+    modeCatalog.find((entry) => entry.mode === mode) ?? modeCatalog[0];
 
   return (
     <header className="relative z-50 flex h-14 shrink-0 items-center gap-2 border-line border-b bg-panel/90 px-3 backdrop-blur sm:gap-3 sm:px-4">
@@ -218,11 +214,11 @@ export function PlayerHeader({
       {renderTool}
 
       <Popover
-        label={`Notation view, ${notationLabel.toLowerCase()}`}
+        label="View"
         align="right"
         trigger={(open) => (
           <span
-            data-tip="Sheet music view"
+            data-tip="View"
             data-tip-align="right"
             className={`inline-flex items-center rounded-lg border p-2 transition-colors ${
               open || notationView !== "off"
@@ -230,19 +226,19 @@ export function PlayerHeader({
                 : "border-line-strong text-muted hover:border-accent hover:text-accent"
             }`}
           >
-            <FileMusic className="size-4" aria-hidden="true" />
+            <Eye className="size-4" aria-hidden="true" />
           </span>
         )}
       >
-        <fieldset className="flex w-40 gap-1 p-1">
-          <legend className="sr-only">Notation view</legend>
+        <fieldset className="flex w-40 flex-col gap-1 p-1">
+          <legend className="sr-only">View</legend>
           {notationChoices.map(({ view, label }) => (
             <button
               key={view}
               type="button"
               aria-pressed={view === notationView}
               onClick={() => onNotationView(view)}
-              className={`flex-1 rounded-lg border px-2 py-1.5 pointer-coarse:min-h-11 text-xs transition-colors ${
+              className={`rounded-lg border px-2.5 py-2 pointer-coarse:min-h-11 text-left text-xs transition-colors ${
                 view === notationView
                   ? "border-accent text-accent"
                   : "border-line-strong text-muted hover:border-accent hover:text-accent"
@@ -266,35 +262,74 @@ export function PlayerHeader({
         <Maximize className="size-4" aria-hidden="true" />
       </button>
 
-      {switchable.length === 0 ? null : (
-        <div data-tour="modes" className="flex shrink-0 items-center gap-2">
-          {switchable.map(({ mode: target, label, icon: Icon }) =>
-            local && target === "multiplayer" ? (
-              <button
-                key={target}
-                type="button"
-                aria-disabled="true"
-                onClick={(event) => event.preventDefault()}
-                data-tip="Uploaded files can't be shared"
+      {mode === "multiplayer" ? null : (
+        <div data-tour="modes" className="shrink-0">
+          <Popover
+            label={`Mode: ${currentModeEntry.label}`}
+            align="right"
+            trigger={(open) => (
+              <span
+                data-tip="Mode"
                 data-tip-align="right"
-                aria-label="Multiplayer unavailable for uploaded files"
-                className="cursor-not-allowed rounded-lg border border-line p-2 text-line-strong"
+                className={`inline-flex items-center gap-1.5 rounded-lg border p-2 transition-colors ${
+                  open
+                    ? "border-accent text-accent"
+                    : "border-line-strong text-muted hover:border-accent hover:text-accent"
+                }`}
               >
-                <Icon className="size-4" aria-hidden="true" />
-              </button>
-            ) : (
-              <Link
-                key={target}
-                href={playerPath(target, params)}
-                data-tip={`Switch to ${label.toLowerCase()}`}
-                data-tip-align="right"
-                aria-label={`Switch to ${label}`}
-                className="rounded-lg border border-line-strong p-2 text-muted transition-colors hover:border-accent hover:text-accent"
-              >
-                <Icon className="size-4" aria-hidden="true" />
-              </Link>
-            ),
-          )}
+                <currentModeEntry.icon className="size-4" aria-hidden="true" />
+                <span className="hidden font-medium text-xs sm:inline">
+                  {currentModeEntry.label}
+                </span>
+              </span>
+            )}
+          >
+            {(close) => (
+              <div className="flex w-44 flex-col gap-0.5">
+                {modeCatalog.map(({ mode: target, label, icon: Icon }) => {
+                  if (target === mode) {
+                    return (
+                      <span
+                        key={target}
+                        aria-current="true"
+                        className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 pointer-coarse:min-h-11 text-accent text-sm"
+                      >
+                        <Icon className="size-4 shrink-0" aria-hidden="true" />
+                        {label}
+                      </span>
+                    );
+                  }
+                  if (local && target === "multiplayer") {
+                    return (
+                      <button
+                        key={target}
+                        type="button"
+                        disabled
+                        data-tip="Uploaded files can't be shared"
+                        data-tip-align="right"
+                        aria-label={`${label} unavailable for uploaded files`}
+                        className="flex cursor-not-allowed items-center gap-2.5 rounded-lg px-2.5 py-2 pointer-coarse:min-h-11 text-left text-line-strong text-sm opacity-70"
+                      >
+                        <Icon className="size-4 shrink-0" aria-hidden="true" />
+                        {label}
+                      </button>
+                    );
+                  }
+                  return (
+                    <Link
+                      key={target}
+                      href={playerPath(target, params)}
+                      onClick={close}
+                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 pointer-coarse:min-h-11 text-left text-sm text-text transition-colors hover:bg-raised"
+                    >
+                      <Icon className="size-4 shrink-0" aria-hidden="true" />
+                      {label}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </Popover>
         </div>
       )}
 

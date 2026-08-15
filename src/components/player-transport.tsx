@@ -2,6 +2,7 @@
 
 import { Gauge, Music4, Pause, Play } from "lucide-react";
 import { SettingsMenu } from "@/components/settings-menu";
+import { SongMinimap } from "@/components/song-minimap";
 import { Popover } from "@/components/ui/popover";
 import { SliderRow } from "@/components/ui/slider-row";
 import { formatClock } from "@/lib/format/clock";
@@ -10,6 +11,7 @@ import {
   clampTranspose,
   defaultTranspose,
   formatTranspose,
+  type Song,
   type Transpose,
   transposeRange,
 } from "@/lib/midi/song";
@@ -19,6 +21,11 @@ type PlayerTransportProps = {
   playing: boolean;
   elapsed: number;
   duration: number;
+  /** Drawn whole in the timeline, so the bar shows what is coming rather than
+   * only how far along it is. */
+  song: Song;
+  hiddenTracks: ReadonlySet<number>;
+  getPosition: () => number;
   speed: Speed;
   /** Null while the speed is fixed: a match runs both sides at one tempo. */
   onSpeed: ((speed: Speed) => void) | null;
@@ -54,6 +61,9 @@ export function PlayerTransport({
   playing,
   elapsed,
   duration,
+  song,
+  hiddenTracks,
+  getPosition,
   speed,
   onSpeed,
   transpose,
@@ -113,17 +123,12 @@ export function PlayerTransport({
         </span>
       </span>
 
-      <input
-        type="range"
-        min={0}
-        max={Math.max(1, duration)}
-        step={1}
-        value={Math.min(elapsed, duration)}
-        disabled={onSeek === null}
-        onChange={(event) => onSeek?.(Number(event.target.value))}
-        aria-label="Song position"
-        aria-valuetext={formatClock(elapsed)}
-        className="min-w-0 flex-1 disabled:opacity-50"
+      <SongMinimap
+        song={song}
+        hiddenTracks={hiddenTracks}
+        elapsed={elapsed}
+        getPosition={getPosition}
+        onSeek={onSeek}
       />
 
       {onSpeed === null ? null : (

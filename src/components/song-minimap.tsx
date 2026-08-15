@@ -77,18 +77,19 @@ export function SongMinimap({
     const hidden = new Set(
       hiddenKey === "" ? [] : hiddenKey.split(",").map(Number),
     );
+    // Both start empty on every run of this effect, so a change of song or of
+    // what is shown repaints even though the element has not been resized.
+    let width = 0;
     let height = 0;
     const measure = (): void => {
       const box = frame.getBoundingClientRect();
-      if (
-        box.width < 1 ||
-        (box.width === widthRef.current && box.height === height)
-      ) {
+      if (box.width < 1 || (box.width === width && box.height === height)) {
         return;
       }
-      widthRef.current = box.width;
+      width = box.width;
       height = box.height;
-      setLayers(paint(song, hidden, box.width, height));
+      widthRef.current = width;
+      setLayers(paint(song, hidden, width, height));
     };
     measure();
     const observer = new ResizeObserver(measure);

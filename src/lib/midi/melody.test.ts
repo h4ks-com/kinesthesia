@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { blankDigest } from "@/lib/midi/analysis";
 import { ExpressionTrail } from "@/lib/midi/expression";
 import {
   clampMelodyRate,
@@ -40,14 +41,16 @@ function track(index: number, percussion = false): SongTrack {
 }
 
 function song(notes: SongNote[], tracks: SongTrack[] = [track(0)]): Song {
+  const duration = Math.max(0, ...notes.map((each) => each.end));
   return {
     name: "test",
-    duration: Math.max(0, ...notes.map((each) => each.end)),
+    duration,
     notes: [...notes].sort((left, right) => left.start - right.start),
     tracks,
     expression: new ExpressionTrail(),
     harmony: [],
     key: null,
+    report: blankDigest("test"),
   };
 }
 

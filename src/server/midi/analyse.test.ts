@@ -29,8 +29,8 @@ describe("analyseMidi", () => {
     const summary = await analyseMidi("https://example.test/a.mid", "A song");
 
     expect(summary.name).toBe("A song");
-    expect(summary.notes).toBe(16);
-    expect(summary.duration).toBeGreaterThan(0);
+    expect(summary.totalNotes).toBe(16);
+    expect(summary.durationSeconds).toBeGreaterThan(0);
     expect(summary.lowestPitch).toBe(38);
     expect(summary.highestPitch).toBe(67);
   });

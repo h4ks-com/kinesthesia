@@ -1,7 +1,57 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SongMenu } from "@/components/song-menu";
+import type { Digest } from "@/lib/midi/analysis";
 import { defaultStart, type PlayerParams } from "@/lib/player-url";
+
+const report: Digest = {
+  name: "Bohemian Rhapsody",
+  durationSeconds: 355,
+  totalNotes: 400,
+  tempo: { bpm: 72, explicit: true, changes: 1 },
+  meter: { beats: 4, value: 4, explicit: true, changes: 1 },
+  key: {
+    tonic: "Bb",
+    mode: "major",
+    correlation: 0.8,
+    margin: 0.1,
+    runnerUp: "G minor",
+  },
+  tracks: [
+    {
+      index: 0,
+      name: "Piano",
+      instrument: "acoustic grand piano",
+      percussion: false,
+      notes: 200,
+      range: ["C3", "C6"],
+    },
+    {
+      index: 1,
+      name: "Vocals",
+      instrument: "voice oohs",
+      percussion: false,
+      notes: 150,
+      range: ["A3", "A5"],
+    },
+    {
+      index: 2,
+      name: "Drums",
+      instrument: "standard kit",
+      percussion: true,
+      notes: 50,
+      range: ["C2", "C2"],
+    },
+  ],
+  playedTrack: 0,
+  lowestPitch: 36,
+  highestPitch: 84,
+  density: 1.1,
+  harmony: [
+    { bars: "1-4", chord: "Bb" },
+    { bars: "5-8", chord: "Fm" },
+  ],
+};
 
 type Row = { key: string; [field: string]: unknown };
 
@@ -81,6 +131,7 @@ function open(
       params={merged}
       title={merged.name.replace(/\.midi?$/i, "")}
       trackCount={3}
+      report={report}
       signedIn={props.signedIn ?? true}
       shareEnabled={props.shareEnabled ?? true}
       onPublished={(url) => published.push(url)}
@@ -154,5 +205,18 @@ describe("SongMenu", () => {
     await waitFor(() =>
       expect(published).toEqual(["https://files.test/abc.mid"]),
     );
+  });
+
+  it("opens the song info panel with the song's own report", () => {
+    open();
+    fireEvent.click(screen.getByRole("button", { name: /Song info/ }));
+
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.getByText("72 bpm")).toBeTruthy();
+    expect(screen.getByText("Bb major")).toBeTruthy();
+    expect(screen.getByText("Vocals")).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

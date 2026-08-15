@@ -5,13 +5,16 @@ import {
   ChevronDown,
   Download,
   Globe,
+  Info,
   Link2,
   Loader2,
   Star,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { SongInfoPanel } from "@/components/song-info-panel";
 import { Popover } from "@/components/ui/popover";
 import { downloadBlob, downloadName } from "@/lib/download";
+import type { Digest } from "@/lib/midi/analysis";
 import { readSongBytes } from "@/lib/midi/song";
 import {
   type PlayerMode,
@@ -29,6 +32,8 @@ type SongMenuProps = {
   /** The name without its file extension, which is noise on a title. */
   title: string;
   trackCount: number;
+  /** Tempo, key, meter and chords, computed once when the song was parsed. */
+  report: Digest;
   signedIn: boolean;
   shareEnabled: boolean;
   /** Where the file landed, for whoever owns the address this page is on. */
@@ -42,6 +47,7 @@ export function SongMenu({
   params,
   title,
   trackCount,
+  report,
   signedIn,
   shareEnabled,
   onPublished,
@@ -50,6 +56,7 @@ export function SongMenu({
   const [copied, setCopied] = useState(false);
   const [working, setWorking] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
   /** The link, where the browser refused to take it, so it stays reachable by
    * hand rather than the control appearing to do nothing. */
   const [refused, setRefused] = useState<string | null>(null);
@@ -127,83 +134,108 @@ export function SongMenu({
   }
 
   return (
-    <Popover
-      label="This song"
-      align="left"
-      trigger={(open) => (
-        <span
-          className={`flex min-w-0 items-center gap-1 rounded-lg px-1.5 py-1 text-sm transition-colors ${
-            open ? "text-text" : "text-muted hover:text-text"
-          }`}
-        >
-          <span className="max-w-[40vw] truncate sm:max-w-xs">{title}</span>
-          <ChevronDown className="size-3.5 shrink-0" aria-hidden="true" />
-        </span>
-      )}
-    >
-      <div className="flex w-64 flex-col gap-0.5 max-sm:w-full">
-        <div className="px-2.5 pt-1.5 pb-2">
-          <p className="truncate font-medium text-sm">{title}</p>
-          <p className="font-mono text-[0.7rem] text-faint">
-            {local ? "on this device" : (params.source ?? "by link")} ·{" "}
-            {trackCount} {trackCount === 1 ? "part" : "parts"}
-          </p>
-        </div>
+    <>
+      <Popover
+        label="This song"
+        align="left"
+        trigger={(open) => (
+          <span
+            className={`flex min-w-0 items-center gap-1 rounded-lg px-1.5 py-1 text-sm transition-colors ${
+              open ? "text-text" : "text-muted hover:text-text"
+            }`}
+          >
+            <span className="max-w-[40vw] truncate sm:max-w-xs">{title}</span>
+            <ChevronDown className="size-3.5 shrink-0" aria-hidden="true" />
+          </span>
+        )}
+      >
+        {(close) => (
+          <div className="flex w-64 flex-col gap-0.5 max-sm:w-full">
+            <div className="px-2.5 pt-1.5 pb-2">
+              <p className="truncate font-medium text-sm">{title}</p>
+              <p className="font-mono text-[0.7rem] text-faint">
+                {local ? "on this device" : (params.source ?? "by link")} ·{" "}
+                {trackCount} {trackCount === 1 ? "part" : "parts"}
+              </p>
+            </div>
 
-        <Row
-          icon={working ? Loader2 : Download}
-          label="Download MIDI"
-          spin={working}
-          onClick={() => void download()}
+            <Row
+              icon={Info}
+              label="Song info"
+              onClick={() => {
+                close();
+                setInfoOpen(true);
+              }}
+            />
+
+            <Row
+              icon={working ? Loader2 : Download}
+              label="Download MIDI"
+              spin={working}
+              onClick={() => void download()}
+            />
+
+            {local ? null : (
+              <Row
+                icon={copied ? Check : Link2}
+                label={copied ? "Copied" : "Copy link"}
+                onClick={copy}
+              />
+            )}
+
+            <Row
+              icon={Star}
+              label={starred ? "Remove favorite" : "Favorite"}
+              filled={starred}
+              onClick={() =>
+                void toggleFavourite({
+                  url: params.url,
+                  name: params.name,
+                  source: params.source,
+                }).then(setStarred)
+              }
+            />
+
+            {!local || !shareEnabled ? null : signedIn ? (
+              <Row
+                icon={Globe}
+                label="Put it online"
+                note={permanenceWarning}
+                onClick={() => void publish()}
+              />
+            ) : (
+              <Row
+                icon={Globe}
+                label="Sign in to put it online"
+                onClick={null}
+              />
+            )}
+
+            {failed === null ? null : (
+              <p className="px-2.5 py-1.5 text-danger text-xs">{failed}</p>
+            )}
+
+            {refused === null ? null : (
+              <input
+                readOnly
+                value={refused}
+                aria-label={`Link to ${title}`}
+                onFocus={(event) => event.currentTarget.select()}
+                className="mx-2.5 mb-1.5 min-w-0 truncate bg-transparent font-mono text-accent text-xs outline-none"
+              />
+            )}
+          </div>
+        )}
+      </Popover>
+
+      {infoOpen ? (
+        <SongInfoPanel
+          title={title}
+          report={report}
+          onClose={() => setInfoOpen(false)}
         />
-
-        {local ? null : (
-          <Row
-            icon={copied ? Check : Link2}
-            label={copied ? "Copied" : "Copy link"}
-            onClick={copy}
-          />
-        )}
-
-        <Row
-          icon={Star}
-          label={starred ? "Remove favorite" : "Favorite"}
-          filled={starred}
-          onClick={() =>
-            void toggleFavourite({
-              url: params.url,
-              name: params.name,
-              source: params.source,
-            }).then(setStarred)
-          }
-        />
-
-        {!local || !shareEnabled ? null : signedIn ? (
-          <Row
-            icon={Globe}
-            label="Put it online"
-            note={permanenceWarning}
-            onClick={() => void publish()}
-          />
-        ) : (
-          <Row icon={Globe} label="Sign in to put it online" onClick={null} />
-        )}
-
-        {failed === null ? null : (
-          <p className="px-2.5 py-1.5 text-danger text-xs">{failed}</p>
-        )}
-
-        {refused === null ? null : (
-          <input
-            readOnly
-            value={refused}
-            aria-label={`Link to ${title}`}
-            onFocus={(event) => event.currentTarget.select()}
-            className="mx-2.5 mb-1.5 min-w-0 truncate bg-transparent font-mono text-accent text-xs outline-none"
-          />
-        )}
-      </div>
-    </Popover>
+      ) : null}
+    </>
   );
 }
 

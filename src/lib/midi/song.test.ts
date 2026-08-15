@@ -1,5 +1,6 @@
 import { Midi } from "@tonejs/midi";
 import { describe, expect, it } from "vitest";
+import { blankDigest } from "@/lib/midi/analysis";
 import { ExpressionTrail } from "@/lib/midi/expression";
 import {
   clampTranspose,
@@ -49,6 +50,7 @@ const song: Song = {
   expression: new ExpressionTrail(),
   harmony: [],
   key: null,
+  report: blankDigest("Test"),
 };
 
 function withLine(line: readonly number[]): Song {

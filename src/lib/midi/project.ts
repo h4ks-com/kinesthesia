@@ -616,7 +616,7 @@ export function projectDigest(project: Project): ProjectDigest {
     id: project.id,
     name: project.name,
     bpm: project.bpm,
-    meter: full.meter,
+    meter: `${full.meter.beats}/${full.meter.value}`,
     bars: projectBars(project),
     key: full.key,
     harmony: full.harmony,

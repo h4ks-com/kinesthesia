@@ -126,6 +126,9 @@ export function PlayerHeader({
   onSolo,
 }: PlayerHeaderProps) {
   const local = isDeviceLocal(params.url);
+  const notationLabel =
+    notationChoices.find((choice) => choice.view === notationView)?.label ??
+    "Off";
   const switchable = modeCatalog.filter((entry) =>
     mode === "multiplayer" ? false : entry.mode !== mode,
   );
@@ -215,7 +218,7 @@ export function PlayerHeader({
       {renderTool}
 
       <Popover
-        label="Notation view"
+        label={`Notation view, ${notationLabel.toLowerCase()}`}
         align="right"
         trigger={(open) => (
           <span
@@ -239,7 +242,7 @@ export function PlayerHeader({
               type="button"
               aria-pressed={view === notationView}
               onClick={() => onNotationView(view)}
-              className={`flex-1 rounded-lg border px-2 py-1.5 text-xs transition-colors ${
+              className={`flex-1 rounded-lg border px-2 py-1.5 pointer-coarse:min-h-11 text-xs transition-colors ${
                 view === notationView
                   ? "border-accent text-accent"
                   : "border-line-strong text-muted hover:border-accent hover:text-accent"

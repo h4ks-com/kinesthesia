@@ -40,8 +40,8 @@ test("it redraws when the shown tracks change", async ({ page }) => {
     .not.toBe(before);
 });
 
-// The old scrubber stepped a whole second at a time because it was driven from
-// React state. This is what says the playhead is on the audio clock instead.
+// A playhead driven from React state moves as often as the component renders,
+// which is a step a second. This is what says it runs on the audio clock.
 test("the playhead moves between frames while playing", async ({ page }) => {
   await openWatch(page);
   await page.getByRole("button", { name: "Play" }).click();

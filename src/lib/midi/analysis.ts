@@ -160,6 +160,46 @@ function correlate(a: readonly number[], b: readonly number[]): number {
 /** Krumhansl-Schmuckler: weight each pitch class by how long it sounds, then
  * find the key profile it best matches. Duration weighting is what makes a
  * passing chromatic note count for less than a structural one. */
+/** A key is named by where it sits on the circle of fifths, which is not the
+ * same as naming its tonic off a chromatic scale: the key a semitone above A is
+ * B flat major, and A sharp major would need ten sharps to write down. Getting
+ * this wrong reaches further than the label, because a key signature nobody can
+ * notate is one the sheet music cannot be drawn from. */
+const majorKeyNames = [
+  "C",
+  "Db",
+  "D",
+  "Eb",
+  "E",
+  "F",
+  "F#",
+  "G",
+  "Ab",
+  "A",
+  "Bb",
+  "B",
+] as const;
+
+const minorKeyNames = [
+  "C",
+  "C#",
+  "D",
+  "Eb",
+  "E",
+  "F",
+  "F#",
+  "G",
+  "G#",
+  "A",
+  "Bb",
+  "B",
+] as const;
+
+export function keyName(pitchClass: number, mode: Mode): string {
+  const names = mode === "major" ? majorKeyNames : minorKeyNames;
+  return names[((pitchClass % 12) + 12) % 12] ?? "C";
+}
+
 export function estimateKey(midi: Midi): KeyEstimate | null {
   const weights = new Array<number>(12).fill(0);
   for (const track of midi.tracks) {
@@ -179,14 +219,13 @@ export function estimateKey(midi: Midi): KeyEstimate | null {
     const rotated = weights.map(
       (_, index) => weights[(index + tonic) % 12] ?? 0,
     );
-    const name = pitchClasses[tonic] ?? "C";
     scored.push({
-      tonic: name,
+      tonic: keyName(tonic, "major"),
       mode: "major",
       r: correlate(rotated, majorProfile),
     });
     scored.push({
-      tonic: name,
+      tonic: keyName(tonic, "minor"),
       mode: "minor",
       r: correlate(rotated, minorProfile),
     });

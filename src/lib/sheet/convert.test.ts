@@ -251,3 +251,32 @@ describe("songToSheetMusic", () => {
     expect(chordNotes[2]?.querySelector("chord")).not.toBeNull();
   });
 });
+
+// The title is the one piece of the file's own text written into the document,
+// and the document is handed straight to an engraver that builds DOM from it.
+describe("a song whose name is markup", () => {
+  it("writes the name as text rather than as more document", () => {
+    const hostile = "</work-title></work><script>alert(1)</script>";
+
+    const { musicXml } = songToSheetMusic(baseSource({ title: hostile }));
+
+    expect(musicXml).not.toContain("<script>");
+    expect(musicXml).toContain("&lt;script&gt;");
+    const doc = new DOMParser().parseFromString(musicXml, "application/xml");
+    expect(doc.querySelector("parsererror")).toBeNull();
+    expect(doc.querySelector("work-title")?.textContent).toBe(hostile);
+  });
+
+  // A key nobody notates has no signature to write, and an empty one in the
+  // document is what an engraver refuses the whole score over.
+  it("falls back to a notatable key when the estimate names none", () => {
+    const { musicXml } = songToSheetMusic(
+      baseSource({ key: { tonic: "A#", mode: "major" } }),
+    );
+
+    const doc = new DOMParser().parseFromString(musicXml, "application/xml");
+    const fifths = doc.querySelector("key > fifths")?.textContent ?? "";
+    expect(Number.isInteger(Number(fifths))).toBe(true);
+    expect(Math.abs(Number(fifths))).toBeLessThanOrEqual(7);
+  });
+});

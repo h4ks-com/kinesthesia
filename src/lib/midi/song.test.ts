@@ -86,6 +86,14 @@ describe("parseSong lead-in", () => {
     const last = parsed.notes[parsed.notes.length - 1]?.end ?? 0;
     expect(parsed.duration).toBeCloseTo(last + 2.5);
   });
+
+  // The report sits beside a clock counting to the song's own length, and the
+  // file's duration leaves out the runway added at both ends.
+  it("reports the length the clock counts to, not the file's own", () => {
+    const parsed = parseSong(midiStartingAt(0), "x");
+
+    expect(parsed.report.durationSeconds).toBeCloseTo(parsed.duration, 1);
+  });
 });
 
 describe("parseSong rejects bad input", () => {

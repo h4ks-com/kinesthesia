@@ -52,21 +52,39 @@ type KeyFacts = {
   readonly keySignature: string;
 };
 
+/** C major, for a tonic that names no key anybody writes down. A key signature
+ * has to be a number of sharps or flats between -7 and 7, and a theoretical key
+ * such as A sharp major answers with nothing: writing that into the document
+ * makes the whole score unreadable to the engraver rather than one bar of it. */
+const noKey: KeyFacts = {
+  scale: ["C", "D", "E", "F", "G", "A", "B"],
+  fifths: 0,
+  keySignature: "",
+};
+
+function notatable(facts: KeyFacts): KeyFacts {
+  return Number.isInteger(facts.fifths) &&
+    Math.abs(facts.fifths) <= 7 &&
+    facts.scale.length === 7
+    ? facts
+    : noKey;
+}
+
 function keyFacts(tonic: string, mode: Mode): KeyFacts {
   if (mode === "minor") {
     const key = Key.minorKey(tonic);
-    return {
+    return notatable({
       scale: key.natural.scale,
       fifths: key.alteration,
       keySignature: key.keySignature,
-    };
+    });
   }
   const key = Key.majorKey(tonic);
-  return {
+  return notatable({
     scale: key.scale,
     fifths: key.alteration,
     keySignature: key.keySignature,
-  };
+  });
 }
 
 /** A step letter's own unaltered pitch class, where that letter is used

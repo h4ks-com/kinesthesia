@@ -1,3 +1,4 @@
+import { assignHandsForSong } from "@/lib/midi/hands";
 import type { SheetNote } from "@/lib/sheet/types";
 
 export type StaffSplit = {
@@ -5,26 +6,55 @@ export type StaffSplit = {
   readonly bass: readonly SheetNote[];
 };
 
-/** Splits notes across the grand staff by the song's own pitch distribution
- * rather than a fixed line, so a piece that sits entirely high or low still
- * lands mostly on one staff instead of straddling middle C by convention. A
- * real two-hand split needs the shape of the melody as well as its pitches,
- * which is what the dedicated hand-separation work covers; this is a
- * self-contained placeholder for it. */
+/** Middle C, the note the two staves of a grand staff meet at. */
+const middleC = 60;
+
+/** How far one hand reaches, which is what decides whether a part needs the
+ * second staff at all. A tenth is comfortable and a wider stretch is not. */
+const handReach = 16;
+
+/**
+ * Which staff a note is written on is the same question as which hand plays it,
+ * so the grand staff is drawn from the split the player already works out: a
+ * left hand reaching above middle C stays on the bass staff rather than jumping
+ * across at a fixed line.
+ *
+ * A part played by one hand is a different question, and the split cannot
+ * answer it: it weighs notes only against each other, so it would divide a line
+ * that never leaves the treble. A part inside one hand's reach goes on the one
+ * staff its register puts it on.
+ */
 export function splitStaves(notes: readonly SheetNote[]): StaffSplit {
   if (notes.length === 0) {
     return { treble: [], bass: [] };
   }
-  const pitches = notes
-    .map((note) => note.pitch)
-    .sort((left, right) => left - right);
-  const middle = Math.floor(pitches.length / 2);
-  const median =
-    pitches.length % 2 === 0
-      ? ((pitches[middle - 1] ?? 0) + (pitches[middle] ?? 0)) / 2
-      : (pitches[middle] ?? 0);
-  return {
-    treble: notes.filter((note) => note.pitch >= median),
-    bass: notes.filter((note) => note.pitch < median),
-  };
+  const pitches = notes.map((note) => note.pitch);
+  if (Math.max(...pitches) - Math.min(...pitches) <= handReach) {
+    return median(pitches) >= middleC
+      ? { treble: notes, bass: [] }
+      : { treble: [], bass: notes };
+  }
+  const hands = assignHandsForSong(
+    notes.map((note, id) => ({
+      id,
+      pitch: note.pitch,
+      start: note.start,
+      track: 0,
+    })),
+  );
+  const treble: SheetNote[] = [];
+  const bass: SheetNote[] = [];
+  notes.forEach((note, id) => {
+    if (hands.get(id) === "left") {
+      bass.push(note);
+    } else {
+      treble.push(note);
+    }
+  });
+  return { treble, bass };
+}
+
+function median(pitches: readonly number[]): number {
+  const sorted = [...pitches].sort((one, next) => one - next);
+  return sorted[Math.floor(sorted.length / 2)] ?? middleC;
 }

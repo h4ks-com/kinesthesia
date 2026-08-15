@@ -1,6 +1,9 @@
 "use client";
 
-import type { IOSMDOptions } from "opensheetmusicdisplay";
+import type {
+  IOSMDOptions,
+  OpenSheetMusicDisplay,
+} from "opensheetmusicdisplay";
 import { useEffect, useRef, useState } from "react";
 import type { Song, Transpose } from "@/lib/midi/song";
 import { loadSheetMusic } from "@/lib/sheet/load";
@@ -92,8 +95,7 @@ function Notation({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // biome-ignore lint/suspicious/noExplicitAny: OSMD's own class, only known once the dynamic import resolves
-  const osmdRef = useRef<any>(null);
+  const osmdRef = useRef<OpenSheetMusicDisplay | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -233,7 +235,15 @@ function Notation({
           </span>
         </div>
       )}
-      <div ref={containerRef} className="min-h-full w-full px-3 py-4" />
+      {/* The engraver fills this with hundreds of unnamed paths for the staves,
+          stems and beams. The falling notes carry the same music in a form a
+          screen reader can already be told about, so this stays out of the
+          tree rather than reading as a wall of graphics. */}
+      <div
+        ref={containerRef}
+        aria-hidden="true"
+        className="min-h-full w-full px-3 py-4"
+      />
     </div>
   );
 }

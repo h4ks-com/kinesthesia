@@ -278,15 +278,22 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
   );
 
   const key = estimateKey(midi);
+  const duration = lastSound + endTail;
   return {
     name,
-    duration: lastSound + endTail,
-    harmony: harmonyOf(runwayNotes, lastSound + endTail),
+    duration,
+    harmony: harmonyOf(runwayNotes, duration),
     key: key === null ? null : { root: rootOf(key.tonic), mode: key.mode },
     notes: runwayNotes,
     tracks,
     expression,
-    report: digest(midi, name),
+    // The file's own length leaves out the runway this parser adds at both
+    // ends, so reporting it would put a different figure in front of a reader
+    // from the one the clock beside it counts to.
+    report: {
+      ...digest(midi, name),
+      durationSeconds: Math.round(duration * 10) / 10,
+    },
     hands: assignHandsForSong(runwayNotes),
   };
 }

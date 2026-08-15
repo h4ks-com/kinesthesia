@@ -6,7 +6,7 @@ import type { Song } from "@/lib/midi/song";
 import { drawSongMap, pitchSpan } from "@/lib/render/minimap";
 
 /** Fine enough that dragging reads as continuous rather than stepping from one
- * second to the next, which is what this replaced. */
+ * second to the next. */
 const seekStep = 0.05;
 
 /** A keyboard gets its own distances, because one step of the drag resolution

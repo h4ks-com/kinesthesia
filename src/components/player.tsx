@@ -26,10 +26,10 @@ import { useSongVoicing } from "@/lib/audio/use-song-voicing";
 import { keyLabelsFor, reachFor } from "@/lib/input/keyboard-map";
 import { useMidiShortcuts } from "@/lib/input/midi-shortcuts";
 import { type NoteInput, useNoteInput } from "@/lib/input/use-note-input";
-import { reduceToMelody } from "@/lib/midi/melody";
 import {
   medianPitch,
   type Part,
+  partLine,
   soloHidden,
   toggleHidden,
   tracksToHide,
@@ -159,6 +159,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     hasKeyboard,
     simplified,
     melodyRate,
+    hand,
     transpose,
     hydrated,
     claimTrack,
@@ -170,6 +171,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     changePlainStyle,
     changeSimplified,
     changeMelodyRate,
+    changeHand,
     changeTranspose,
     changeSpeed,
     togglePlayerTrack,
@@ -273,14 +275,13 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
     if (song === null || !interactive) {
       return [];
     }
-    const mine = song.notes.filter((note) => playerTracks.has(note.track));
-    return simplified
-      ? reduceToMelody(song, {
-          tracks: playerTracks,
-          maxNotesPerSecond: melodyRate,
-        })
-      : mine;
-  }, [song, playerTracks, interactive, simplified, melodyRate]);
+    return partLine(song, {
+      tracks: [...playerTracks],
+      simplified,
+      melodyRate,
+      hand,
+    });
+  }, [song, playerTracks, interactive, simplified, melodyRate, hand]);
 
   const owedIds = useMemo(() => new Set(owed.map((note) => note.id)), [owed]);
 
@@ -471,8 +472,9 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
       tracks: [...playerTracks].sort((left, right) => left - right),
       simplified,
       melodyRate,
+      hand,
     });
-  }, [playerTracks, simplified, melodyRate]);
+  }, [playerTracks, simplified, melodyRate, hand]);
 
   const hitRef = useRef(gates.lastHit?.seq ?? 0);
   useEffect(() => {
@@ -591,6 +593,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                 speed,
                 simplified,
                 melodyRate,
+                hand,
                 transpose,
                 focus,
               }}
@@ -613,6 +616,8 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
               onSimplified={changeSimplified}
               melodyRate={melodyRate}
               onMelodyRate={changeMelodyRate}
+              hand={hand}
+              onHand={changeHand}
               editable={!locked}
               score={gates.score}
               owedNotes={owed.length}

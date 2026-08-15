@@ -48,6 +48,7 @@ function song(notes: SongNote[], tracks: SongTrack[] = [track(0)]): Song {
     expression: new ExpressionTrail(),
     harmony: [],
     key: null,
+    hands: new Map(),
   };
 }
 

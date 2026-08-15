@@ -61,6 +61,7 @@ const song: PlayerParams = {
   speed: 1,
   simplified: false,
   melodyRate: 6,
+  hand: null,
   transpose: 0,
   focus: false,
   skin: null,

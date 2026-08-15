@@ -1,3 +1,5 @@
+import type { Hand } from "@/lib/midi/hands";
+
 export type MultiplayerRoom = {
   readonly code: string;
   readonly peerId: string;
@@ -11,6 +13,7 @@ export type MultiplayerRoom = {
   readonly speed: number;
   readonly simplified: boolean;
   readonly melodyRate: number;
+  readonly hand: Hand | null;
   readonly transpose: number;
   /** A battle is one shared part; a co-op is two parts the host set. */
   readonly coop: boolean;

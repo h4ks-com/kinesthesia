@@ -15,6 +15,7 @@ import { SongMenu } from "@/components/song-menu";
 import { type SoundSharing, TrackMenu } from "@/components/track-menu";
 import { ScoreReadout } from "@/components/ui/score-readout";
 import type { SongVoicing, Voicing } from "@/lib/audio/voicing";
+import type { Hand } from "@/lib/midi/hands";
 import type { MelodyRate } from "@/lib/midi/melody";
 import type { SongNote, SongTrack } from "@/lib/midi/song";
 import {
@@ -53,6 +54,8 @@ type PlayerHeaderProps = {
   onSimplified: (simplified: boolean) => void;
   melodyRate: MelodyRate;
   onMelodyRate: (rate: number) => void;
+  hand: Hand | null;
+  onHand: (hand: Hand | null) => void;
   editable: boolean;
   score: Score;
   /** How many notes the part asks for, so the tally can read as a share of the
@@ -89,6 +92,8 @@ export function PlayerHeader({
   onSimplified,
   melodyRate,
   onMelodyRate,
+  hand,
+  onHand,
   editable,
   score,
   owedNotes,
@@ -167,6 +172,8 @@ export function PlayerHeader({
           onSimplified={editable ? onSimplified : null}
           melodyRate={melodyRate}
           onMelodyRate={editable ? onMelodyRate : null}
+          hand={hand}
+          onHand={editable ? onHand : null}
           whose="yours"
         />
       ) : (

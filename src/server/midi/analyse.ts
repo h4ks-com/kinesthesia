@@ -1,3 +1,4 @@
+import { looksTwoHanded } from "@/lib/midi/hands";
 import { parseSong, type Song } from "@/lib/midi/song";
 import { busiestTrack } from "@/lib/scoring/gates";
 import { sourceFetch } from "@/server/http/fetch";
@@ -8,6 +9,9 @@ export type TrackSummary = {
   readonly instrument: string;
   readonly percussion: boolean;
   readonly notes: number;
+  /** Whether this track looks like it holds both hands, so splitting it with
+   * the hand player option would give two real parts. */
+  readonly bothHands: boolean;
 };
 
 export type MidiSummary = {
@@ -35,6 +39,9 @@ function summarise(song: Song): MidiSummary {
       instrument: track.instrument,
       percussion: track.percussion,
       notes: track.noteCount,
+      bothHands: looksTwoHanded(
+        song.notes.filter((note) => note.track === track.index),
+      ),
     })),
     playedTrack: busiestTrack(song),
     lowestPitch: pitches.length === 0 ? 0 : Math.min(...pitches),

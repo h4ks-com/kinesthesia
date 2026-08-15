@@ -40,6 +40,7 @@ function song(notes: SongNote[]): Song {
     expression: new ExpressionTrail(),
     harmony: [],
     key: null,
+    hands: new Map(),
   };
 }
 

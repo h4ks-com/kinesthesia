@@ -7,7 +7,7 @@
       "dependencies": {
         "@hono/mcp": "0.3.1",
         "@hono/zod-openapi": "1.5.1",
-        "@ip-location-db/dbip-country-mmdb": "^2.3.2026060120",
+        "@ip-location-db/dbip-country-mmdb": "2.3.2026060120",
         "@libsql/client": "0.17.4",
         "@logto/next": "^4.2.10",
         "@modelcontextprotocol/sdk": "1.29.0",

@@ -53,9 +53,15 @@ const song: Song = {
   expression: new ExpressionTrail(),
   harmony: [],
   key: null,
+  hands: new Map(),
 };
 
-const part = { simplified: false, melodyRate: 8, tracks: [0] } as const;
+const part = {
+  simplified: false,
+  melodyRate: 8,
+  tracks: [0],
+  hand: null,
+} as const;
 
 function show(theirKeys: () => ReadonlySet<number>) {
   return render(

@@ -1,3 +1,4 @@
+import type { Hand } from "@/lib/midi/hands";
 import { emptyScore, type Judgement, type Score } from "@/lib/scoring/judge";
 import type { Summary } from "@/lib/scoring/summary";
 
@@ -10,6 +11,8 @@ export type MatchMessage =
       readonly simplified?: boolean;
       readonly melodyRate?: number;
       readonly tracks?: readonly number[];
+      /** Absent on a build from before hands split, which reads as both. */
+      readonly hand?: Hand | null;
     }
   /** Sent once a side has unlocked its audio and is set to play, since a
    * browser only starts sound from a tap and both must be armed to stay level. */

@@ -59,6 +59,7 @@ function playSong(parts: readonly PlayPart[]): Song {
     expression: new ExpressionTrail(),
     harmony: [],
     key: null,
+    hands: new Map(),
   };
 }
 

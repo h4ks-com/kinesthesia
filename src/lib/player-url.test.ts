@@ -15,6 +15,7 @@ const song: PlayerParams = {
   speed: 1,
   simplified: false,
   melodyRate: 6,
+  hand: null,
   transpose: 0,
   focus: false,
   skin: null,
@@ -288,5 +289,30 @@ describe("which way the notes travel", () => {
     expect(parse(new URLSearchParams("name=x&url=https://x/a.mid"))?.rise).toBe(
       false,
     );
+  });
+});
+
+describe("the hand a link carries", () => {
+  it("leaves the flag out while both hands play, which is the default", () => {
+    expect(buildPlayerUrl("https://x", "watch", song)).not.toContain("hand=");
+  });
+
+  it("carries a chosen hand, so a shared link arrives the same", () => {
+    const url = buildPlayerUrl("https://x", "watch", { ...song, hand: "left" });
+    expect(url).toContain("hand=left");
+    expect(parse(new URL(url).searchParams)?.hand).toBe("left");
+  });
+
+  it("reads a link without one, or a garbled one, as both hands", () => {
+    expect(
+      parse(new URLSearchParams("name=x&url=https://x/a.mid"))?.hand,
+    ).toBeNull();
+    expect(
+      parse(new URLSearchParams("name=x&url=https://x/a.mid&hand=both"))?.hand,
+    ).toBeNull();
+    expect(
+      parse(new URLSearchParams("name=x&url=https://x/a.mid&hand=nonsense"))
+        ?.hand,
+    ).toBeNull();
   });
 });

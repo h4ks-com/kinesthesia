@@ -49,6 +49,7 @@ const song: Song = {
   expression: new ExpressionTrail(),
   harmony: [],
   key: null,
+  hands: new Map(),
 };
 
 function withLine(line: readonly number[]): Song {
@@ -118,6 +119,10 @@ describe("transposeSong", () => {
 
   it("returns the same song when nothing moves", () => {
     expect(transposeSong(song, 0)).toBe(song);
+  });
+
+  it("carries the hand split unchanged, since a uniform shift keeps every gap between notes the same", () => {
+    expect(transposeSong(song, 5).hands).toBe(song.hands);
   });
 
   it("keeps every note on the keyboard", () => {

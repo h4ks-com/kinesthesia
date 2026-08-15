@@ -14,6 +14,7 @@ const params: PlayerParams = {
   speed: 1,
   simplified: false,
   melodyRate: defaultMelodyRate,
+  hand: null,
   transpose: 0,
   focus: false,
   skin: null,

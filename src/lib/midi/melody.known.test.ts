@@ -75,6 +75,7 @@ function arrangement(
     expression: new ExpressionTrail(),
     harmony: [],
     key: null,
+    hands: new Map(),
   };
 }
 
@@ -147,6 +148,7 @@ describe("reduceToMelody on tunes with a known shape", () => {
       expression: new ExpressionTrail(),
       harmony: [],
       key: null,
+      hands: new Map(),
     };
     const atTuneSpeed: MelodyOptions = {
       tracks: new Set([0]),

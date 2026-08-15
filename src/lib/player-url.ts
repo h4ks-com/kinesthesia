@@ -1,3 +1,4 @@
+import { type Hand, hands } from "@/lib/midi/hands";
 import {
   clampMelodyRate,
   defaultMelodyRate,
@@ -36,6 +37,8 @@ export type PlayerParams = {
    * both sides of a match play the identical line. */
   readonly simplified: boolean;
   readonly melodyRate: MelodyRate;
+  /** Which hand of the chosen tracks to play. Null plays both. */
+  readonly hand: Hand | null;
   /** Semitones the song is moved by, so a part can sit where the hands are. */
   readonly transpose: Transpose;
   /** Strips the page back to the keys and the falling notes, for recording. */
@@ -66,6 +69,7 @@ export type SongSettingKey =
   | "tracks"
   | "simplified"
   | "melodyRate"
+  | "hand"
   | "transpose";
 
 /** A setting a link states outright wins over what the device remembers for
@@ -86,6 +90,9 @@ export function explicitSongSettings(
   if (searchParams.has("rate")) {
     present.add("melodyRate");
   }
+  if (searchParams.has("hand")) {
+    present.add("hand");
+  }
   if (searchParams.has("transpose")) {
     present.add("transpose");
   }
@@ -98,6 +105,10 @@ function readRate(raw: string | null): MelodyRate {
   }
   const value = Number(raw);
   return Number.isFinite(value) ? clampMelodyRate(value) : defaultMelodyRate;
+}
+
+function readHand(raw: string | null): Hand | null {
+  return hands.find((hand) => hand === raw) ?? null;
 }
 
 function readStart(raw: string | null): number {
@@ -159,6 +170,9 @@ export function buildPlayerUrl(
   }
   if (explicit || params.melodyRate !== defaultMelodyRate) {
     target.searchParams.set("rate", String(params.melodyRate));
+  }
+  if (explicit || params.hand !== null) {
+    target.searchParams.set("hand", params.hand ?? "both");
   }
   if (explicit || params.transpose !== defaultTranspose) {
     target.searchParams.set("transpose", String(params.transpose));
@@ -277,6 +291,7 @@ export function parsePlayerParams(
     speed: isSpeed(speed) ? speed : defaultSpeed,
     simplified: searchParams.get("simple") === "1",
     melodyRate: readRate(searchParams.get("rate")),
+    hand: readHand(searchParams.get("hand")),
     transpose: clampTranspose(transpose),
     focus: searchParams.get("focus") === "1",
     rise: searchParams.get("rise") === "1",

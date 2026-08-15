@@ -1,6 +1,7 @@
 import type { Midi } from "@tonejs/midi";
 import { estimateKey, readMidi } from "@/lib/midi/analysis";
 import { ExpressionTrail } from "@/lib/midi/expression";
+import { assignHandsForSong, type HandMap } from "@/lib/midi/hands";
 import { type HarmonySpan, nameChord, rootOf } from "@/lib/midi/harmony";
 import { pedalSpans, releaseAt } from "@/lib/midi/sustain";
 import type { SongKey } from "@/lib/skins/types";
@@ -105,6 +106,9 @@ export type Song = {
   readonly harmony: readonly HarmonySpan[];
   /** The key the whole song sits in, where one fits well enough to say. */
   readonly key: SongKey | null;
+  /** Which hand plays each note, worked out once per track here because both
+   * sides of a match need to land on the identical split. */
+  readonly hands: HandMap;
 };
 
 /** How often the harmony is named. Short enough to catch a chord change, long
@@ -286,6 +290,7 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
     notes: runwayNotes,
     tracks,
     expression,
+    hands: assignHandsForSong(runwayNotes),
   };
 }
 

@@ -1,5 +1,6 @@
 import type { StoredVoicing } from "@/lib/audio/voicing";
 import type { MidiShortcut } from "@/lib/input/midi-shortcuts";
+import type { Hand } from "@/lib/midi/hands";
 import type { Transpose } from "@/lib/midi/song";
 import { defaultKeyWidth } from "@/lib/render/keyboard";
 import type { BackgroundChoice } from "@/lib/skins/backdrop";
@@ -15,6 +16,8 @@ export type SongSettings = {
   readonly melodyRate: number;
   /** Absent on rows written before the song could be moved to another key. */
   readonly transpose?: Transpose;
+  /** Absent on rows written before hands split. */
+  readonly hand?: Hand | null;
 };
 
 /** Settings that belong to the hands and the screen, so they hold across

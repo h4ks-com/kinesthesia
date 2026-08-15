@@ -179,6 +179,8 @@ export function OpponentPanel({
               ? null
               : (rate) => change({ melodyRate: clampMelodyRate(rate) })
           }
+          hand={part?.hand ?? null}
+          onHand={onPart === null ? null : (next) => change({ hand: next })}
           whose="theirs"
           voicing={new Map()}
           onVoicing={null}

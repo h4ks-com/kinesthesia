@@ -54,6 +54,10 @@ const report: Digest = {
     { bars: "1-4", chord: "Bb" },
     { bars: "5-8", chord: "Fm" },
   ],
+  timeline: [
+    { at: 0, chord: "Bb" },
+    { at: 10, chord: "Fm" },
+  ],
 };
 
 type Row = { key: string; [field: string]: unknown };

@@ -279,20 +279,27 @@ export function parseSong(data: ArrayBuffer, name: string): Song {
 
   const key = estimateKey(midi);
   const duration = lastSound + endTail;
+  const harmony = harmonyOf(runwayNotes, duration);
   return {
     name,
     duration,
-    harmony: harmonyOf(runwayNotes, duration),
+    harmony,
     key: key === null ? null : { root: rootOf(key.tonic), mode: key.mode },
     notes: runwayNotes,
     tracks,
     expression,
     // The file's own length leaves out the runway this parser adds at both
     // ends, so reporting it would put a different figure in front of a reader
-    // from the one the clock beside it counts to.
+    // from the one the clock beside it counts to. The timeline is replaced
+    // too: the digest's own is bar-windowed off the raw file, while this one
+    // is named off the same runway- and pedal-aware notes the roll draws.
     report: {
       ...digest(midi, name),
       durationSeconds: Math.round(duration * 10) / 10,
+      timeline: harmony.map((span) => ({
+        at: span.at,
+        chord: span.chord?.name ?? null,
+      })),
     },
     hands: assignHandsForSong(runwayNotes),
   };

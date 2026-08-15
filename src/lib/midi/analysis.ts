@@ -262,6 +262,14 @@ export type HarmonySpan = {
   readonly chord: string;
 };
 
+/** A chord-change point in real seconds rather than a bar number, for a
+ * timeline that draws directly against the clock instead of against the
+ * score. */
+export type TimelineChord = {
+  readonly at: number;
+  readonly chord: string | null;
+};
+
 /** The whole file boiled down to what an agent needs to reason about it, held
  * to a fixed size no matter how many notes the file has: one summary per track
  * and a run-length-encoded chord timeline. The same shape the song info panel,
@@ -282,6 +290,7 @@ export type Digest = {
   /** Notes per second across the whole file, as a sense of how busy it is. */
   readonly density: number;
   readonly harmony: readonly HarmonySpan[];
+  readonly timeline: readonly TimelineChord[];
 };
 
 function noteName(pitch: number): string {
@@ -331,6 +340,19 @@ function harmonyRuns(spans: readonly ChordSpan[]): HarmonySpan[] {
   return runs;
 }
 
+function timelineOf(spans: readonly ChordSpan[]): TimelineChord[] {
+  const points: TimelineChord[] = [];
+  let last: string | null | undefined;
+  for (const span of spans) {
+    if (span.chord === last) {
+      continue;
+    }
+    points.push({ at: span.startSeconds, chord: span.chord });
+    last = span.chord;
+  }
+  return points;
+}
+
 /** A report for a song with nothing to say yet, so a fixture that does not
  * care about tempo, key or chords can still satisfy `Song.report`. */
 export function blankDigest(name: string): Digest {
@@ -347,6 +369,7 @@ export function blankDigest(name: string): Digest {
     highestPitch: 0,
     density: 0,
     harmony: [],
+    timeline: [],
   };
 }
 
@@ -393,6 +416,7 @@ export function digest(midi: Midi, name: string): Digest {
     });
   });
   const durationSeconds = Math.round(midi.duration * 10) / 10;
+  const chordSpans = detectChords(midi);
   return {
     name,
     durationSeconds,
@@ -408,7 +432,8 @@ export function digest(midi: Midi, name: string): Digest {
       durationSeconds <= 0
         ? 0
         : Math.round((totalNotes / durationSeconds) * 10) / 10,
-    harmony: harmonyRuns(detectChords(midi)),
+    harmony: harmonyRuns(chordSpans),
+    timeline: timelineOf(chordSpans),
   };
 }
 

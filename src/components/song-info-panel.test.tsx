@@ -44,6 +44,10 @@ const report: Digest = {
     { bars: "1-4", chord: "C" },
     { bars: "5-8", chord: "G" },
   ],
+  timeline: [
+    { at: 0, chord: "C" },
+    { at: 45, chord: "G" },
+  ],
 };
 
 describe("SongInfoPanel", () => {
@@ -53,7 +57,8 @@ describe("SongInfoPanel", () => {
     );
 
     expect(screen.getByText("Fixture Song")).toBeTruthy();
-    expect(screen.getByText("1:30")).toBeTruthy();
+    // Once as the duration fact, once as the chord timeline's right edge.
+    expect(screen.getAllByText("1:30")).toHaveLength(2);
     expect(screen.getByText("100 bpm")).toBeTruthy();
     expect(screen.getByText("4/4")).toBeTruthy();
     expect(screen.getByText("assumed")).toBeTruthy();
@@ -72,20 +77,20 @@ describe("SongInfoPanel", () => {
     expect(screen.getByText(/C2–C2 · 16/)).toBeTruthy();
   });
 
-  it("lists the chord progression as bar ranges", () => {
+  it("draws the chord progression as a timeline, sized by how long each chord holds", () => {
     render(
       <SongInfoPanel title="Fixture Song" report={report} onClose={vi.fn()} />,
     );
 
-    expect(screen.getByText("1-4")).toBeTruthy();
-    expect(screen.getByText("5-8")).toBeTruthy();
+    expect(screen.getByText("C")).toBeTruthy();
+    expect(screen.getByText("G")).toBeTruthy();
   });
 
   it("says so when no chords were detected", () => {
     render(
       <SongInfoPanel
         title="Fixture Song"
-        report={{ ...report, harmony: [] }}
+        report={{ ...report, timeline: [] }}
         onClose={vi.fn()}
       />,
     );

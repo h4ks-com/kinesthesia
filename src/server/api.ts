@@ -180,6 +180,7 @@ api.openapi(infoRoute, async (c) => {
           range: [track.range[0], track.range[1]],
         })),
         harmony: [...summary.harmony],
+        timeline: [...summary.timeline],
       },
       200,
     );

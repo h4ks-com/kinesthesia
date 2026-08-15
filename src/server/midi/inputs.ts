@@ -65,6 +65,11 @@ const harmonySpanSchema = z.object({
   chord: z.string(),
 });
 
+const timelineChordSchema = z.object({
+  at: z.number().describe("Seconds into the song this chord starts"),
+  chord: z.string().nullable().describe("Null where nothing is sounding"),
+});
+
 /** The whole file boiled down to what a caller needs to reason about it: what
  * the song info panel shows, midi_info reports and GET /api/midi/info returns,
  * so the three read from the same shape. */
@@ -98,5 +103,10 @@ export const digestSchema = z
         "Notes per second across the file, as a sense of how busy it is",
       ),
     harmony: z.array(harmonySpanSchema),
+    timeline: z
+      .array(timelineChordSchema)
+      .describe(
+        "The same progression as chord-change points in real seconds, for drawing a timeline",
+      ),
   })
   .openapi("SongReport");

@@ -107,6 +107,21 @@ describe("detectChords", () => {
   });
 });
 
+describe("digest timeline", () => {
+  it("names each chord change against real seconds rather than bar numbers", () => {
+    const report = digest(
+      build({ bpm: 120, meter: [4, 4], chords: [c, c, g, g] }),
+      "x",
+    );
+    // A 4/4 bar at 120bpm is 2 seconds; the chord holds through bar 1 and
+    // changes at the start of bar 2.
+    expect(report.timeline).toEqual([
+      { at: 0, chord: "CM" },
+      { at: 4, chord: "GM" },
+    ]);
+  });
+});
+
 function twoTrackMidi(): Midi {
   const midi = new Midi();
   const piano = midi.addTrack();

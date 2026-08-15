@@ -129,9 +129,7 @@ test("a shaped song offers to keep the sound, and to drop it", async ({
 
   await expect(page.getByText("Kept on this device")).toBeVisible();
 
-  await page
-    .getByRole("button", { name: "Reset all instruments" })
-    .click();
+  await page.getByRole("button", { name: "Reset all instruments" }).click();
   await expect(page.getByText("Kept on this device")).toHaveCount(0);
 });
 

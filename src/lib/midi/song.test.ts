@@ -96,6 +96,27 @@ describe("parseSong lead-in", () => {
   });
 });
 
+describe("parseSong report timeline", () => {
+  it("names the report's chord timeline off the same harmony the roll reads", () => {
+    const midi = new Midi();
+    const track = midi.addTrack();
+    for (const pitch of [60, 64, 67]) {
+      track.addNote({ midi: pitch, time: 4, duration: 2 });
+    }
+    const parsed = parseSong(midi.toArray().buffer as ArrayBuffer, "x");
+
+    expect(parsed.report.timeline).toEqual(
+      parsed.harmony.map((span) => ({
+        at: span.at,
+        chord: span.chord?.name ?? null,
+      })),
+    );
+    expect(parsed.report.timeline.some((point) => point.chord !== null)).toBe(
+      true,
+    );
+  });
+});
+
 describe("parseSong rejects bad input", () => {
   it("throws on bytes that are not a MIDI", () => {
     expect(() => parseSong(new Uint8Array([1, 2, 3, 4]).buffer, "x")).toThrow(

@@ -76,6 +76,8 @@ src/components/
                               it, put it online
   song-info-panel.tsx         tempo, key, meter, tracks and the chord
                               progression, read off the song already in memory
+  chord-timeline.tsx          the chord progression as a strip against real
+                              time rather than bar numbers, coloured by root
   part-controls.tsx           tracks, simplify, note density and hand for one
                               side
   player-transport.tsx        play, clock, scrubber, speed, key and settings

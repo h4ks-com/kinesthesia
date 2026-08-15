@@ -4,6 +4,7 @@ import { Clock, Drum, Gauge, ListMusic, Music2, Rows3, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { ChordTimeline } from "@/components/chord-timeline";
 import { formatClock } from "@/lib/format/clock";
 import type { Digest } from "@/lib/midi/analysis";
 import { trackColor } from "@/lib/midi/palette";
@@ -167,20 +168,10 @@ export function SongInfoPanel({ title, report, onClose }: SongInfoPanelProps) {
           <ListMusic className="size-3" aria-hidden="true" />
           Chords
         </h3>
-        {report.harmony.length === 0 ? (
-          <p className="text-faint text-xs">No chords detected.</p>
-        ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {report.harmony.map((span) => (
-              <span
-                key={span.bars}
-                className="rounded-md border border-line-strong px-1.5 py-0.5 font-mono text-[0.7rem] text-muted"
-              >
-                <span className="text-faint">{span.bars}</span> {span.chord}
-              </span>
-            ))}
-          </div>
-        )}
+        <ChordTimeline
+          timeline={report.timeline}
+          duration={report.durationSeconds}
+        />
       </div>
     </div>,
     document.body,

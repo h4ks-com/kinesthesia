@@ -85,8 +85,8 @@ test("the notation view follows playback with a smooth, pausable scroll", async 
   await page.goto(`/watch?${playerQuery()}`);
   await expect(page.locator("canvas")).toBeVisible();
 
-  await page.getByRole("button", { name: "Notation view" }).click();
-  await page.getByRole("button", { name: "Full", exact: true }).click();
+  await page.getByRole("button", { name: "View" }).click();
+  await page.getByRole("button", { name: "Sheet only", exact: true }).click();
   const scroller = page.getByTestId("sheet-scroll");
   await expect
     .poll(async () => scroller.locator("svg path").count(), {

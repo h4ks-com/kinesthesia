@@ -9,6 +9,17 @@ import { drawSongMap, pitchSpan } from "@/lib/render/minimap";
  * second to the next, which is what this replaced. */
 const seekStep = 0.05;
 
+/** A keyboard gets its own distances, because one step of the drag resolution
+ * per press would take twenty presses to cross a second. */
+const keySteps: Readonly<Record<string, number>> = {
+  ArrowLeft: -1,
+  ArrowRight: 1,
+  ArrowDown: -1,
+  ArrowUp: 1,
+  PageDown: -10,
+  PageUp: 10,
+};
+
 type SongMinimapProps = {
   song: Song;
   hiddenTracks: ReadonlySet<number>;
@@ -155,6 +166,21 @@ export function SongMinimap({
         value={Math.min(elapsed, duration)}
         disabled={onSeek === null}
         onChange={(event) => onSeek?.(Number(event.target.value))}
+        onKeyDown={(event) => {
+          if (onSeek === null) {
+            return;
+          }
+          const step = keySteps[event.key];
+          const target =
+            step === undefined
+              ? { Home: 0, End: duration }[event.key]
+              : getPosition() + step;
+          if (target === undefined) {
+            return;
+          }
+          event.preventDefault();
+          onSeek(Math.max(0, Math.min(duration, target)));
+        }}
         aria-label="Song position"
         aria-valuetext={formatClock(elapsed)}
         className="absolute inset-0 size-full cursor-pointer appearance-none bg-transparent opacity-0 outline-none disabled:cursor-default"

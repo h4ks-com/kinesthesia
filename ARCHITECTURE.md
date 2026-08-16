@@ -126,7 +126,10 @@ src/lib/
                               so the three can never drift apart
   midi/compose.ts             chord voicing, a 5x7 text font and note primitives
   midi/project.ts             an editable song: beat-timed tracks and the edit ops
-  midi/part.ts                a side's tracks and the notes sounding right now
+  midi/part.ts                a side's tracks, the notes sounding right now,
+                              and a sweep that tracks sounding and next ids
+                              over a moving position without a scan or an
+                              allocation per step
   midi/hands.ts               which hand plays each note of a track, for a
                               file that puts both hands on one
   midi/use-part-roll.ts       a part as the getters the roll draws with
@@ -160,12 +163,17 @@ src/lib/
   sheet/staff-split.ts        notes onto the grand staff by their own pitch
                               median, not a fixed line, and the clef a single
                               line reads best in
-  sheet/notation.ts           quantises onto a 16th note grid, carries each
-                              written moment's heard time through the
-                              reduction, ties notes across a barline, and
-                              writes it all as MusicXML
+  sheet/notation.ts           quantises onto a 16th note grid, ties notes
+                              across a barline and writes it all as MusicXML,
+                              carrying each written note's source ids through
+                              every step
   sheet/convert.ts            the pure song to MusicXML pipeline the tests
-                              exercise directly
+                              exercise directly, and where each written note's
+                              ids and score coordinates are collected
+  sheet/marks.ts              finds a written note again in OSMD's own
+                              graphical model by those coordinates and turns
+                              it into a screen box, once per load, shared by
+                              the live view and the render
   sheet/load.ts               rereads a file's own MIDI for the tempo, meter
                               and key the converter needs, which `Song` does
                               not carry, and picks out the notes the page is
@@ -202,8 +210,10 @@ src/lib/
   render/video.ts             offline video render, WebCodecs with a recorder fallback
   render/sheet.ts             the notation for a render: how the frame is split
                               between notation and notes, the score engraved
-                              once into a bitmap, and the window and two
-                              markers a frame moves over it
+                              once into a bitmap, and the window and the
+                              highlights a frame draws over it, from the same
+                              marks and the same sounding notes the live view
+                              reads
   render/video-support.ts     what this browser can encode, without loading an
                               encoder to find out
   render/handback.ts          a render the address asked for: proving one was
@@ -272,37 +282,43 @@ play.
 
 `src/lib/sheet/` turns a song into MusicXML: `convert.ts` quantises every note
 onto a 16th note grid, spells each pitch from the key `midi/analysis.ts`
-already detects, and writes measures, rests and
-ties across a barline as plain MusicXML 3.1. Every onset earns an event, so a
-note struck while another is still ringing is written into the chord that
-follows rather than dropped, which is busier than an engraver would set it and
-is what lets the cursor stop on every note that sounds. It is pure and knows
-nothing of a
-live song; `load.ts` is the one place that rereads a file's own MIDI for the
-tempo, meter and key `Song` does not carry, and hands the converter the lines
-to write, built from the notes the player says are in front of you, transposed
-and past their runway.
+already detects, and writes measures, rests and ties across a barline as plain
+MusicXML 3.1. Every onset earns an event, so a note struck while another is
+still ringing is written into the chord that follows rather than dropped,
+which is busier than an engraver would set it. Every written note carries the
+source note ids it sounds for, tracked through the quantisation, the staff
+split and the tie splitting, so a tied note owns every chunk the barline cut
+it into. The measure count comes from the last of those written notes rather
+than from the audio's own length, so the score ends where the last note does
+regardless of a tempo change elsewhere in the piece. `convert.ts` is pure and
+knows nothing of a live song; `load.ts` is the one place that rereads a file's
+own MIDI for the tempo, meter and key `Song` does not carry, and hands the
+converter the lines to write, built from the notes the player says are in
+front of you, transposed and past their runway.
 
-OpenSheetMusicDisplay, loaded only once the view opens, draws the MusicXML
-with two of its own cursors: the first highlights the notes sounding now, the
-second sits one onset ahead and marks what comes next as a narrow bar in the
-warning colour, so the two read apart at a glance. Both are steppers with no
-way to seek, so the view keeps an index into the note onsets `convert.ts`
-reports and steps each cursor forward on every animation frame the song's own
-clock has crossed the next onset, resetting and fast-forwarding both back up to
-position on a seek backward. Those onsets are the seconds the notes are heard
-at, carried through the reduction beside their place on the grid: the grid
-holds one tempo because that is what reads well, so it is never the clock a
-performance keeps.
+OpenSheetMusicDisplay, loaded only once the view opens, draws the MusicXML.
+`sheet/marks.ts` then walks it once, matching each written note's part,
+measure, staff and grid position against OSMD's own graphical model to find
+the screen box it was drawn in, keyed by the source ids it belongs to: a tied
+note or a doubled unison can own more than one box. The view has no index and
+does no stepping; every animation frame it asks `midi/part.ts`'s note sweep
+which ids sound now and which come next at the song's own clock position, and
+draws over the boxes those ids own: a wide translucent band on what is
+sounding, a narrow bar in the warning colour on what comes next. A seek is
+just a different set of ids, so nothing needs resetting or fast-forwarding.
+The render (`render/sheet.ts`) shares the same marks and the same sweep, so
+the video a song renders to agrees with what the live view showed.
 
 While the song plays the notation belongs to it: the panel refuses pointer
 input and keeps the current system in view by easing its own scroll toward a
-point a third of the way down rather than jumping to it. Stopped, it belongs to
-the reader, holds wherever they leave it, and moves only to chase a seek.
-OSMD's own built-in follow would fight this over the same scroll position, so
-it stays off, and the panel tells its own scroll apart from one the reader made
-by comparing against the value it last wrote itself. The transport's own
-scrubber is the one seek control; the notation has none of its own.
+point a third of the way down rather than jumping to it, reading the position
+of whichever box is steering follow straight from the marks already found
+rather than measuring the page again. Stopped, it belongs to the reader, holds
+wherever they leave it, and moves only to chase a seek. OSMD's own built-in
+follow would fight this over the same scroll position, so it stays off, and
+the panel tells its own scroll apart from one the reader made by comparing
+against the value it last wrote itself. The transport's own scrubber is the
+one seek control; the notation has none of its own.
 
 A small button in the notation panel's own corner inverts it to dark ink on
 light paper instead of the app's usual light on dark, the way printed

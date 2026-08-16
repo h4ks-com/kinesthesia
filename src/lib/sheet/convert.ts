@@ -2,13 +2,14 @@ import {
   buildInstructions,
   buildMusicXml,
   divisions,
+  type NoteInstruction,
+  type QuantizedNote,
   quantizeNotes,
-  type StaffEvent,
   sequenceStaff,
 } from "@/lib/sheet/notation";
 import { keySpelling } from "@/lib/sheet/spelling";
 import { clefFor, splitStaves } from "@/lib/sheet/staff-split";
-import type { SheetMusic, SheetSource } from "@/lib/sheet/types";
+import type { SheetMusic, SheetSource, WrittenNote } from "@/lib/sheet/types";
 
 const defaultBeats = 4;
 const defaultBeatType = 4;
@@ -17,6 +18,32 @@ const defaultBpm = 120;
 function unitsPerMeasure(beats: number, beatType: number): number {
   const computed = Math.round((beats * divisions * 4) / beatType);
   return computed > 0 ? computed : defaultBeats * divisions;
+}
+
+function lastUnit(notes: readonly QuantizedNote[]): number {
+  return notes.reduce(
+    (last, note) => Math.max(last, note.start + note.duration),
+    0,
+  );
+}
+
+function collectWrittenNotes(
+  out: WrittenNote[],
+  instructions: readonly NoteInstruction[],
+  partIndex: number,
+): void {
+  for (const instruction of instructions) {
+    for (const tone of instruction.tones) {
+      out.push({
+        ids: tone.ids,
+        partIndex,
+        measureIndex: instruction.measureIndex,
+        staff: instruction.staff,
+        positionInMeasure: instruction.positionInMeasure,
+        pitch: tone.pitch,
+      });
+    }
+  }
 }
 
 /** Quantises, splits into staves and serialises a song to MusicXML. Pure: no
@@ -28,47 +55,60 @@ export function songToSheetMusic(source: SheetSource): SheetMusic {
     source.meter.value > 0 ? source.meter.value : defaultBeatType;
   const measureUnits = unitsPerMeasure(beats, beatType);
   const bpm = source.bpm > 0 ? source.bpm : defaultBpm;
-  const unitsPerSecond = (bpm / 60) * divisions;
 
-  const rawUnits = Math.max(1, Math.round(source.duration * unitsPerSecond));
+  const parts = source.parts.length === 0 ? [blankPart] : source.parts;
+  const quantized = parts.map((part) => {
+    if (!part.split) {
+      return { treble: quantizeNotes(part.notes, bpm), bass: [] };
+    }
+    const { treble, bass } = splitStaves(part.notes);
+    return {
+      treble: quantizeNotes(treble, bpm),
+      bass: quantizeNotes(bass, bpm),
+    };
+  });
+
+  // The score ends when the last written note does, not whenever the audio's
+  // own tail happens to run out: a single detected tempo is the grid the
+  // whole converter reads time against, so the last note's own position on
+  // that same grid is the only length that stays self-consistent with it.
+  const rawUnits = Math.max(
+    1,
+    ...quantized.flatMap((one) => [lastUnit(one.treble), lastUnit(one.bass)]),
+  );
   const measureCount = Math.max(1, Math.ceil(rawUnits / measureUnits));
   const totalUnits = measureCount * measureUnits;
 
-  const written = (source.parts.length === 0 ? [blankPart] : source.parts).map(
-    (part) => {
-      if (!part.split) {
-        const events = sequenceStaff(
-          quantizeNotes(part.notes, bpm),
-          totalUnits,
-        );
-        return {
-          part: {
-            name: part.name,
-            clefs: [clefFor(part.notes)],
-            instructions: buildInstructions(events, measureUnits, 1),
-          },
-          events,
-        };
-      }
-      const { treble, bass } = splitStaves(part.notes);
-      const trebleEvents = sequenceStaff(
-        quantizeNotes(treble, bpm),
-        totalUnits,
+  const writtenNotes: WrittenNote[] = [];
+  const writtenParts = parts.map((part, partIndex) => {
+    const { treble, bass } = quantized[partIndex] ?? { treble: [], bass: [] };
+    if (!part.split) {
+      const instructions = buildInstructions(
+        sequenceStaff(treble, totalUnits),
+        measureUnits,
+        1,
       );
-      const bassEvents = sequenceStaff(quantizeNotes(bass, bpm), totalUnits);
-      return {
-        part: {
-          name: part.name,
-          clefs: ["treble", "bass"] as const,
-          instructions: [
-            ...buildInstructions(trebleEvents, measureUnits, 1),
-            ...buildInstructions(bassEvents, measureUnits, 2),
-          ],
-        },
-        events: [...trebleEvents, ...bassEvents],
-      };
-    },
-  );
+      collectWrittenNotes(writtenNotes, instructions, partIndex);
+      return { name: part.name, clefs: [clefFor(part.notes)], instructions };
+    }
+    const trebleInstructions = buildInstructions(
+      sequenceStaff(treble, totalUnits),
+      measureUnits,
+      1,
+    );
+    const bassInstructions = buildInstructions(
+      sequenceStaff(bass, totalUnits),
+      measureUnits,
+      2,
+    );
+    collectWrittenNotes(writtenNotes, trebleInstructions, partIndex);
+    collectWrittenNotes(writtenNotes, bassInstructions, partIndex);
+    return {
+      name: part.name,
+      clefs: ["treble", "bass"] as const,
+      instructions: [...trebleInstructions, ...bassInstructions],
+    };
+  });
 
   const { table, fifths, signature } =
     source.key === null
@@ -82,7 +122,7 @@ export function songToSheetMusic(source: SheetSource): SheetMusic {
     beatType,
     measureCount,
     measureUnits,
-    parts: written.map((one) => one.part),
+    parts: writtenParts,
     table,
     signature,
   });
@@ -90,69 +130,11 @@ export function songToSheetMusic(source: SheetSource): SheetMusic {
   return {
     musicXml,
     partNames:
-      source.parts.length === 0 ? [] : written.map((one) => one.part.name),
-    cursorOnsets: onsetSeconds(
-      written.flatMap((one) => one.events),
-      unitsPerSecond,
-    ),
+      source.parts.length === 0 ? [] : writtenParts.map((one) => one.name),
+    writtenNotes,
   };
 }
 
 /** A song with nothing to write still needs a page, so the panel shows an empty
  * stave rather than failing to draw at all. */
 const blankPart = { name: "Piano", notes: [], split: false } as const;
-
-/** When each written moment is heard. The grid is one tempo because that is
- * what reads well, so it is never the clock: each note anchors its own moment
- * and a rest is placed proportionally between its neighbours. */
-function onsetSeconds(
-  events: readonly StaffEvent[],
-  unitsPerSecond: number,
-): number[] {
-  const anchors = new Map<number, number>();
-  for (const event of events) {
-    if (event.at !== null) {
-      anchors.set(
-        event.start,
-        Math.min(anchors.get(event.start) ?? event.at, event.at),
-      );
-    }
-  }
-  const anchored = [...anchors].sort(([left], [right]) => left - right);
-  const units = [...new Set(events.map((event) => event.start))].sort(
-    (left, right) => left - right,
-  );
-
-  const onsets: number[] = [];
-  let reached = 0;
-  for (const unit of units) {
-    const known = anchors.get(unit);
-    if (known !== undefined) {
-      onsets.push(known);
-      continue;
-    }
-    while (
-      reached < anchored.length &&
-      (anchored[reached]?.[0] ?? Number.POSITIVE_INFINITY) < unit
-    ) {
-      reached += 1;
-    }
-    const before = anchored[reached - 1];
-    const after = anchored[reached];
-    if (before === undefined) {
-      onsets.push(
-        after === undefined
-          ? unit / unitsPerSecond
-          : Math.max(0, after[1] - (after[0] - unit) / unitsPerSecond),
-      );
-      continue;
-    }
-    if (after === undefined) {
-      onsets.push(before[1] + (unit - before[0]) / unitsPerSecond);
-      continue;
-    }
-    const share = (unit - before[0]) / (after[0] - before[0]);
-    onsets.push(before[1] + share * (after[1] - before[1]));
-  }
-  return onsets;
-}

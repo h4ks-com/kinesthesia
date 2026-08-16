@@ -156,6 +156,7 @@ export function RenderMenu({
           theme: sheetTheme,
           colors: sheetColors(sheetTheme),
           music,
+          noteIds: sheetNotes,
         };
   }
 

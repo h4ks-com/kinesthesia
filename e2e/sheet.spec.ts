@@ -39,7 +39,17 @@ test("switching to full replaces the roll with notation alone", async ({
   await expect(page.locator("canvas")).toHaveCount(0);
 });
 
-test("the current and next cursors move as playback advances, one onset apart", async ({
+// Replaces "the current and next cursors move as playback advances, one
+// onset apart": that test pinned the old stepping design, where an index
+// counted onsets and a mismatch between the index and the engraved score
+// desynced silently. The new design has no index to desync: a highlight is
+// drawn for whichever source notes are actually sounding at the read
+// position, found by id. What is worth proving now is that identity, not a
+// step count: nothing highlighted before the music starts, something
+// highlighted once it does, and nothing left highlighted once the score's
+// own last note has stopped sounding, which is also the fix for the score
+// not ending when the music does.
+test("the highlight follows which notes are actually sounding, by identity", async ({
   page,
 }) => {
   await serveFixture(page);
@@ -48,62 +58,39 @@ test("the current and next cursors move as playback advances, one onset apart", 
 
   await openHalf(page);
   const sheet = page.getByTestId("sheet-view");
-  const now = sheet.locator("img").first();
-  const next = sheet.locator("img").nth(1);
-  await expect(now).toBeAttached({ timeout: 15_000 });
-  await expect(next).toBeAttached();
+  await expect
+    .poll(async () => sheet.locator("svg path").count(), { timeout: 15_000 })
+    .toBeGreaterThan(20);
+
+  const nowMarks = sheet.locator('[data-testid="sheet-mark-now"]:visible');
+  const nextMarks = sheet.locator('[data-testid="sheet-mark-next"]:visible');
+  const seek = page.getByRole("slider", { name: "Song position" });
+
+  // Before the runway's first note, nothing sounds, so nothing reads as
+  // sounding; what comes next still does.
+  await seek.fill("0");
+  await expect.poll(() => nowMarks.count()).toBe(0);
+  await expect.poll(() => nextMarks.count()).toBeGreaterThan(0);
 
   // The two read as distinct markers: a wide highlight on what is sounding,
-  // a short line on what comes next, so they are never the same shape.
-  const nowBox = await now.boundingBox();
-  const nextBox = await next.boundingBox();
+  // a narrow bar on what comes next, so they are never the same shape.
+  const nextBox = await nextMarks.first().boundingBox();
+  expect(nextBox?.height ?? 0).toBeGreaterThan(40);
+
+  // Well inside the fixture's first notes (the runway shifts the whole file
+  // 2.5s forward), something is now sounding.
+  await seek.fill("2.6");
+  await expect.poll(() => nowMarks.count()).toBeGreaterThan(0);
+  const nowBox = await nowMarks.first().boundingBox();
   expect(nowBox?.width ?? 0).toBeGreaterThan(nextBox?.width ?? 0);
-  expect(nextBox?.x ?? 0).toBeGreaterThan(nowBox?.x ?? 0);
+  expect(nowBox?.height ?? 0).toBeCloseTo(nextBox?.height ?? 0, 0);
 
-  // A stylesheet rule for images outranks the `height` attribute OSMD sizes
-  // its cursors with, which leaves a marker one pixel tall.
-  expect(nowBox?.height ?? 0).toBeGreaterThan(40);
-  expect(nextBox?.height ?? 0).toBeCloseTo(nowBox?.height ?? 0, 0);
-
-  const seek = page.getByRole("slider", { name: "Song position" });
-  const leftOf = (marker: typeof now): Promise<number> =>
-    marker.evaluate((node) => Number.parseFloat(node.style.left));
-  // A seek lands on a later frame than the fill that asked for it, so a
-  // reading taken straight after one can still be the position it is leaving.
-  // Two readings that agree are a marker that has arrived.
-  const settled = async (marker: typeof now): Promise<number> => {
-    let last = Number.NaN;
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      const reading = await leftOf(marker);
-      if (reading === last) {
-        return reading;
-      }
-      last = reading;
-      await page.waitForTimeout(120);
-    }
-    return last;
-  };
-
-  await seek.fill("0");
-  const startLeft = await settled(now);
-  const promised = await settled(next);
-
-  // Crept forward rather than played, so the reading lands on the first onset
-  // crossed instead of wherever playback had reached by the time it was read.
-  // In steps small enough that no one of them can cross two onsets: the
-  // closest this fixture writes two are an eighth of a second apart, and a
-  // coarser creep would land two notes on and read as the gap this is here to
-  // measure. The step matches the slider's own, which refuses a finer one.
-  for (let at = 1; at <= 80; at += 1) {
-    await seek.fill(String(Number((at * 0.05).toFixed(2))));
-    if ((await leftOf(now)) !== startLeft) {
-      break;
-    }
-  }
-
-  // One note on, what is sounding stands where the marker for what was coming
-  // stood. Two onsets apart, this lands a note short.
-  expect(await settled(now)).toBeCloseTo(promised, 1);
+  // Past the last note's own sound, the score has nothing left to mark: it
+  // ends when the music does rather than running on with an empty highlight.
+  const max = await seek.getAttribute("max");
+  await seek.fill(String(max));
+  await expect.poll(() => nowMarks.count()).toBe(0);
+  await expect.poll(() => nextMarks.count()).toBe(0);
 });
 
 test("the notation belongs to the music while it plays and to the reader once it stops", async ({

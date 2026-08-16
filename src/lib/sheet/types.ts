@@ -1,6 +1,10 @@
 import type { Mode } from "@/lib/midi/analysis";
 
 export type SheetNote = {
+  /** The source note this came from, carried through quantisation, the
+   * staff split and tie splitting so a written note can be found again by
+   * what it sounds for rather than by when the engraver happened to stop. */
+  readonly id: number;
   readonly pitch: number;
   readonly start: number;
   readonly duration: number;
@@ -30,19 +34,32 @@ export type SheetPart = {
 export type SheetSource = {
   readonly title: string;
   readonly parts: readonly SheetPart[];
-  readonly duration: number;
   readonly bpm: number;
   readonly meter: SheetMeter;
   readonly key: SheetKey | null;
+};
+
+/** Where one written note lives on the page, and which source notes it
+ * sounds for. A tied note keeps the same ids across every chunk the barline
+ * or a long duration split it into, which is what lets a still-sounding note
+ * be found on whichever chunk is on screen. Coordinates are the converter's
+ * own: `partIndex` into `partNames`, `staff` 1 or 2, and `positionInMeasure`
+ * in 16th-note units, so a page that has actually rendered this MusicXML can
+ * find the same note again in its own graphical model. */
+export type WrittenNote = {
+  readonly ids: readonly number[];
+  readonly partIndex: number;
+  readonly measureIndex: number;
+  readonly staff: 1 | 2;
+  readonly positionInMeasure: number;
+  readonly pitch: number;
 };
 
 export type SheetMusic = {
   readonly musicXml: string;
   /** What each written line is played by, in the order they are written. */
   readonly partNames: readonly string[];
-  /** Seconds at which the OSMD cursor should step forward: one entry per
-   * distinct onset across both staves, ascending, including rests. */
-  readonly cursorOnsets: readonly number[];
+  readonly writtenNotes: readonly WrittenNote[];
 };
 
 /** How much of the screen the notation takes: none, half alongside the

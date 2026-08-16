@@ -1,4 +1,12 @@
 import type { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
+import { createNoteSweep } from "@/lib/midi/part";
+import type { SongNote } from "@/lib/midi/song";
+import {
+  buildMarks,
+  nextMarkWidth,
+  nowMarkWidth,
+  type ScoreMark,
+} from "@/lib/sheet/marks";
 import type { SheetColors } from "@/lib/sheet/theme";
 import type { NotationView, SheetMusic, SheetTheme } from "@/lib/sheet/types";
 
@@ -10,6 +18,9 @@ export type RenderNotation = {
   readonly theme: SheetTheme;
   readonly colors: SheetColors;
   readonly music: SheetMusic;
+  /** Which of the song's own notes this score was written for, so a render
+   * finds the same notes sounding the screen did. */
+  readonly noteIds: ReadonlySet<number>;
 };
 
 export type Region = {
@@ -72,44 +83,19 @@ export function easedScroll(
   return current + (target - current) * (1 - Math.exp(-stepMs / followTauMs));
 }
 
-/** The written moment being heard at this position, walked on from the one
- * before it so a frame costs a step rather than a scan. */
-export function onsetIndexAt(
-  onsets: readonly number[],
-  position: number,
-  from: number,
-): number {
-  let index = position < (onsets[from] ?? 0) ? 0 : from;
-  while (
-    index + 1 < onsets.length &&
-    position >= (onsets[index + 1] ?? Number.POSITIVE_INFINITY)
-  ) {
-    index += 1;
-  }
-  return index;
-}
-
-/** Where a written moment stands on the engraved score, in the score's own
- * coordinates. Both markers share it: the engraver places them alike and each
- * carries its own width in the image it is drawn from. */
-type Mark = {
-  readonly x: number;
-  readonly y: number;
-  readonly height: number;
-};
-
 export type SheetPainter = {
-  /** Blits the window of the score the current moment sits in, with the marker
-   * on what is sounding and the one on what comes next. */
+  /** Blits the window of the score the current moment sits in, with the
+   * highlight on what is sounding and the one on what comes next. */
   draw(ctx: CanvasRenderingContext2D, position: number, stepMs: number): void;
   dispose(): void;
 };
 
 /** Engraves the whole score once at render resolution and hands back something
- * that only moves a window and two markers over it per frame. Null where the
- * engraver drew nothing, which leaves the render on the falling notes. */
+ * that only moves a window and two highlights over it per frame. Null where
+ * the engraver drew nothing, which leaves the render on the falling notes. */
 export async function sheetPainter(
   notation: RenderNotation,
+  notes: readonly SongNote[],
   region: Region,
 ): Promise<SheetPainter | null> {
   const host = document.createElement("div");
@@ -124,13 +110,23 @@ export async function sheetPainter(
     if (score === null || score.width === 0 || score.height === 0) {
       return null;
     }
-    const marks = readMarks(osmd, notation.music.cursorOnsets.length);
-    const now = await cursorImage(osmd.cursor.cursorElement);
-    const next = await cursorImage(osmd.cursors[1]?.cursorElement ?? null);
+    const marks = buildMarks(osmd, notation.music.writtenNotes);
+    const nowWidth = nowMarkWidth(osmd.zoom);
+    const nextWidth = nextMarkWidth(osmd.zoom);
+    const relevant = notes.filter((note) => notation.noteIds.has(note.id));
+    const sweep = createNoteSweep(relevant);
     // Kept as a bitmap rather than as a page: nothing is laid out again, and
     // the document is free of the score for the length of the render.
     score.remove();
-    return painterOver(score, marks, now, next, notation, region);
+    return painterOver(
+      score,
+      marks,
+      nowWidth,
+      nextWidth,
+      sweep,
+      notation,
+      region,
+    );
   } finally {
     host.remove();
   }
@@ -140,9 +136,7 @@ async function engrave(
   host: HTMLDivElement,
   notation: RenderNotation,
 ): Promise<OpenSheetMusicDisplay> {
-  const { OpenSheetMusicDisplay, CursorType } = await import(
-    "opensheetmusicdisplay"
-  );
+  const { OpenSheetMusicDisplay } = await import("opensheetmusicdisplay");
   const { colors } = notation;
   const osmd = new OpenSheetMusicDisplay(host, {
     // A canvas leaves the engraver as pixels a frame can blit, where the svg
@@ -153,93 +147,58 @@ async function engrave(
     drawComposer: false,
     followCursor: false,
     defaultColorMusic: colors.music,
-    cursorsOptions: [
-      {
-        type: CursorType.Standard,
-        color: colors.cursor,
-        alpha: colors.cursorAlpha,
-        follow: false,
-      },
-      {
-        type: CursorType.ThinLeft,
-        color: colors.next,
-        alpha: colors.nextAlpha,
-        follow: false,
-      },
-    ],
   });
   await osmd.load(notation.music.musicXml);
   osmd.render();
-  osmd.cursor.show();
-  osmd.cursors[1]?.show();
   return osmd;
 }
 
-/** Walks the cursor over the whole score once, so every frame after this is a
- * lookup. One mark per written moment, in the order the panel steps them. */
-function readMarks(osmd: OpenSheetMusicDisplay, count: number): Mark[] {
-  const marks: Mark[] = [];
-  osmd.cursor.reset();
-  for (let index = 0; index < count; index += 1) {
-    marks.push(markOf(osmd.cursor.cursorElement));
-    osmd.cursor.next();
+function firstMark(
+  ids: ReadonlySet<number>,
+  marks: ReadonlyMap<number, readonly ScoreMark[]>,
+): ScoreMark | null {
+  for (const id of ids) {
+    const box = marks.get(id)?.[0];
+    if (box !== undefined) {
+      return box;
+    }
   }
-  return marks;
-}
-
-/** Sized off the attribute rather than off `height`, which answers with what an
- * element in a document is rendered at: the engraver draws a one pixel tall
- * image and stretches it to the staff, so the stylesheet's own
- * `img { height: auto }` reset would report every marker one pixel tall. */
-function markOf(element: HTMLImageElement): Mark {
-  return {
-    x: Number.parseFloat(element.style.left) || 0,
-    y: Number.parseFloat(element.style.top) || 0,
-    height: Number.parseFloat(element.getAttribute("height") ?? "") || 0,
-  };
-}
-
-/** The marker exactly as the panel wears it: the engraver hands each cursor out
- * as a one pixel tall gradient already carrying its colour and its
- * transparency, so a render stretches that rather than mixing its own. */
-async function cursorImage(
-  element: HTMLImageElement | null,
-): Promise<HTMLImageElement | null> {
-  const source = element?.src ?? "";
-  if (source === "") {
-    return null;
-  }
-  const image = new Image();
-  image.src = source;
-  await image.decode();
-  return image;
+  return null;
 }
 
 function painterOver(
   score: HTMLCanvasElement,
-  marks: readonly Mark[],
-  now: HTMLImageElement | null,
-  next: HTMLImageElement | null,
+  marks: ReadonlyMap<number, readonly ScoreMark[]>,
+  nowWidth: number,
+  nextWidth: number,
+  sweep: ReturnType<typeof createNoteSweep>,
   notation: RenderNotation,
   region: Region,
 ): SheetPainter {
-  const onsets = notation.music.cursorOnsets;
-  const { paper } = notation.colors;
+  const { paper, cursor, cursorAlpha, next, nextAlpha } = notation.colors;
   // The engraver lays the score down at the display's own density, so its
-  // pixels are that much finer than the coordinates its cursors stand in.
+  // pixels are that much finer than the coordinates its marks stand in.
   const width = Number.parseFloat(score.style.width) || score.width;
   const density = score.width / width;
   const contentHeight = score.height / density;
   let scroll = 0;
-  let index = 0;
+  let lastPosition = Number.NEGATIVE_INFINITY;
+  const rewindSlack = 0.05;
   return {
     draw(ctx, position, stepMs) {
-      index = onsetIndexAt(onsets, position, index);
-      const mark = marks[index] ?? null;
-      if (mark !== null) {
+      if (position + rewindSlack < lastPosition) {
+        sweep.seek(position);
+      } else {
+        sweep.advance(position);
+      }
+      lastPosition = position;
+
+      const primary =
+        firstMark(sweep.sounding, marks) ?? firstMark(sweep.next, marks);
+      if (primary !== null) {
         scroll = easedScroll(
           scroll,
-          sheetScrollTarget(mark.y, region.height, contentHeight),
+          sheetScrollTarget(primary.top, region.height, contentHeight),
           stepMs,
         );
       }
@@ -260,8 +219,28 @@ function painterOver(
         region.width,
         region.height,
       );
-      paintMark(ctx, now, mark, region, scroll);
-      paintMark(ctx, next, marks[index + 1] ?? null, region, scroll);
+      paintGroup(
+        ctx,
+        sweep.sounding,
+        marks,
+        region,
+        scroll,
+        nowWidth,
+        cursor,
+        cursorAlpha,
+        true,
+      );
+      paintGroup(
+        ctx,
+        sweep.next,
+        marks,
+        region,
+        scroll,
+        nextWidth,
+        next,
+        nextAlpha,
+        false,
+      );
       ctx.restore();
     },
     dispose(): void {
@@ -271,21 +250,55 @@ function painterOver(
   };
 }
 
-function paintMark(
+function paintGroup(
   ctx: CanvasRenderingContext2D,
-  image: HTMLImageElement | null,
-  mark: Mark | null,
+  ids: ReadonlySet<number>,
+  marks: ReadonlyMap<number, readonly ScoreMark[]>,
   region: Region,
   scroll: number,
+  width: number,
+  color: string,
+  alpha: number,
+  faded: boolean,
 ): void {
-  if (image === null || mark === null || mark.height === 0) {
+  for (const id of ids) {
+    const boxes = marks.get(id);
+    if (boxes === undefined) {
+      continue;
+    }
+    for (const box of boxes) {
+      paintBox(ctx, box, region, scroll, width, color, alpha, faded);
+    }
+  }
+}
+
+function paintBox(
+  ctx: CanvasRenderingContext2D,
+  box: ScoreMark,
+  region: Region,
+  scroll: number,
+  width: number,
+  color: string,
+  alpha: number,
+  faded: boolean,
+): void {
+  if (box.height === 0) {
     return;
   }
-  ctx.drawImage(
-    image,
-    region.x + mark.x,
-    region.y + mark.y - scroll,
-    image.naturalWidth,
-    mark.height,
-  );
+  const x = region.x + box.left;
+  const y = region.y + box.top - scroll;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  if (faded) {
+    const gradient = ctx.createLinearGradient(x, 0, x + width, 0);
+    gradient.addColorStop(0, "transparent");
+    gradient.addColorStop(0.2, color);
+    gradient.addColorStop(0.8, color);
+    gradient.addColorStop(1, "transparent");
+    ctx.fillStyle = gradient;
+  } else {
+    ctx.fillStyle = color;
+  }
+  ctx.fillRect(x, y, width, box.height);
+  ctx.restore();
 }

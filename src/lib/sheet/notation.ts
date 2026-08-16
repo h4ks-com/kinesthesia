@@ -7,12 +7,10 @@ import type { SheetNote } from "@/lib/sheet/types";
 export const divisions = 4;
 
 export type QuantizedNote = {
+  readonly id: number;
   readonly pitch: number;
   readonly start: number;
   readonly duration: number;
-  /** When the note sounds, in seconds, carried alongside its place on the
-   * grid. */
-  readonly at: number;
 };
 
 /** Snaps note starts and durations onto the 16th-note grid. Tempo changes are
@@ -31,24 +29,43 @@ export function quantizeNotes(
       Math.round((note.start + note.duration) * unitsPerSecond),
     );
     quantized.push({
+      id: note.id,
       pitch: note.pitch,
       start,
       duration: end - start,
-      at: note.start,
     });
   }
   return quantized;
 }
 
+/** One written pitch of a chord and every source note it sounds for: more
+ * than one where a doubled unison collapsed onto the same written pitch. */
+export type ChordTone = {
+  readonly pitch: number;
+  readonly ids: readonly number[];
+};
+
 export type StaffEvent = {
   readonly start: number;
   readonly duration: number;
   /** Empty for a rest. */
-  readonly pitches: readonly number[];
-  /** When this sounds, in seconds. Null for a rest, which is a gap the writing
-   * needs and not a moment anything is heard at. */
-  readonly at: number | null;
+  readonly tones: readonly ChordTone[];
 };
+
+function tonesOf(sounding: readonly QuantizedNote[]): ChordTone[] {
+  const idsByPitch = new Map<number, number[]>();
+  for (const note of sounding) {
+    const ids = idsByPitch.get(note.pitch);
+    if (ids === undefined) {
+      idsByPitch.set(note.pitch, [note.id]);
+    } else {
+      ids.push(note.id);
+    }
+  }
+  return [...idsByPitch.entries()]
+    .sort(([left], [right]) => right - left)
+    .map(([pitch, ids]) => ({ pitch, ids }));
+}
 
 /**
  * Reduces a staff's quantized notes to one timeline of chords and rests
@@ -63,7 +80,7 @@ export function sequenceStaff(
   totalUnits: number,
 ): StaffEvent[] {
   if (notes.length === 0) {
-    return [{ start: 0, duration: totalUnits, pitches: [], at: null }];
+    return [{ start: 0, duration: totalUnits, tones: [] }];
   }
   const onsets = [...new Set(notes.map((note) => note.start))].sort(
     (left, right) => left - right,
@@ -90,17 +107,12 @@ export function sequenceStaff(
     if (bound <= cursor) {
       continue;
     }
-    let startedHere: number | null = null;
     while (admitted < byStart.length) {
       const note = byStart[admitted];
       if (note === undefined || note.start > cursor) {
         break;
       }
       sounding.push(note);
-      if (note.start === cursor) {
-        startedHere =
-          startedHere === null ? note.at : Math.min(startedHere, note.at);
-      }
       admitted += 1;
     }
     for (let index = sounding.length - 1; index >= 0; index -= 1) {
@@ -112,10 +124,7 @@ export function sequenceStaff(
     events.push({
       start: cursor,
       duration: bound - cursor,
-      pitches: [...new Set(sounding.map((note) => note.pitch))].sort(
-        (left, right) => right - left,
-      ),
-      at: startedHere,
+      tones: tonesOf(sounding),
     });
     cursor = bound;
   }
@@ -123,8 +132,7 @@ export function sequenceStaff(
     events.push({
       start: cursor,
       duration: totalUnits - cursor,
-      pitches: [],
-      at: null,
+      tones: [],
     });
   }
   return events;
@@ -166,7 +174,9 @@ export function decomposeDuration(units: number): number[] {
 
 export type NoteInstruction = {
   readonly measureIndex: number;
-  readonly pitches: readonly number[];
+  /** Offset within the measure, in the same 16th-note units as the grid. */
+  readonly positionInMeasure: number;
+  readonly tones: readonly ChordTone[];
   readonly durationUnits: number;
   /** Sound continues into a later chunk of the same original event. */
   readonly tieStart: boolean;
@@ -177,7 +187,10 @@ export type NoteInstruction = {
 
 /** Splits a staff's events at measure boundaries, then further at standard
  * note values within a measure, tying every chunk of one original event back
- * together whichever boundary caused the split. */
+ * together whichever boundary caused the split. Every chunk keeps the tones
+ * (and so the source ids) of the event it was split from, which is what lets
+ * a note tied across a barline be found by identity on whichever chunk is on
+ * screen. */
 export function buildInstructions(
   events: readonly StaffEvent[],
   measureUnits: number,
@@ -187,23 +200,34 @@ export function buildInstructions(
   for (const event of events) {
     let pos = event.start;
     let remaining = event.duration;
-    const values: { measureIndex: number; duration: number }[] = [];
+    const values: {
+      measureIndex: number;
+      positionInMeasure: number;
+      duration: number;
+    }[] = [];
     while (remaining > 0) {
       const measureIndex = Math.floor(pos / measureUnits);
       const offset = pos - measureIndex * measureUnits;
       const room = measureUnits - offset;
       const boundaryChunk = Math.min(remaining, room);
+      let withinBoundary = offset;
       for (const value of decomposeDuration(boundaryChunk)) {
-        values.push({ measureIndex, duration: value });
+        values.push({
+          measureIndex,
+          positionInMeasure: withinBoundary,
+          duration: value,
+        });
+        withinBoundary += value;
       }
       pos += boundaryChunk;
       remaining -= boundaryChunk;
     }
-    const isRest = event.pitches.length === 0;
+    const isRest = event.tones.length === 0;
     values.forEach((value, index) => {
       out.push({
         measureIndex: value.measureIndex,
-        pitches: event.pitches,
+        positionInMeasure: value.positionInMeasure,
+        tones: event.tones,
         durationUnits: value.duration,
         tieStart: !isRest && index < values.length - 1,
         tieStop: !isRest && index > 0,
@@ -266,7 +290,7 @@ function noteXml(
   const notationsXml =
     tiedXml === "" ? "" : `<notations>${tiedXml}</notations>`;
 
-  if (instruction.pitches.length === 0) {
+  if (instruction.tones.length === 0) {
     return (
       "<note><rest/>" +
       `<duration>${instruction.durationUnits}</duration>` +
@@ -274,8 +298,8 @@ function noteXml(
       `<staff>${instruction.staff}</staff></note>`
     );
   }
-  return instruction.pitches
-    .map((pitch, index) => {
+  return instruction.tones
+    .map(({ pitch }, index) => {
       const spelled = spellPitch(pitch, table);
       const chordXml = index === 0 ? "" : "<chord/>";
       const alterXml =

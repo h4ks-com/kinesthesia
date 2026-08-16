@@ -211,6 +211,10 @@ test("a sheet only render fills the picture and follows the music", async ({
   await chooseView(page, "Sheet only");
 
   const file = await renderVideo(page);
+  // Nothing has sounded yet this early in the runway, so only what comes
+  // next is marked: a highlight on what is sounding is drawn for a note
+  // that is actually sounding, not for a clock position with nothing to
+  // show for it.
   const opening = await pictureFrom(page, file, 0.2, 1);
   const later = await pictureFrom(page, file, 6, 1);
   const [notation = 0, lower = 0, keyboard = 0] = later.rows;
@@ -220,11 +224,12 @@ test("a sheet only render fills the picture and follows the music", async ({
   expect(keyboard).toBeLessThan(90);
   expect(later.bright).toBeGreaterThan(2000);
   expect(later.cursor).not.toBeNull();
-  expect(opening.cursor).not.toBeNull();
+  expect(opening.nextMark).not.toBeNull();
   // The marker has walked the score, or the score has walked under it.
+  const openingMark = opening.cursor ?? opening.nextMark;
   const moved =
-    Math.abs((later.cursor?.x ?? 0) - (opening.cursor?.x ?? 0)) +
-    Math.abs((later.cursor?.y ?? 0) - (opening.cursor?.y ?? 0));
+    Math.abs((later.cursor?.x ?? 0) - (openingMark?.x ?? 0)) +
+    Math.abs((later.cursor?.y ?? 0) - (openingMark?.y ?? 0));
   expect(moved).toBeGreaterThan(20);
 });
 

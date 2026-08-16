@@ -66,13 +66,13 @@ export async function loadSheetMusic(
         percussion: track.percussion,
       })),
       notes: chosen.map((note) => ({
+        id: note.id,
         track: note.track,
         pitch: note.pitch,
         start: note.start,
         duration: note.end - note.start,
       })),
     }),
-    duration: song.duration,
     bpm: tempo.bpm,
     meter: { beats: meter.beats, value: meter.value },
     key:

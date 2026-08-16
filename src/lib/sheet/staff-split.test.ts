@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import { splitStaves } from "@/lib/sheet/staff-split";
 import type { SheetNote } from "@/lib/sheet/types";
 
+let nextId = 0;
+
 function noteAt(pitch: number, start = 0, duration = 1): SheetNote {
-  return { pitch, start, duration };
+  nextId += 1;
+  return { id: nextId, pitch, start, duration };
 }
 
 describe("splitStaves", () => {

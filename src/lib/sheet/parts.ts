@@ -40,6 +40,7 @@ export function sheetParts(input: PartsInput): SheetPart[] {
   for (const note of heard) {
     const kept = byTrack.get(note.track) ?? [];
     kept.push({
+      id: note.id,
       pitch: note.pitch,
       start: note.start,
       duration: note.duration,

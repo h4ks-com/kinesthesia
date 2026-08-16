@@ -4,19 +4,33 @@ import type { SheetNote, SheetPart, SheetSource } from "@/lib/sheet/types";
 
 const bpm120Meter44 = { bpm: 120, meter: { beats: 4, value: 4 } } as const;
 
+type NoteInput = {
+  readonly pitch: number;
+  readonly start: number;
+  readonly duration: number;
+  readonly id?: number;
+};
+
 type SourceOverrides = Partial<Omit<SheetSource, "parts">> & {
-  readonly notes?: readonly SheetNote[];
+  readonly notes?: readonly NoteInput[];
   readonly parts?: readonly SheetPart[];
 };
 
 /** One piano read across a grand staff unless a test says otherwise, which is
- * the shape every case here was written against. */
+ * the shape every case here was written against. Notes that do not care about
+ * their own id get one from their position, so most cases can still write a
+ * plain pitch/start/duration literal. */
 function baseSource(overrides: SourceOverrides = {}): SheetSource {
   const { notes = [], parts, ...rest } = overrides;
+  const withIds: SheetNote[] = notes.map((note, index) => ({
+    id: note.id ?? index,
+    pitch: note.pitch,
+    start: note.start,
+    duration: note.duration,
+  }));
   return {
     title: "Test Song",
-    parts: parts ?? [{ name: "Piano", notes, split: true }],
-    duration: 2,
+    parts: parts ?? [{ name: "Piano", notes: withIds, split: true }],
     key: null,
     ...bpm120Meter44,
     ...rest,
@@ -48,8 +62,8 @@ describe("songToSheetMusic", () => {
   });
 
   it("produces one valid whole-rest measure for an empty song", () => {
-    const { musicXml, cursorOnsets } = songToSheetMusic(
-      baseSource({ notes: [], duration: 0 }),
+    const { musicXml, writtenNotes } = songToSheetMusic(
+      baseSource({ notes: [] }),
     );
     const doc = parse(musicXml);
     const list = measures(doc);
@@ -61,18 +75,20 @@ describe("songToSheetMusic", () => {
     expect(bassRests).toHaveLength(1);
     expect(trebleRests[0]?.querySelector("rest")).not.toBeNull();
     expect(trebleRests[0]?.querySelector("type")?.textContent).toBe("whole");
-    expect(cursorOnsets).toEqual([0]);
+    expect(writtenNotes).toEqual([]);
   });
 
-  it("infers enough measures to cover the song's duration at its tempo", () => {
-    // 120bpm 4/4: one measure is 2 seconds. A 5 second song needs 3 measures.
-    const { musicXml } = songToSheetMusic(baseSource({ duration: 5 }));
+  it("infers enough measures to cover the last note actually played", () => {
+    // 120bpm 4/4: one measure is 2 seconds. A note ending at 4.5s needs 3.
+    const { musicXml } = songToSheetMusic(
+      baseSource({ notes: [{ pitch: 60, start: 4.4, duration: 0.1 }] }),
+    );
     expect(measures(parse(musicXml))).toHaveLength(3);
   });
 
   it("writes the time signature from the detected meter", () => {
     const { musicXml } = songToSheetMusic(
-      baseSource({ meter: { beats: 3, value: 4 }, duration: 3 }),
+      baseSource({ meter: { beats: 3, value: 4 } }),
     );
     const doc = parse(musicXml);
     const time = doc.querySelector("attributes > time");
@@ -82,10 +98,7 @@ describe("songToSheetMusic", () => {
 
   it("writes a rest for a gap before the first note", () => {
     const { musicXml } = songToSheetMusic(
-      baseSource({
-        notes: [{ pitch: 72, start: 1, duration: 1 }],
-        duration: 2,
-      }),
+      baseSource({ notes: [{ pitch: 72, start: 1, duration: 1 }] }),
     );
     const doc = parse(musicXml);
     const treble = notesOf(measures(doc)[0] as Element, 1);
@@ -101,7 +114,6 @@ describe("songToSheetMusic", () => {
         key: { tonic: "F", mode: "major" },
         // A Bb (MIDI 70), diatonic in F major.
         notes: [{ pitch: 70, start: 0, duration: 1 }],
-        duration: 2,
       }),
     );
     const doc = parse(musicXml);
@@ -122,7 +134,6 @@ describe("songToSheetMusic", () => {
         key: { tonic: "F", mode: "major" },
         // B natural (MIDI 71) contradicts F major's printed Bb.
         notes: [{ pitch: 71, start: 0, duration: 1 }],
-        duration: 2,
       }),
     );
     const doc = parse(musicXml);
@@ -137,7 +148,6 @@ describe("songToSheetMusic", () => {
         key: { tonic: "C", mode: "major" },
         // C# (MIDI 61) is chromatic in C major.
         notes: [{ pitch: 61, start: 0, duration: 1 }],
-        duration: 2,
       }),
     );
     const doc = parse(musicXml);
@@ -152,10 +162,7 @@ describe("songToSheetMusic", () => {
     // at unit 16 (1 second before the second measure's start at 2s... the
     // measure boundary itself sits at t=2s, unit 16).
     const { musicXml } = songToSheetMusic(
-      baseSource({
-        notes: [{ pitch: 60, start: 1.75, duration: 0.5 }],
-        duration: 3,
-      }),
+      baseSource({ notes: [{ pitch: 60, start: 1.75, duration: 0.5 }] }),
     );
     const doc = parse(musicXml);
     const list = measures(doc);
@@ -181,9 +188,7 @@ describe("songToSheetMusic", () => {
   });
 
   it("keeps a rest from ever carrying a tie", () => {
-    const { musicXml } = songToSheetMusic(
-      baseSource({ notes: [], duration: 3 }),
-    );
+    const { musicXml } = songToSheetMusic(baseSource({ notes: [] }));
     const doc = parse(musicXml);
     for (const rest of doc.querySelectorAll("part > measure note:has(rest)")) {
       expect(rest.querySelector("tie")).toBeNull();
@@ -197,7 +202,6 @@ describe("songToSheetMusic", () => {
           { pitch: 36, start: 0, duration: 1 },
           { pitch: 84, start: 0, duration: 1 },
         ],
-        duration: 2,
       }),
     );
     const doc = parse(musicXml);
@@ -214,23 +218,6 @@ describe("songToSheetMusic", () => {
     expect(bassPitched[0]?.querySelector("octave")?.textContent).toBe("2");
   });
 
-  it("reports cursor onsets in ascending order covering both staves", () => {
-    const { cursorOnsets } = songToSheetMusic(
-      baseSource({
-        notes: [
-          { pitch: 60, start: 0, duration: 1 },
-          { pitch: 36, start: 0.5, duration: 1 },
-        ],
-        duration: 2,
-      }),
-    );
-    expect(cursorOnsets).toEqual(
-      [...cursorOnsets].sort((left, right) => left - right),
-    );
-    expect(cursorOnsets[0]).toBe(0);
-    expect(cursorOnsets).toContain(0.5);
-  });
-
   it("stacks simultaneous notes into a chord in the XML", () => {
     const { musicXml } = songToSheetMusic(
       baseSource({
@@ -245,7 +232,6 @@ describe("songToSheetMusic", () => {
           { pitch: 76, start: 0, duration: 1 },
           { pitch: 79, start: 0, duration: 1 },
         ],
-        duration: 2,
       }),
     );
     const doc = parse(musicXml);
@@ -289,149 +275,111 @@ describe("a song whose name is markup", () => {
   });
 });
 
-// The cursor used to be timed off the written grid at one tempo, so it walked
-// away from the music: a note quantised onto the grid is not heard when it is
-// written, and a song that changes tempo drifts further with every change.
-describe("when each written moment is heard", () => {
-  it("times a chord from when it sounds, not from where it is written", () => {
-    // Played late against the grid, the way a rolled or rubato chord is.
-    const { cursorOnsets } = songToSheetMusic(
-      baseSource({
-        notes: [
-          { pitch: 60, start: 0, duration: 0.5 },
-          { pitch: 72, start: 1.37, duration: 0.5 },
-        ],
-        duration: 4,
-      }),
+// The identity design: every written note carries the source note ids it
+// sounds for, found again by a page that has rendered this MusicXML rather
+// than by counting onsets against a clock.
+describe("written notes carry the id of the source note they sound for", () => {
+  it("keeps a single note's id on its one written note", () => {
+    const { writtenNotes } = songToSheetMusic(
+      baseSource({ notes: [{ id: 42, pitch: 60, start: 0, duration: 1 }] }),
     );
-
-    expect(cursorOnsets).toContain(1.37);
+    expect(writtenNotes).toHaveLength(1);
+    expect(writtenNotes[0]?.ids).toEqual([42]);
+    expect(writtenNotes[0]?.pitch).toBe(60);
+    expect(writtenNotes[0]?.staff).toBe(1);
+    expect(writtenNotes[0]?.measureIndex).toBe(0);
   });
 
-  it("keeps up with playing that does not sit on the grid", () => {
-    // Times no 16th-note grid at this tempo lands on, which is what rubato and
-    // a tempo change both produce. Reading the clock off the grid rounds every
-    // one of these to the wrong moment.
-    const notes = [0, 0.47, 0.91, 1.33, 1.52, 1.68, 1.81].map((start) => ({
-      pitch: 60,
-      start,
-      duration: 0.2,
-    }));
-
-    const { cursorOnsets } = songToSheetMusic(
-      baseSource({ notes, duration: 3 }),
-    );
+  it("keeps each overlapping note's own id, however they overlap", () => {
+    const notes = [
+      { id: 1, pitch: 60, start: 0, duration: 3 },
+      { id: 2, pitch: 64, start: 0.4, duration: 2 },
+      { id: 3, pitch: 67, start: 0.75, duration: 0.2 },
+      { id: 4, pitch: 72, start: 1.1, duration: 0.9 },
+    ];
+    const { writtenNotes } = songToSheetMusic(baseSource({ notes }));
 
     for (const note of notes) {
       expect(
-        cursorOnsets.some((onset) => Math.abs(onset - note.start) < 0.001),
+        writtenNotes.some((written) => written.ids.includes(note.id)),
       ).toBe(true);
     }
   });
 
-  it("places a rest between the notes it falls between", () => {
-    const { cursorOnsets } = songToSheetMusic(
+  it("puts a note tied across a barline on more than one written note", () => {
+    const { writtenNotes } = songToSheetMusic(
+      baseSource({ notes: [{ id: 9, pitch: 60, start: 1.75, duration: 0.5 }] }),
+    );
+    const owned = writtenNotes.filter((written) => written.ids.includes(9));
+    expect(owned.length).toBeGreaterThanOrEqual(2);
+    expect(owned.map((written) => written.measureIndex).sort()).toEqual([0, 1]);
+  });
+
+  it("groups a doubled unison's ids onto the one written pitch", () => {
+    const { writtenNotes } = songToSheetMusic(
       baseSource({
         notes: [
-          { pitch: 60, start: 0, duration: 0.25 },
-          { pitch: 64, start: 2, duration: 0.25 },
+          { id: 1, pitch: 60, start: 0, duration: 1 },
+          { id: 2, pitch: 60, start: 0, duration: 1 },
         ],
-        duration: 4,
       }),
     );
-
-    const between = cursorOnsets.filter((onset) => onset > 0 && onset < 2);
-    for (const onset of between) {
-      expect(onset).toBeGreaterThan(0);
-      expect(onset).toBeLessThan(2);
-    }
-    expect(cursorOnsets).toEqual([...cursorOnsets].sort((a, b) => a - b));
+    expect(writtenNotes).toHaveLength(1);
+    expect([...(writtenNotes[0]?.ids ?? [])].sort()).toEqual([1, 2]);
   });
 
-  // Overlapping notes are how a piano is played, so a reduction that dropped
-  // them left the cursor with nothing to stand on for a third of a real piece.
-  it("gives every note a moment to be marked, however they overlap", () => {
-    const notes = [
-      { pitch: 60, start: 0, duration: 3 },
-      { pitch: 64, start: 0.4, duration: 2 },
-      { pitch: 67, start: 0.75, duration: 0.2 },
-      { pitch: 72, start: 1.1, duration: 0.9 },
-      { pitch: 48, start: 0.2, duration: 2.5 },
-      { pitch: 55, start: 1.6, duration: 0.3 },
-    ];
-    const { cursorOnsets } = songToSheetMusic(
-      baseSource({ notes, duration: 4 }),
-    );
-
-    for (const note of notes) {
-      const nearest = Math.min(
-        ...cursorOnsets.map((onset) => Math.abs(onset - note.start)),
-      );
-      expect(nearest).toBeLessThan(0.001);
-    }
-  });
-});
-
-describe("a song of several instruments", () => {
-  const band: readonly SheetPart[] = [
-    {
-      name: "Lead",
-      notes: [{ pitch: 72, start: 0, duration: 1 }],
-      split: false,
-    },
-    {
-      name: "Bass",
-      notes: [{ pitch: 40, start: 0, duration: 1 }],
-      split: false,
-    },
-  ];
-
-  it("writes one line each rather than one player's two hands", () => {
-    const { musicXml } = songToSheetMusic(baseSource({ parts: band }));
-    const doc = parse(musicXml);
-    expect(doc.querySelectorAll("part-list > score-part")).toHaveLength(2);
-    expect(doc.querySelectorAll("score-partwise > part")).toHaveLength(2);
-    for (const part of doc.querySelectorAll("score-partwise > part")) {
-      expect(part.querySelector("attributes > staves")?.textContent).toBe("1");
-    }
-  });
-
-  it("names each line after the instrument playing it", () => {
-    const { musicXml } = songToSheetMusic(baseSource({ parts: band }));
-    const names = [
-      ...parse(musicXml).querySelectorAll("score-part > part-name"),
-    ].map((name) => name.textContent);
-    expect(names).toEqual(["Lead", "Bass"]);
-  });
-
-  // An instrument sitting low is written where a reader expects to find it.
-  it("gives a line the clef its register asks for", () => {
-    const { musicXml } = songToSheetMusic(baseSource({ parts: band }));
-    const signs = [...parse(musicXml).querySelectorAll("clef > sign")].map(
-      (sign) => sign.textContent,
-    );
-    expect(signs).toEqual(["G", "F"]);
-  });
-
-  it("marks every instrument's moment for the cursor", () => {
-    const { cursorOnsets } = songToSheetMusic(
+  it("keeps a hand's id on whichever staff the split puts it on", () => {
+    const { writtenNotes } = songToSheetMusic(
       baseSource({
-        parts: [
-          {
-            name: "Lead",
-            notes: [{ pitch: 72, start: 0.5, duration: 0.5 }],
-            split: false,
-          },
-          {
-            name: "Bass",
-            notes: [{ pitch: 40, start: 1.25, duration: 0.5 }],
-            split: false,
-          },
+        notes: [
+          { id: 1, pitch: 84, start: 0, duration: 1 },
+          { id: 2, pitch: 36, start: 0, duration: 1 },
         ],
       }),
     );
-    expect(cursorOnsets).toContain(0.5);
-    expect(cursorOnsets).toContain(1.25);
-    expect(cursorOnsets).toEqual([...cursorOnsets].sort((a, b) => a - b));
+    const treble = writtenNotes.find((written) => written.ids.includes(1));
+    const bass = writtenNotes.find((written) => written.ids.includes(2));
+    expect(treble?.staff).toBe(1);
+    expect(bass?.staff).toBe(2);
+  });
+
+  it("marks every instrument's own part index", () => {
+    const band: readonly SheetPart[] = [
+      {
+        name: "Lead",
+        notes: [{ id: 10, pitch: 72, start: 0.5, duration: 0.5 }],
+        split: false,
+      },
+      {
+        name: "Bass",
+        notes: [{ id: 20, pitch: 40, start: 1.25, duration: 0.5 }],
+        split: false,
+      },
+    ];
+    const { writtenNotes } = songToSheetMusic(baseSource({ parts: band }));
+    expect(
+      writtenNotes.find((written) => written.ids.includes(10))?.partIndex,
+    ).toBe(0);
+    expect(
+      writtenNotes.find((written) => written.ids.includes(20))?.partIndex,
+    ).toBe(1);
+  });
+
+  // A single detected tempo is one grid every note in the file reads time
+  // against; a note whose real timestamp falls late for that grid is exactly
+  // what a tempo change elsewhere in the piece produces, and the score used to
+  // size itself off the audio's own wall-clock length instead of that grid,
+  // so a late-enough note could fall past the last measure and go unwritten.
+  it("ends the score when the last note does, however a tempo change shaped it", () => {
+    // 60bpm 4/4: one measure is 4 seconds. A note whose grid position falls
+    // at 7.9s needs a second measure it would not get from a shorter duration
+    // read off real time alone.
+    const { writtenNotes } = songToSheetMusic(
+      baseSource({
+        bpm: 60,
+        notes: [{ id: 5, pitch: 60, start: 7.9, duration: 0.3 }],
+      }),
+    );
+    expect(writtenNotes.some((written) => written.ids.includes(5))).toBe(true);
   });
 });

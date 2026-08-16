@@ -5,8 +5,11 @@ const piano = { index: 0, name: "Piano", percussion: false };
 const bass = { index: 1, name: "Bass", percussion: false };
 const drums = { index: 9, name: "Drums", percussion: true };
 
+let nextId = 0;
+
 function note(track: number, pitch: number, start: number) {
-  return { track, pitch, start, duration: 0.5 };
+  nextId += 1;
+  return { id: nextId, track, pitch, start, duration: 0.5 };
 }
 
 describe("sheetParts", () => {

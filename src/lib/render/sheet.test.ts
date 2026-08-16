@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   easedScroll,
-  onsetIndexAt,
   sceneRegions,
   sheetScrollTarget,
 } from "@/lib/render/sheet";
@@ -75,32 +74,5 @@ describe("easedScroll", () => {
     }
     expect(scroll).toBeGreaterThan(760);
     expect(scroll).toBeLessThan(800);
-  });
-});
-
-describe("onsetIndexAt", () => {
-  const onsets = [0, 0.5, 1, 2];
-
-  it("holds the first moment until the second is heard", () => {
-    expect(onsetIndexAt(onsets, 0, 0)).toBe(0);
-    expect(onsetIndexAt(onsets, 0.49, 0)).toBe(0);
-    expect(onsetIndexAt(onsets, 0.5, 0)).toBe(1);
-  });
-
-  it("walks on from where the last frame left off", () => {
-    expect(onsetIndexAt(onsets, 1.5, 2)).toBe(2);
-    expect(onsetIndexAt(onsets, 2, 2)).toBe(3);
-  });
-
-  it("stays on the last moment past the end of the score", () => {
-    expect(onsetIndexAt(onsets, 99, 3)).toBe(3);
-  });
-
-  it("finds its way back when the position lands behind the pointer", () => {
-    expect(onsetIndexAt(onsets, 0.6, 3)).toBe(1);
-  });
-
-  it("answers zero for a score with no written moments", () => {
-    expect(onsetIndexAt([], 4, 0)).toBe(0);
   });
 });

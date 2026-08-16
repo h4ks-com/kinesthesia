@@ -2,6 +2,7 @@ import type {
   GraphicalStaffEntry,
   OpenSheetMusicDisplay,
 } from "opensheetmusicdisplay";
+import { divisions } from "@/lib/sheet/notation";
 import type { WrittenNote } from "@/lib/sheet/types";
 
 /** A written note's box on the engraved page, in the host's own pixel space:
@@ -18,10 +19,9 @@ export type ScoreMark = {
  * `Cursor.updateWidthAndStyle` uses this same factor. */
 const pixelsPerUnit = 10;
 
-/** `relInMeasureTimestamp` is a fraction of a whole note; the converter's own
- * grid is 16th notes (`divisions` in notation.ts), so a whole note is 16
- * units. */
-const unitsPerWholeNote = 16;
+/** `relInMeasureTimestamp` is a fraction of a whole note, and the converter
+ * counts `divisions` units to a quarter. */
+const unitsPerWholeNote = divisions * 4;
 
 /** Close enough to call the same grid position once floating point has been
  * through a `Fraction`'s `RealValue` and back. */

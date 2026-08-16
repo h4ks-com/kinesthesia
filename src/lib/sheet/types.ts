@@ -44,8 +44,9 @@ export type SheetSource = {
  * or a long duration split it into, which is what lets a still-sounding note
  * be found on whichever chunk is on screen. Coordinates are the converter's
  * own: `partIndex` into `partNames`, `staff` 1 or 2, and `positionInMeasure`
- * in 16th-note units, so a page that has actually rendered this MusicXML can
- * find the same note again in its own graphical model. */
+ * in the notation grid's own units (`divisions` to a quarter note), so a page
+ * that has actually rendered this MusicXML can find the same note again in its
+ * own graphical model. */
 export type WrittenNote = {
   readonly ids: readonly number[];
   readonly partIndex: number;

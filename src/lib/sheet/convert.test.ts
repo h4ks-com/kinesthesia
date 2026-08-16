@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { songToSheetMusic } from "@/lib/sheet/convert";
-import { voicesPerStaff } from "@/lib/sheet/notation";
+import { meterGrid, voicesPerStaff } from "@/lib/sheet/notation";
 import type { SheetNote, SheetPart, SheetSource } from "@/lib/sheet/types";
 
 const bpm120Meter44 = { bpm: 120, meter: { beats: 4, value: 4 } } as const;
@@ -349,12 +349,13 @@ describe("voices", () => {
       ]),
     );
     const doc = parse(musicXml);
+    const measureUnits = meterGrid(4, 4).measureUnits;
     for (const measure of measures(doc)) {
       const { covered, lowest, end } = replayMeasure(measure);
       expect(lowest).toBe(0);
-      expect(end).toBe(16);
+      expect(end).toBe(measureUnits);
       for (const units of covered.values()) {
-        expect(units).toBe(16);
+        expect(units).toBe(measureUnits);
       }
     }
   });

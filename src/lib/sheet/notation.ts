@@ -29,10 +29,10 @@ export type Grid = {
 const simpleBeatParts = [1, 2, 4, 8] as const;
 const compoundBeatParts = [1, 3, 6, 12] as const;
 
-/** 6/8, 9/8 and 12/8 are felt in dotted beats, so one beat there is three of
- * the written value rather than one. */
+/** 3/8, 6/8, 9/8 and 12/8 are felt in dotted beats, so one beat there is three
+ * of the written value rather than one, and a 3/8 bar is one beamed group. */
 function isCompound(beats: number, beatType: number): boolean {
-  return beatType >= 8 && beats >= 6 && beats % 3 === 0;
+  return beatType >= 8 && beats >= 3 && beats % 3 === 0;
 }
 
 export function meterGrid(beats: number, beatType: number): Grid {

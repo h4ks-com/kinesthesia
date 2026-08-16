@@ -37,6 +37,97 @@ export function soundingPitches(
   return pitches;
 }
 
+/** Which ids sound at a moving position, and which come next, without
+ * allocating on every step: both Sets are mutated in place, which is what
+ * lets a per-frame highlight stay a lookup rather than a scan. */
+export type NoteSweep = {
+  readonly sounding: ReadonlySet<number>;
+  /** The very next attack after the current position, several ids where it
+   * is a chord. Empty past the last one. */
+  readonly next: ReadonlySet<number>;
+  /** Moves ahead to a position no earlier than the last one seen. */
+  advance(position: number): void;
+  /** Jumps to an arbitrary position, forward or back. */
+  seek(position: number): void;
+};
+
+type SweepEvent = {
+  readonly at: number;
+  readonly id: number;
+  readonly starts: boolean;
+};
+
+export function createNoteSweep(notes: readonly SongNote[]): NoteSweep {
+  const events: SweepEvent[] = [];
+  for (const note of notes) {
+    events.push({ at: note.start, id: note.id, starts: true });
+    events.push({ at: note.end, id: note.id, starts: false });
+  }
+  events.sort((left, right) => left.at - right.at);
+  const attackTimes = [...new Set(notes.map((note) => note.start))].sort(
+    (left, right) => left - right,
+  );
+
+  const sounding = new Set<number>();
+  const next = new Set<number>();
+  let eventIndex = 0;
+  let attackIndex = 0;
+
+  function fillNext(): void {
+    next.clear();
+    const at = attackTimes[attackIndex];
+    if (at === undefined) {
+      return;
+    }
+    for (const note of notes) {
+      if (note.start === at) {
+        next.add(note.id);
+      }
+    }
+  }
+
+  function reset(): void {
+    sounding.clear();
+    eventIndex = 0;
+    attackIndex = 0;
+    fillNext();
+  }
+  reset();
+
+  function advance(position: number): void {
+    while ((events[eventIndex]?.at ?? Number.POSITIVE_INFINITY) <= position) {
+      const event = events[eventIndex];
+      if (event === undefined) {
+        break;
+      }
+      if (event.starts) {
+        sounding.add(event.id);
+      } else {
+        sounding.delete(event.id);
+      }
+      eventIndex += 1;
+    }
+    let advanced = false;
+    while ((attackTimes[attackIndex] ?? Number.POSITIVE_INFINITY) <= position) {
+      attackIndex += 1;
+      advanced = true;
+    }
+    if (advanced) {
+      fillNext();
+    }
+  }
+
+  return {
+    sounding,
+    next,
+    advance,
+    seek(position: number): void {
+      reset();
+      advance(position);
+    },
+  };
+}
+
 /** Which channels have a note sounding at the position, skipping hidden ones,
  * so the track list can light what is playing. */
 export function soundingTracks(

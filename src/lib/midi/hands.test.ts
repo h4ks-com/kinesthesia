@@ -187,3 +187,62 @@ describe("looksTwoHanded", () => {
     expect(looksTwoHanded(notes)).toBe(false);
   });
 });
+
+// A small interval is one hand's to hold, and nothing about a third or a fifth
+// argues for dividing it between two.
+describe("a small interval belongs to one hand", () => {
+  it("keeps a third in one hand rather than dividing it", () => {
+    const low = note(60, 0);
+    const high = note(63, 0);
+    const assigned = assignHands([low, high]);
+    expect(assigned.get(low.id)).toBe(assigned.get(high.id));
+  });
+
+  it("keeps each half of the Clair de Lune opening in its own hand", () => {
+    // Two low notes then two high ones, a bar apart, the way the piece opens.
+    const lowPair = [note(53, 0.625), note(56, 0.625)];
+    const highPair = [note(65, 1.25), note(68, 1.25)];
+    const assigned = assignHands([...lowPair, ...highPair]);
+
+    const lowHands = lowPair.map((one) => assigned.get(one.id));
+    const highHands = highPair.map((one) => assigned.get(one.id));
+    expect(new Set(lowHands).size).toBe(1);
+    expect(new Set(highHands).size).toBe(1);
+    expect(lowHands[0]).toBe("left");
+    expect(highHands[0]).toBe("right");
+  });
+
+  it("keeps a repeated two note figure in one hand across the phrase", () => {
+    const figures = [0, 0.5, 1, 1.5, 2].map((start) => [
+      note(60, start),
+      note(64, start),
+    ]);
+    const assigned = assignHands(figures.flat());
+    for (const [low, high] of figures) {
+      expect(assigned.get(low?.id ?? 0)).toBe(assigned.get(high?.id ?? 0));
+    }
+  });
+});
+
+// A chord struck as a roll arrives one note at a time. Everything downstream
+// reads a chord low to high, so the grouping has to put it back in that order.
+describe("a rolled chord", () => {
+  it("splits the same way whether it is struck together or rolled", () => {
+    const together = assignHands([note(43, 0), note(79, 0)]);
+    const rolled = [note(79, 0), note(43, 0.01)];
+    const assigned = assignHands(rolled);
+    expect(assigned.get(rolled[1]?.id ?? 0)).toBe("left");
+    expect(assigned.get(rolled[0]?.id ?? 0)).toBe("right");
+    expect([...together.values()].sort()).toEqual(
+      [...assigned.values()].sort(),
+    );
+  });
+
+  it("still reads as two handed when its notes arrive apart", () => {
+    const rolled: SongNote[] = [];
+    for (let index = 0; index < 8; index += 1) {
+      rolled.push(note(84, index * 0.5), note(40, index * 0.5 + 0.01));
+    }
+    expect(looksTwoHanded(rolled)).toBe(true);
+  });
+});

@@ -60,6 +60,17 @@ export async function loadSheetMusic(
   const keyEstimate = estimateKey(midi);
 
   const chosen = song.notes.filter((note) => noteIds.has(note.id));
+  // The player holds a song back a couple of seconds so its first notes have
+  // somewhere to fall from, which is a runway on screen and nothing at all in
+  // the music. Written into the score it lands every note off the beat by
+  // whatever fraction of a bar those seconds happen to be, and every duration
+  // then breaks into tied fragments. The page starts where the music does; the
+  // highlight follows notes by identity, so it needs no shared clock.
+  const opening = chosen.reduce(
+    (earliest, note) => Math.min(earliest, note.start),
+    Number.POSITIVE_INFINITY,
+  );
+  const fromMusicStart = Number.isFinite(opening) ? opening : 0;
 
   return songToSheetMusic({
     title,
@@ -73,7 +84,7 @@ export async function loadSheetMusic(
         id: note.id,
         track: note.track,
         pitch: note.pitch,
-        start: note.start,
+        start: note.start - fromMusicStart,
         duration: note.end - note.start,
       })),
     }),

@@ -144,6 +144,31 @@ describe("songToSheetMusic", () => {
     }
   });
 
+  // A file of plain quarter notes has to come out as plain quarter notes. Any
+  // constant offset in the note times, a lead in the player added for instance,
+  // lands every note off the beat and shatters each one into tied fragments.
+  it("writes plain quarter notes as quarter notes", () => {
+    const quarters = Array.from({ length: 16 }, (_value, index) => ({
+      id: index,
+      pitch: 60 + (index % 5),
+      // 120bpm: a quarter is half a second.
+      start: index * 0.5,
+      duration: 0.5,
+    }));
+    const { musicXml } = songToSheetMusic(
+      baseSource({ parts: [{ name: "Piano", notes: quarters, split: false }] }),
+    );
+    const doc = parse(musicXml);
+    const pitched = [...doc.querySelectorAll("note")].filter(
+      (note) => note.querySelector("rest") === null,
+    );
+    expect(pitched).toHaveLength(quarters.length);
+    expect(doc.querySelectorAll("tie")).toHaveLength(0);
+    for (const note of pitched) {
+      expect(note.querySelector("type")?.textContent).toBe("quarter");
+    }
+  });
+
   it("infers enough measures to cover the last note actually played", () => {
     // 120bpm 4/4: one measure is 2 seconds. A note ending at 4.5s needs 3.
     const { musicXml } = songToSheetMusic(

@@ -39,6 +39,16 @@ type LoadState =
   | { readonly status: "ready"; readonly sheet: SheetMusic }
   | { readonly status: "failed"; readonly message: string };
 
+/** Resolves once the browser has had a frame to draw what was just set. The
+ * first frame commits React's render; the second is when it is on screen. */
+function painted(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
 function sheetButtonClass(theme: SheetTheme): string {
   const surface =
     theme === "light"
@@ -274,6 +284,11 @@ function Notation({
   const savePdf = async (): Promise<void> => {
     setSaving(true);
     try {
+      // Engraving holds the main thread, and the second press finds the module
+      // already loaded, so its import resolves in a microtask and the work
+      // starts before the browser has painted anything. A frame first is what
+      // puts the spinner on screen.
+      await painted();
       const { downloadSheetPdf } = await import("@/lib/sheet/export-pdf");
       await downloadSheetPdf(sheet, title);
     } finally {

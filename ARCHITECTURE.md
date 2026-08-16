@@ -166,11 +166,13 @@ src/lib/
                               them, once any chord in the part actually needs
                               two, and the clef a single line reads best in
                               by the middle of its own range
-  sheet/notation.ts           quantises onto a 16th note grid, separates a
-                              staff into voices so overlapping notes each get
-                              written once, ties notes across a barline and
-                              writes it all as MusicXML, carrying each written
-                              note's source ids through every step
+  sheet/notation.ts           reads the meter into a grid, quantises each beat
+                              onto the subdivision its own onsets show,
+                              separates a staff into voices so overlapping
+                              notes each get written once, splits durations at
+                              beats, beams by beat and writes it all as
+                              MusicXML, carrying each written note's source ids
+                              through every step
   sheet/convert.ts            the pure song to MusicXML pipeline the tests
                               exercise directly, and where each written note's
                               ids and score coordinates are collected
@@ -287,10 +289,38 @@ player assigns them. Silencing a track takes its line off the page, and
 learning writes only the part you owe, so what you read is what you have to
 play.
 
-`src/lib/sheet/` turns a song into MusicXML: `convert.ts` quantises every note
-onto a 16th note grid, spells each pitch from the key `midi/analysis.ts`
-already detects, and writes measures, rests and ties across a barline as plain
-MusicXML 3.1. Each staff is separated into up to four voices, streams where no
+`src/lib/sheet/` turns a song into MusicXML: `convert.ts` quantises every note,
+spells each pitch from the key `midi/analysis.ts` already detects, and writes
+measures, rests, beams and ties across a barline as plain MusicXML 3.1.
+
+The meter is read into a grid first: how many units a measure and a beat hold,
+where a compound meter like 9/8 is felt in dotted quarters rather than in its
+written eighths. Everything downstream measures against that one description.
+The grid counts 24 units to a quarter note, the smallest count that writes a
+32nd, a dotted 16th and an eighth-note triplet all exactly, so the values music
+uses are representable rather than rounded to. Triplets are not written yet:
+they need `<time-modification>` and `<tuplet>`, and the grid is sized to take
+them when they are.
+
+Rounding every note onto the finest grid available writes rhythms nobody can
+read, so quantising is a judgement instead. Each beat of the score takes the
+coarsest subdivision that still explains the onsets landing in it, scored by
+how far those onsets have to move plus the subdivision's own part count. That
+count is what keeps a chord's spread attacks on one stem while still letting a
+beat of real 32nds be written as 32nds. The subdivision is chosen once from
+every note the score will carry, because two hands and two instruments striking
+one beat have to land on the same ruler or the page shows them apart.
+
+Durations are split by reading the beat before the note: one that fills a beat
+is written once, one that starts inside a beat stops at the end of it, and one
+that starts on a beat may only run over further beats whole. Silence has no
+stem to read the beat off, so a rest is written beat by beat unless it takes
+the whole measure. Beams group by the same beat, broken by a rest and by
+anything a quarter note or longer; a beam line spanning one note alone is
+written as a hook, which is how a dotted eighth and its sixteenth beam
+together.
+
+Each staff is separated into up to four voices, streams where no
 two notes sound at once, so a note held under a moving line is written once for
 the length it really sounds instead of restated every time the line moves. A
 note joins the first voice free when it starts, preferring the one whose last

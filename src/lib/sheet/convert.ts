@@ -1,8 +1,10 @@
 import {
+  beatSteps,
   buildInstructions,
   buildMusicXml,
-  divisions,
   fillGaps,
+  type Grid,
+  meterGrid,
   type NoteInstruction,
   type QuantizedNote,
   quantizeNotes,
@@ -13,14 +15,7 @@ import { keySpelling } from "@/lib/sheet/spelling";
 import { clefFor, splitStaves } from "@/lib/sheet/staff-split";
 import type { SheetMusic, SheetSource, WrittenNote } from "@/lib/sheet/types";
 
-const defaultBeats = 4;
-const defaultBeatType = 4;
 const defaultBpm = 120;
-
-function unitsPerMeasure(beats: number, beatType: number): number {
-  const computed = Math.round((beats * divisions * 4) / beatType);
-  return computed > 0 ? computed : defaultBeats * divisions;
-}
 
 function lastUnit(notes: readonly QuantizedNote[]): number {
   return notes.reduce(
@@ -51,13 +46,13 @@ function collectWrittenNotes(
 function staffInstructions(
   notes: readonly QuantizedNote[],
   totalUnits: number,
-  measureUnits: number,
+  grid: Grid,
   staff: 1 | 2,
 ): NoteInstruction[] {
   return separateVoices(notes).flatMap((events, index) =>
     buildInstructions(
       fillGaps(events, totalUnits),
-      measureUnits,
+      grid,
       staff,
       voiceNumber(staff, index),
     ),
@@ -68,21 +63,23 @@ function staffInstructions(
  * MIDI parsing or tempo detection happens here, so it is testable with plain
  * note lists. */
 export function songToSheetMusic(source: SheetSource): SheetMusic {
-  const beats = source.meter.beats > 0 ? source.meter.beats : defaultBeats;
-  const beatType =
-    source.meter.value > 0 ? source.meter.value : defaultBeatType;
-  const measureUnits = unitsPerMeasure(beats, beatType);
+  const grid = meterGrid(source.meter.beats, source.meter.value);
   const bpm = source.bpm > 0 ? source.bpm : defaultBpm;
 
   const parts = source.parts.length === 0 ? [blankPart] : source.parts;
+  const steps = beatSteps(
+    parts.flatMap((part) => [...part.notes]),
+    bpm,
+    grid,
+  );
   const quantized = parts.map((part) => {
     if (!part.split) {
-      return { treble: quantizeNotes(part.notes, bpm), bass: [] };
+      return { treble: quantizeNotes(part.notes, steps), bass: [] };
     }
     const { treble, bass } = splitStaves(part.notes);
     return {
-      treble: quantizeNotes(treble, bpm),
-      bass: quantizeNotes(bass, bpm),
+      treble: quantizeNotes(treble, steps),
+      bass: quantizeNotes(bass, steps),
     };
   });
 
@@ -94,34 +91,19 @@ export function songToSheetMusic(source: SheetSource): SheetMusic {
     1,
     ...quantized.flatMap((one) => [lastUnit(one.treble), lastUnit(one.bass)]),
   );
-  const measureCount = Math.max(1, Math.ceil(rawUnits / measureUnits));
-  const totalUnits = measureCount * measureUnits;
+  const measureCount = Math.max(1, Math.ceil(rawUnits / grid.measureUnits));
+  const totalUnits = measureCount * grid.measureUnits;
 
   const writtenNotes: WrittenNote[] = [];
   const writtenParts = parts.map((part, partIndex) => {
     const { treble, bass } = quantized[partIndex] ?? { treble: [], bass: [] };
     if (!part.split) {
-      const instructions = staffInstructions(
-        treble,
-        totalUnits,
-        measureUnits,
-        1,
-      );
+      const instructions = staffInstructions(treble, totalUnits, grid, 1);
       collectWrittenNotes(writtenNotes, instructions, partIndex);
       return { name: part.name, clefs: [clefFor(part.notes)], instructions };
     }
-    const trebleInstructions = staffInstructions(
-      treble,
-      totalUnits,
-      measureUnits,
-      1,
-    );
-    const bassInstructions = staffInstructions(
-      bass,
-      totalUnits,
-      measureUnits,
-      2,
-    );
+    const trebleInstructions = staffInstructions(treble, totalUnits, grid, 1);
+    const bassInstructions = staffInstructions(bass, totalUnits, grid, 2);
     collectWrittenNotes(writtenNotes, trebleInstructions, partIndex);
     collectWrittenNotes(writtenNotes, bassInstructions, partIndex);
     return {
@@ -139,10 +121,8 @@ export function songToSheetMusic(source: SheetSource): SheetMusic {
   const musicXml = buildMusicXml({
     title: source.title,
     fifths,
-    beats,
-    beatType,
+    grid,
     measureCount,
-    measureUnits,
     parts: writtenParts,
     table,
     signature,

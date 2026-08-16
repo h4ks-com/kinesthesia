@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { songToSheetMusic } from "@/lib/sheet/convert";
-import { voicesPerStaff } from "@/lib/sheet/notation";
+import { meterGrid, voicesPerStaff } from "@/lib/sheet/notation";
 import type { SheetNote, SheetPart, SheetSource } from "@/lib/sheet/types";
 
 const bpm120Meter44 = { bpm: 120, meter: { beats: 4, value: 4 } } as const;
@@ -262,6 +262,34 @@ describe("songToSheetMusic", () => {
     expect(bassPitched[0]?.querySelector("octave")?.textContent).toBe("2");
   });
 
+  it("beams a beat of sixteenths and stops the beam at the beat", () => {
+    // 120bpm 4/4: a 16th is 0.125s, so eight of them fill the first two beats.
+    const { musicXml } = songToSheetMusic(
+      baseSource({
+        notes: Array.from({ length: 8 }, (_one, index) => ({
+          pitch: 72,
+          start: index * 0.125,
+          duration: 0.125,
+        })),
+      }),
+    );
+    const doc = parse(musicXml);
+    const beams = [...doc.querySelectorAll('note beam[number="1"]')].map(
+      (beam) => beam.textContent,
+    );
+    expect(beams).toEqual([
+      "begin",
+      "continue",
+      "continue",
+      "end",
+      "begin",
+      "continue",
+      "continue",
+      "end",
+    ]);
+    expect(doc.querySelectorAll('note beam[number="2"]')).toHaveLength(8);
+  });
+
   it("stacks simultaneous notes into a chord in the XML", () => {
     const { musicXml } = songToSheetMusic(
       baseSource({
@@ -350,12 +378,13 @@ describe("voices", () => {
       ]),
     );
     const doc = parse(musicXml);
+    const measureUnits = meterGrid(4, 4).measureUnits;
     for (const measure of measures(doc)) {
       const { covered, lowest, end } = replayMeasure(measure);
       expect(lowest).toBe(0);
-      expect(end).toBe(16);
+      expect(end).toBe(measureUnits);
       for (const units of covered.values()) {
-        expect(units).toBe(16);
+        expect(units).toBe(measureUnits);
       }
     }
   });

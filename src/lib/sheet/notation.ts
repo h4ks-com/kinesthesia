@@ -2,9 +2,55 @@ import type { Spelling, Step } from "@/lib/sheet/spelling";
 import { spellPitch } from "@/lib/sheet/spelling";
 import type { SheetNote } from "@/lib/sheet/types";
 
-/** Divisions per quarter note in the produced MusicXML, chosen to equal one
- * 16th note, so a "unit" below is directly the `<duration>` value. */
-export const divisions = 4;
+/** Divisions per quarter note in the produced MusicXML: the smallest number
+ * that writes every value an engraver reaches for exactly, since it divides by
+ * both four and three. A 32nd is 3 units, a dotted 16th is 9, and an
+ * eighth-note triplet is 8. */
+export const divisions = 24;
+
+const unitsPerWhole = divisions * 4;
+
+const defaultBeats = 4;
+const defaultBeatType = 4;
+
+/** The meter, and the measure and beat it is read in, in `divisions` units.
+ * Quantising, duration splitting and beaming all group music against this one
+ * description, so they cannot disagree about where a beat falls. */
+export type Grid = {
+  readonly beats: number;
+  readonly beatType: number;
+  readonly measureUnits: number;
+  readonly beatUnits: number;
+  /** How many equal parts of a beat an onset may be snapped onto, coarsest
+   * first. A compound beat divides by three before it divides by two. */
+  readonly beatParts: readonly number[];
+};
+
+const simpleBeatParts = [1, 2, 4, 8] as const;
+const compoundBeatParts = [1, 3, 6, 12] as const;
+
+/** 6/8, 9/8 and 12/8 are felt in dotted beats, so one beat there is three of
+ * the written value rather than one. */
+function isCompound(beats: number, beatType: number): boolean {
+  return beatType >= 8 && beats >= 6 && beats % 3 === 0;
+}
+
+export function meterGrid(beats: number, beatType: number): Grid {
+  const safeBeats = beats > 0 ? beats : defaultBeats;
+  const safeBeatType = beatType > 0 ? beatType : defaultBeatType;
+  const written = Math.max(3, Math.round(unitsPerWhole / safeBeatType));
+  const compound = isCompound(safeBeats, safeBeatType);
+  const beatUnits = compound ? written * 3 : written;
+  return {
+    beats: safeBeats,
+    beatType: safeBeatType,
+    measureUnits: safeBeats * written,
+    beatUnits,
+    beatParts: (compound ? compoundBeatParts : simpleBeatParts).filter(
+      (count) => beatUnits % count === 0,
+    ),
+  };
+}
 
 export type QuantizedNote = {
   readonly id: number;
@@ -13,29 +59,82 @@ export type QuantizedNote = {
   readonly duration: number;
 };
 
-/** Snaps note starts and durations onto the 16th-note grid. Tempo changes are
- * not modelled: `bpm` is the single detected tempo, matching what the rest of
- * the converter treats as constant for v1. */
-export function quantizeNotes(
+/** The subdivision each beat of the score is written on. Read once from every
+ * note the score will carry, because two hands and two instruments striking
+ * one beat have to land on the same ruler or the page shows them apart. */
+export type BeatSteps = {
+  readonly unitsPerSecond: number;
+  readonly beatUnits: number;
+  readonly byBeat: ReadonlyMap<number, number>;
+};
+
+/** Snapping every onset onto the finest grid available writes rhythms nobody
+ * can read, so each beat takes the coarsest subdivision that still explains the
+ * onsets landing in it: a subdivision costs how far it moves those onsets plus
+ * its own part count, both in grid units. That count is what keeps a chord's
+ * spread attacks on one stem and still lets a beat of real 32nds be written as
+ * 32nds. Tempo changes are not modelled: `bpm` is the single detected tempo,
+ * matching what the rest of the converter treats as constant. */
+export function beatSteps(
   notes: readonly SheetNote[],
   bpm: number,
-): QuantizedNote[] {
+  grid: Grid,
+): BeatSteps {
   const unitsPerSecond = (bpm / 60) * divisions;
-  const quantized: QuantizedNote[] = [];
+  const offsets = new Map<number, number[]>();
   for (const note of notes) {
-    const start = Math.round(note.start * unitsPerSecond);
-    const end = Math.max(
-      start + 1,
-      Math.round((note.start + note.duration) * unitsPerSecond),
-    );
-    quantized.push({
+    const start = note.start * unitsPerSecond;
+    const beat = Math.floor(start / grid.beatUnits);
+    const offset = start - beat * grid.beatUnits;
+    const list = offsets.get(beat);
+    if (list === undefined) {
+      offsets.set(beat, [offset]);
+    } else {
+      list.push(offset);
+    }
+  }
+  const byBeat = new Map<number, number>();
+  for (const [beat, within] of offsets) {
+    let best = grid.beatUnits;
+    let bestCost = Number.POSITIVE_INFINITY;
+    for (const count of grid.beatParts) {
+      const step = grid.beatUnits / count;
+      let cost = count;
+      for (const offset of within) {
+        cost += Math.abs(offset - Math.round(offset / step) * step);
+      }
+      if (cost < bestCost) {
+        bestCost = cost;
+        best = step;
+      }
+    }
+    byBeat.set(beat, best);
+  }
+  return { unitsPerSecond, beatUnits: grid.beatUnits, byBeat };
+}
+
+/** Snaps note starts and releases onto their beat's chosen subdivision. */
+export function quantizeNotes(
+  notes: readonly SheetNote[],
+  steps: BeatSteps,
+): QuantizedNote[] {
+  const stepAt = (units: number): number =>
+    steps.byBeat.get(Math.floor(units / steps.beatUnits)) ?? steps.beatUnits;
+  const snap = (units: number): number => {
+    const step = stepAt(units);
+    return Math.round(units / step) * step;
+  };
+  return notes.map((note) => {
+    const raw = note.start * steps.unitsPerSecond;
+    const start = snap(raw);
+    const end = snap((note.start + note.duration) * steps.unitsPerSecond);
+    return {
       id: note.id,
       pitch: note.pitch,
       start,
-      duration: end - start,
-    });
-  }
-  return quantized;
+      duration: Math.max(end - start, stepAt(raw)),
+    };
+  });
 }
 
 /** One written pitch of a chord and every source note it sounds for: more
@@ -218,43 +317,178 @@ export function fillGaps(
   return filled;
 }
 
-/** Standard note values in 16th-note units, longest first, so a greedy
- * decomposition of an arbitrary quantized duration always terminates on 1. */
-const standardValues = [16, 12, 8, 6, 4, 3, 2, 1] as const;
+const noteTypeNames = [
+  "whole",
+  "half",
+  "quarter",
+  "eighth",
+  "16th",
+  "32nd",
+] as const;
 
-const typeByValue: Record<
-  number,
-  { readonly type: string; readonly dots: number }
-> = {
-  16: { type: "whole", dots: 0 },
-  12: { type: "half", dots: 1 },
-  8: { type: "half", dots: 0 },
-  6: { type: "quarter", dots: 1 },
-  4: { type: "quarter", dots: 0 },
-  3: { type: "eighth", dots: 1 },
-  2: { type: "eighth", dots: 0 },
-  1: { type: "16th", dots: 0 },
+type NoteTypeName = (typeof noteTypeNames)[number];
+
+type WrittenValue = {
+  readonly units: number;
+  readonly type: NoteTypeName;
+  readonly dots: number;
 };
 
-/** Breaks an arbitrary duration into standard (optionally dotted) note
- * values, greedily. Not tie-minimal for every duration, which is the
- * documented trade-off of a simple greedy scheme rather than an engraving
- * algorithm. */
-export function decomposeDuration(units: number): number[] {
+/** Every length one notehead can carry, longest first. Derived from
+ * `divisions` so the two cannot drift apart. */
+const writtenValues: readonly WrittenValue[] = noteTypeNames
+  .flatMap((type, index) => {
+    const plain = unitsPerWhole / 2 ** index;
+    return [
+      { units: plain * 1.5, type, dots: 1 },
+      { units: plain, type, dots: 0 },
+    ];
+  })
+  .filter((one) => Number.isInteger(one.units) && one.units <= unitsPerWhole)
+  .sort((left, right) => right.units - left.units);
+
+const valueByUnits = new Map(writtenValues.map((one) => [one.units, one]));
+
+/** Breaks a duration into written values, reading the beat before the note:
+ * one that fills a beat is written once, one that starts inside a beat stops
+ * at the end of it, and one that starts on a beat may only run over further
+ * beats whole. Nothing is tied across a boundary it did not have to cross. */
+export function decomposeDuration(
+  offsetInMeasure: number,
+  units: number,
+  grid: Grid,
+): number[] {
   const chunks: number[] = [];
+  let pos = offsetInMeasure;
   let remaining = units;
   while (remaining > 0) {
+    const intoBeat = pos % grid.beatUnits;
+    const room =
+      intoBeat === 0
+        ? remaining
+        : Math.min(remaining, grid.beatUnits - intoBeat);
     const value =
-      standardValues.find((candidate) => candidate <= remaining) ?? 1;
+      writtenValues.find(
+        (one) =>
+          one.units <= room &&
+          (one.units <= grid.beatUnits ||
+            (intoBeat === 0 && one.units % grid.beatUnits === 0)),
+      )?.units ?? room;
     chunks.push(value);
+    pos += value;
     remaining -= value;
   }
   return chunks;
 }
 
+export type BeamKind =
+  | "begin"
+  | "continue"
+  | "end"
+  | "forward hook"
+  | "backward hook";
+
+export type Beam = {
+  readonly number: number;
+  readonly kind: BeamKind;
+};
+
+/** Beam lines a value carries: one for an eighth, one more for each halving
+ * below it. A dot lengthens a note without adding a line. */
+function beamCount(units: number): number {
+  const value = valueByUnits.get(units);
+  if (value === undefined) {
+    return 0;
+  }
+  const depth = noteTypeNames.indexOf(value.type);
+  return Math.max(0, depth - noteTypeNames.indexOf("quarter"));
+}
+
+/** Every beam line of one group, level by level. A line spanning a single note
+ * is a hook, angled back into the group it hangs off, which is how a dotted
+ * eighth and its sixteenth beam together at all. */
+function beamKinds(counts: readonly number[]): Beam[][] {
+  const kinds: Beam[][] = counts.map(() => []);
+  const deepest = Math.max(...counts);
+  for (let level = 1; level <= deepest; level += 1) {
+    let index = 0;
+    while (index < counts.length) {
+      if ((counts[index] ?? 0) < level) {
+        index += 1;
+        continue;
+      }
+      let last = index;
+      while (last + 1 < counts.length && (counts[last + 1] ?? 0) >= level) {
+        last += 1;
+      }
+      if (last === index) {
+        kinds[index]?.push({
+          number: level,
+          kind: index === 0 ? "forward hook" : "backward hook",
+        });
+      } else {
+        kinds[index]?.push({ number: level, kind: "begin" });
+        for (let middle = index + 1; middle < last; middle += 1) {
+          kinds[middle]?.push({ number: level, kind: "continue" });
+        }
+        kinds[last]?.push({ number: level, kind: "end" });
+      }
+      index = last + 1;
+    }
+  }
+  return kinds;
+}
+
+type Draft = {
+  measureIndex: number;
+  positionInMeasure: number;
+  tones: readonly ChordTone[];
+  durationUnits: number;
+  tieStart: boolean;
+  tieStop: boolean;
+};
+
+/** Groups a voice's beamable noteheads by the beat they fall in, so a run of
+ * sixteenths reads as one group. A rest, a note a quarter or longer, and the
+ * end of a beat each close the group open at the time. */
+function beamsFor(drafts: readonly Draft[], grid: Grid): Beam[][] {
+  const beams: Beam[][] = drafts.map(() => []);
+  let run: number[] = [];
+  const flush = (): void => {
+    if (run.length > 1) {
+      const kinds = beamKinds(
+        run.map((at) => beamCount(drafts[at]?.durationUnits ?? 0)),
+      );
+      run.forEach((at, position) => {
+        beams[at] = kinds[position] ?? [];
+      });
+    }
+    run = [];
+  };
+
+  drafts.forEach((draft, index) => {
+    if (draft.tones.length === 0 || beamCount(draft.durationUnits) === 0) {
+      flush();
+      return;
+    }
+    const open = drafts[run.at(-1) ?? -1];
+    const beat = Math.floor(draft.positionInMeasure / grid.beatUnits);
+    if (
+      open !== undefined &&
+      (open.measureIndex !== draft.measureIndex ||
+        Math.floor(open.positionInMeasure / grid.beatUnits) !== beat)
+    ) {
+      flush();
+    }
+    run.push(index);
+  });
+  flush();
+  return beams;
+}
+
 export type NoteInstruction = {
   readonly measureIndex: number;
-  /** Offset within the measure, in the same 16th-note units as the grid. */
+  /** Offset within the measure, in the same `divisions` units as the grid. */
   readonly positionInMeasure: number;
   readonly tones: readonly ChordTone[];
   readonly durationUnits: number;
@@ -264,61 +498,69 @@ export type NoteInstruction = {
   readonly tieStop: boolean;
   readonly staff: 1 | 2;
   readonly voice: number;
+  readonly beams: readonly Beam[];
 };
 
-/** Splits a voice's events at measure boundaries, then further at standard
- * note values within a measure, tying every chunk of one original event back
+/** Splits a voice's events at measure boundaries, then at beats and written
+ * values within a measure, tying every chunk of one original event back
  * together whichever boundary caused the split. Every chunk keeps the tones
  * (and so the source ids) of the event it was split from, which is what lets
  * a note tied across a barline be found by identity on whichever chunk is on
  * screen. */
 export function buildInstructions(
   events: readonly StaffEvent[],
-  measureUnits: number,
+  grid: Grid,
   staff: 1 | 2,
   voice: number,
 ): NoteInstruction[] {
-  const out: NoteInstruction[] = [];
+  const drafts: Draft[] = [];
   for (const event of events) {
+    const first = drafts.length;
+    const isRest = event.tones.length === 0;
     let pos = event.start;
     let remaining = event.duration;
-    const values: {
-      measureIndex: number;
-      positionInMeasure: number;
-      duration: number;
-    }[] = [];
     while (remaining > 0) {
-      const measureIndex = Math.floor(pos / measureUnits);
-      const offset = pos - measureIndex * measureUnits;
-      const room = measureUnits - offset;
-      const boundaryChunk = Math.min(remaining, room);
-      let withinBoundary = offset;
-      for (const value of decomposeDuration(boundaryChunk)) {
-        values.push({
+      const measureIndex = Math.floor(pos / grid.measureUnits);
+      const offset = pos - measureIndex * grid.measureUnits;
+      const room = Math.min(remaining, grid.measureUnits - offset);
+      // Silence has no stem to read the beat off, so a rest is written beat by
+      // beat unless it takes the whole measure, where one rest is the reading.
+      const span =
+        isRest && !(offset === 0 && room === grid.measureUnits)
+          ? Math.min(room, grid.beatUnits - (offset % grid.beatUnits))
+          : room;
+      let within = offset;
+      for (const value of decomposeDuration(offset, span, grid)) {
+        drafts.push({
           measureIndex,
-          positionInMeasure: withinBoundary,
-          duration: value,
+          positionInMeasure: within,
+          tones: event.tones,
+          durationUnits: value,
+          tieStart: false,
+          tieStop: false,
         });
-        withinBoundary += value;
+        within += value;
       }
-      pos += boundaryChunk;
-      remaining -= boundaryChunk;
+      pos += span;
+      remaining -= span;
     }
-    const isRest = event.tones.length === 0;
-    values.forEach((value, index) => {
-      out.push({
-        measureIndex: value.measureIndex,
-        positionInMeasure: value.positionInMeasure,
-        tones: event.tones,
-        durationUnits: value.duration,
-        tieStart: !isRest && index < values.length - 1,
-        tieStop: !isRest && index > 0,
-        staff,
-        voice,
-      });
-    });
+    if (!isRest) {
+      for (let index = first; index < drafts.length; index += 1) {
+        const draft = drafts[index];
+        if (draft !== undefined) {
+          draft.tieStart = index < drafts.length - 1;
+          draft.tieStop = index > first;
+        }
+      }
+    }
   }
-  return out;
+  const beams = beamsFor(drafts, grid);
+  return drafts.map((draft, index) => ({
+    ...draft,
+    staff,
+    voice,
+    beams: beams[index] ?? [],
+  }));
 }
 
 function escapeXml(value: string): string {
@@ -359,11 +601,14 @@ function noteXml(
   table: readonly Spelling[],
   signature: Readonly<Record<Step, number>>,
 ): string {
-  const { type, dots } = typeByValue[instruction.durationUnits] ?? {
+  const { type, dots } = valueByUnits.get(instruction.durationUnits) ?? {
     type: "quarter",
     dots: 0,
   };
   const dotXml = "<dot/>".repeat(dots);
+  const beamXml = instruction.beams
+    .map((beam) => `<beam number="${beam.number}">${beam.kind}</beam>`)
+    .join("");
   const tieXml =
     (instruction.tieStop ? '<tie type="stop"/>' : "") +
     (instruction.tieStart ? '<tie type="start"/>' : "");
@@ -400,12 +645,15 @@ function noteXml(
       );
       const accidentalXml =
         accidental === null ? "" : `<accidental>${accidental}</accidental>`;
+      // MusicXML hangs a chord's beams off its first note alone, and orders a
+      // note's children: type, dot, accidental, staff, beam, notations.
       return (
         `<note>${chordXml}<pitch><step>${spelled.step}</step>${alterXml}` +
         `<octave>${spelled.octave}</octave></pitch>` +
         `<duration>${instruction.durationUnits}</duration>${tieXml}` +
         `<voice>${instruction.voice}</voice><type>${type}</type>${dotXml}` +
-        `${accidentalXml}<staff>${instruction.staff}</staff>${notationsXml}</note>`
+        `${accidentalXml}<staff>${instruction.staff}</staff>` +
+        `${index === 0 ? beamXml : ""}${notationsXml}</note>`
       );
     })
     .join("");
@@ -425,14 +673,14 @@ function clefXml(clef: StaffClef, staff: number): string {
 
 function attributesXml(
   fifths: number,
-  beats: number,
-  beatType: number,
+  grid: Grid,
   clefs: readonly StaffClef[],
 ): string {
   return (
     `<attributes><divisions>${divisions}</divisions>` +
     `<key><fifths>${fifths}</fifths></key>` +
-    `<time><beats>${beats}</beats><beat-type>${beatType}</beat-type></time>` +
+    `<time><beats>${grid.beats}</beats>` +
+    `<beat-type>${grid.beatType}</beat-type></time>` +
     `<staves>${clefs.length}</staves>` +
     clefs.map((clef, index) => clefXml(clef, index + 1)).join("") +
     "</attributes>"
@@ -450,10 +698,8 @@ export type MusicXmlPart = {
 export type MusicXmlInput = {
   readonly title: string;
   readonly fifths: number;
-  readonly beats: number;
-  readonly beatType: number;
+  readonly grid: Grid;
   readonly measureCount: number;
-  readonly measureUnits: number;
   readonly parts: readonly MusicXmlPart[];
   readonly table: readonly Spelling[];
   readonly signature: Readonly<Record<Step, number>>;
@@ -492,10 +738,8 @@ function partXml(part: MusicXmlPart, input: MusicXmlInput): string {
           .join(""),
       );
     const attributes =
-      index === 0
-        ? attributesXml(input.fifths, input.beats, input.beatType, part.clefs)
-        : "";
-    const backup = `<backup><duration>${input.measureUnits}</duration></backup>`;
+      index === 0 ? attributesXml(input.fifths, input.grid, part.clefs) : "";
+    const backup = `<backup><duration>${input.grid.measureUnits}</duration></backup>`;
     measures.push(
       `<measure number="${index + 1}">${attributes}${written.join(backup)}</measure>`,
     );

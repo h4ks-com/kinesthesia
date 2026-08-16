@@ -15,9 +15,10 @@ export type ScoreMark = {
   readonly height: number;
 };
 
-/** OSMD's own internal unit is 1/10 of the CSS pixel a page reads at zoom 1;
- * `Cursor.updateWidthAndStyle` uses this same factor. */
-const pixelsPerUnit = 10;
+/** OSMD's own internal unit is one staff-line spacing, which its Vexflow
+ * backend draws as this many CSS pixels at zoom 1; `Cursor.updateWidthAndStyle`
+ * uses the same factor. */
+export const osmdPxPerUnit = 10;
 
 /** `relInMeasureTimestamp` is a fraction of a whole note, and the converter
  * counts `divisions` units to a quarter. */
@@ -31,7 +32,7 @@ const positionTolerance = 0.01;
  * `CursorType.Standard` and `CursorType.ThinLeft`), reproduced here so a
  * self-drawn mark keeps exactly that look. */
 export function nowMarkWidth(zoom: number): number {
-  return 3 * pixelsPerUnit * zoom;
+  return 3 * osmdPxPerUnit * zoom;
 }
 
 export function nextMarkWidth(zoom: number): number {
@@ -129,8 +130,8 @@ function findMark(
     bottomStaffLine.StaffHeight;
 
   return {
-    left: (x - 1.5) * pixelsPerUnit * zoom,
-    top: y * pixelsPerUnit * zoom,
-    height: (endY - y) * pixelsPerUnit * zoom,
+    left: (x - 1.5) * osmdPxPerUnit * zoom,
+    top: y * osmdPxPerUnit * zoom,
+    height: (endY - y) * osmdPxPerUnit * zoom,
   };
 }

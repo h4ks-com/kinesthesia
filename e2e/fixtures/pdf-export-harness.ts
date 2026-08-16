@@ -6,14 +6,7 @@ import {
 } from "@/lib/midi/analysis";
 import { parseSong } from "@/lib/midi/song";
 import { songToSheetMusic } from "@/lib/sheet/convert";
-import {
-  downloadSheetPdf,
-  engraveHeightPx,
-  engraveWidthPx,
-  engravingZoom,
-  paginateSystems,
-  readSystemTops,
-} from "@/lib/sheet/export-pdf";
+import { downloadSheetPdf, engravePages } from "@/lib/sheet/export-pdf";
 import { sheetParts } from "@/lib/sheet/parts";
 import type { SheetMusic } from "@/lib/sheet/types";
 
@@ -74,53 +67,17 @@ window.sheetPdfStats = async (
   name: string,
 ): Promise<SheetPdfStats> => {
   const sheet = buildSheet(bytes, name);
-  const { OpenSheetMusicDisplay, CursorType } = await import(
-    "opensheetmusicdisplay"
-  );
-  const host = document.createElement("div");
-  host.style.position = "absolute";
-  host.style.left = "-99999px";
-  host.style.top = "0";
-  host.style.width = `${engraveWidthPx}px`;
-  document.body.appendChild(host);
+  const { host, pages } = await engravePages(sheet);
   try {
-    const osmd = new OpenSheetMusicDisplay(host, {
-      backend: "svg",
-      drawTitle: true,
-      drawPartNames: sheet.partNames.length > 1,
-      drawComposer: false,
-      followCursor: false,
-      defaultColorMusic: "#000000",
-      cursorsOptions: [
-        {
-          type: CursorType.Standard,
-          color: "#000000",
-          alpha: 0,
-          follow: false,
-        },
-      ],
-    });
-    osmd.zoom = engravingZoom(sheet.partNames.length);
-    await osmd.load(sheet.musicXml);
-    osmd.render();
-
-    const svg = host.querySelector("svg");
-    if (svg === null) {
-      throw new Error("This song's notation could not be printed.");
-    }
-    const totalHeight = Number.parseFloat(svg.getAttribute("height") ?? "0");
-    const systemTops = readSystemTops(osmd);
-    const pages = paginateSystems(systemTops, totalHeight, engraveHeightPx);
-    const maxSystemsOnAPage = Math.max(
-      ...pages.map(
-        (page) =>
-          systemTops.filter(
-            (top) => top >= page.top && top < page.top + page.height,
-          ).length,
-      ),
-      1,
+    // A system is a stave group, which OSMD draws one `g` per, so counting
+    // them per page is counting how much music the page carries.
+    const perPage = pages.map(
+      (page) => page.querySelectorAll("g.staffline, .vf-stave").length,
     );
-    return { pageCount: pages.length, maxSystemsOnAPage };
+    return {
+      pageCount: pages.length,
+      maxSystemsOnAPage: Math.max(...perPage, 1),
+    };
   } finally {
     host.remove();
   }

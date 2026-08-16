@@ -37,6 +37,8 @@ type PartControlsProps = {
   lockedNote?: string;
 };
 
+/** Both hands across the top, then the two hands side by side in the order
+ * they sit at a keyboard, so the menu is laid out the way the hands are. */
 const handOptions: readonly { hand: Hand | null; label: string }[] = [
   { hand: null, label: "Both hands" },
   { hand: "left", label: "Left hand" },
@@ -231,7 +233,7 @@ export function PartControls({
           )}
         >
           {(close) => (
-            <div className="flex w-44 flex-col gap-0.5">
+            <div className="grid w-52 grid-cols-2 gap-1">
               {handOptions.map((option) => (
                 <button
                   key={option.label}
@@ -241,11 +243,15 @@ export function PartControls({
                     onHand(option.hand);
                     close();
                   }}
-                  className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 pointer-coarse:min-h-11 text-left text-sm transition-colors hover:bg-raised ${
-                    hand === option.hand ? "text-accent" : "text-text"
+                  className={`flex flex-col items-center justify-center gap-1.5 rounded-lg border px-2 py-3 pointer-coarse:min-h-16 text-center text-sm transition-colors hover:bg-raised ${
+                    option.hand === null ? "col-span-2" : ""
+                  } ${
+                    hand === option.hand
+                      ? "border-accent text-accent"
+                      : "border-line-strong text-text"
                   }`}
                 >
-                  <HandGlyph hand={option.hand} className="size-4 shrink-0" />
+                  <HandGlyph hand={option.hand} className="size-5 shrink-0" />
                   {theirs
                     ? `Their ${option.label.toLowerCase()}`
                     : option.label}

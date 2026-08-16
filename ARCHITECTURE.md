@@ -173,6 +173,9 @@ src/lib/
   sheet/theme.ts              the ink, paper and marker colours a notation
                               theme reads in, resolved from the page's custom
                               properties once so a render can carry them
+  sheet/export-pdf.ts         paginates the whole engraved score into A4 pages,
+                              between systems and never through one, and hands
+                              back a downloaded PDF
   tour/steps.ts               what the walkthrough points at, per mode
   tour/use-walkthrough.ts     first-run auto play and the replay it hands back
   render/keyboard.ts          key geometry, sizing and the pitch under a point
@@ -309,6 +312,17 @@ second set of hex values. The notation view choice and this inversion are
 both global settings, remembered the way key width and timing offset are, so
 they hold across every song and every mode, including focus mode, which
 shares the same stage the roll and the notation split.
+
+`sheet/export-pdf.ts` takes the notation to paper. It engraves the whole score
+off screen once, backend `svg` so the pages stay vector, black ink on white
+regardless of the screen's own theme. A page never starts inside a system:
+the cursor is walked across the whole score to read where each one begins,
+and `paginateSystems` breaks between them, greedily fitting as many as an A4
+page holds. Each page is a clone of that one engraved SVG, cropped to its own
+slice and pruned of every element outside it, since a crop by `viewBox` alone
+still carries the rest of the score underneath it into the PDF. `jsPDF` and
+`svg2pdf.js` turn each cropped clone into one page, and `downloadBlob` hands
+the file back the way a rendered video already does.
 
 ## Modes
 

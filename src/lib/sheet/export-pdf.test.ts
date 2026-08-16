@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   contentHeightPt,
   contentWidthPt,
+  engraveHeightPx,
+  engraveWidthPx,
+  engravingZoom,
   pageHeightPt,
   pageWidthPt,
   paginateSystems,
@@ -9,9 +12,9 @@ import {
 } from "@/lib/sheet/export-pdf";
 
 describe("page size", () => {
-  it("is A4 portrait in points", () => {
-    expect(pageWidthPt).toBeCloseTo(595.28, 1);
-    expect(pageHeightPt).toBeCloseTo(841.89, 1);
+  it("is 9x12in concert-size portrait in points, not A4", () => {
+    expect(pageWidthPt).toBeCloseTo(9 * 72, 1);
+    expect(pageHeightPt).toBeCloseTo(12 * 72, 1);
   });
 
   it("leaves an equal margin on every side of the content", () => {
@@ -21,6 +24,31 @@ describe("page size", () => {
       pageHeightPt - contentHeightPt,
       5,
     );
+  });
+});
+
+describe("engraving size", () => {
+  it("engraves at the printable width and height, in CSS pixels", () => {
+    // Every native pixel this module reads off the live SVG lands back on the
+    // page through this same 96-to-72 ratio, in both directions.
+    const cssPxToPt = 72 / 96;
+    expect(engraveWidthPx * cssPxToPt).toBeCloseTo(contentWidthPt, 5);
+    expect(engraveHeightPx * cssPxToPt).toBeCloseTo(contentHeightPt, 5);
+  });
+
+  it("fits several systems in the page's printable height for a piano score", () => {
+    const zoom = engravingZoom(1);
+    // A grand staff (2 staves) at this zoom, roughly: OSMD's own 4-unit,
+    // 10px-per-unit staff, twice over plus a staff gap.
+    const staffHeightPx = 4 * 10 * zoom;
+    const systemHeightPx = staffHeightPx * 2 + staffHeightPx;
+    const systemsPerPage = Math.floor(engraveHeightPx / systemHeightPx);
+    expect(systemsPerPage).toBeGreaterThanOrEqual(4);
+  });
+
+  it("shrinks for a score of several instruments, still legible", () => {
+    expect(engravingZoom(1)).toBeGreaterThan(engravingZoom(2));
+    expect(engravingZoom(9)).toBeGreaterThan(0);
   });
 });
 

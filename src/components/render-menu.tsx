@@ -146,9 +146,13 @@ export function RenderMenu({
     if (notationView === "off") {
       return null;
     }
-    const music = await loadSheetMusic(url, song, transpose, sheetNotes).catch(
-      () => null,
-    );
+    const music = await loadSheetMusic(
+      url,
+      song,
+      transpose,
+      sheetNotes,
+      title,
+    ).catch(() => null);
     return music === null
       ? null
       : {

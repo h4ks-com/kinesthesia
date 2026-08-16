@@ -70,7 +70,7 @@ export function SheetView({
   useEffect(() => {
     let cancelled = false;
     setState({ status: "loading" });
-    void loadSheetMusic(url, song, transpose, noteIds)
+    void loadSheetMusic(url, song, transpose, noteIds, title)
       .then((sheet) => {
         if (!cancelled) {
           setState({ status: "ready", sheet });
@@ -91,7 +91,7 @@ export function SheetView({
     return () => {
       cancelled = true;
     };
-  }, [url, song, transpose, noteIds]);
+  }, [url, song, transpose, noteIds, title]);
 
   // Identity, not the grid: which of the song's own notes this page's score
   // was written from, the same set `loadSheetMusic` handed the converter.

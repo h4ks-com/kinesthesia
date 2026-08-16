@@ -70,7 +70,10 @@ const unset = -1;
  * pitch can take, so no two pairs of positions ever collide on it. */
 const positionStride = 512;
 
-function groupChords(sorted: readonly PlacedNote[]): PlacedNote[][] {
+/** Groups struck-together notes into chords, low to high. Shared with
+ * `staff-split.ts`, which reads a chord's own span rather than a whole part's,
+ * to tell a wide moment from a part that merely ranges widely over time. */
+export function groupChords(sorted: readonly PlacedNote[]): PlacedNote[][] {
   const chords: PlacedNote[][] = [];
   let index = 0;
   while (index < sorted.length) {

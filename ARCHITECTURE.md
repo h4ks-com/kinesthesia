@@ -162,9 +162,10 @@ src/lib/
   sheet/parts.ts              which lines the score is written on: one per
                               instrument, or one keyboard part read across two
                               hands
-  sheet/staff-split.ts        notes onto the grand staff by their own pitch
-                              median, not a fixed line, and the clef a single
-                              line reads best in
+  sheet/staff-split.ts        notes onto the grand staff by which hand plays
+                              them, once any chord in the part actually needs
+                              two, and the clef a single line reads best in
+                              by the middle of its own range
   sheet/notation.ts           quantises onto a 16th note grid, separates a
                               staff into voices so overlapping notes each get
                               written once, ties notes across a barline and

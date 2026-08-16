@@ -266,12 +266,13 @@ describe("songToSheetMusic", () => {
     const { musicXml } = songToSheetMusic(
       baseSource({
         notes: [
-          // Three low anchor notes pull the song's pitch median well below
-          // the chord, so the whole chord lands on one staff rather than
-          // being split by the median itself sitting inside it.
-          { pitch: 20, start: 1, duration: 0.1 },
-          { pitch: 20, start: 1.2, duration: 0.1 },
-          { pitch: 20, start: 1.4, duration: 0.1 },
+          // A low anchor note struck with the chord is what makes this
+          // passage genuinely two-handed, so the chord still has to land on
+          // one staff as a unit rather than being split by a median that
+          // sits inside its own range.
+          { pitch: 20, start: 0, duration: 0.1 },
+          { pitch: 20, start: 0.2, duration: 0.1 },
+          { pitch: 20, start: 0.4, duration: 0.1 },
           { pitch: 72, start: 0, duration: 1 },
           { pitch: 76, start: 0, duration: 1 },
           { pitch: 79, start: 0, duration: 1 },

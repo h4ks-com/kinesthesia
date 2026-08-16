@@ -57,4 +57,36 @@ describe("splitStaves", () => {
 
     expect(bass.some((note) => note.pitch === 64)).toBe(true);
   });
+
+  // A melody's own ends can sit further apart than a hand reaches without any
+  // single moment of it ever asking for a second hand: judging the part by
+  // its own overall span, rather than by what is actually struck together,
+  // used to fabricate a second hand for a line that never leaves the first.
+  it("keeps a wide-ranging single line on one staff instead of inventing a second hand", () => {
+    const melody = [50, 55, 60, 65, 70, 75, 80, 74, 68, 62].map((pitch, at) =>
+      noteAt(pitch, at * 0.5),
+    );
+
+    const { treble, bass } = splitStaves(melody);
+
+    expect(bass).toHaveLength(0);
+    expect(treble).toHaveLength(melody.length);
+  });
+
+  // The song's own median leans on the tenor register this line repeats, not
+  // on where the line as a whole actually sits, which is exactly the case
+  // Debussy's Clair de Lune left hand puts on the treble staff if the split
+  // reads the note count rather than the range.
+  it("puts a one-handed part that mostly repeats above middle C, but reaches well below it, on the bass staff", () => {
+    const notes: SheetNote[] = [];
+    for (let at = 0; at < 20; at += 1) {
+      notes.push(noteAt(61, at * 0.5));
+    }
+    notes.push(noteAt(27, 20 * 0.5));
+
+    const { treble, bass } = splitStaves(notes);
+
+    expect(treble).toHaveLength(0);
+    expect(bass).toHaveLength(notes.length);
+  });
 });

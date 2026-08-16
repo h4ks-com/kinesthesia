@@ -163,3 +163,40 @@ test("the mode, view and simplify controls fit the header and stay reachable", a
   await toggle.click();
   await expect(page.getByLabel("Maximum notes per second")).toBeVisible();
 });
+
+test("a header dropdown opens over its own trigger, not off to the side", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await serveFixture(page);
+  await page.goto(`/learn?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  for (const trigger of [
+    page.getByRole("button", { name: "Mode: Learn" }),
+    page.getByRole("button", { name: "View" }),
+  ]) {
+    const triggerBox = await trigger.boundingBox();
+    await trigger.click();
+    const panel = page.locator(".rise");
+    await expect(panel).toBeVisible();
+    const panelBox = await panel.boundingBox();
+    expect(triggerBox).not.toBeNull();
+    expect(panelBox).not.toBeNull();
+    if (triggerBox === null || panelBox === null) {
+      continue;
+    }
+
+    expect(panelBox.x).toBeGreaterThanOrEqual(0);
+    expect(panelBox.y).toBeGreaterThanOrEqual(0);
+    expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(360);
+    expect(panelBox.y + panelBox.height).toBeLessThanOrEqual(640);
+
+    const overlaps =
+      panelBox.x < triggerBox.x + triggerBox.width &&
+      panelBox.x + panelBox.width > triggerBox.x;
+    expect(overlaps).toBe(true);
+
+    await page.keyboard.press("Escape");
+  }
+});

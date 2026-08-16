@@ -1,6 +1,12 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 type PopoverProps = {
   trigger: (open: boolean) => ReactNode;
@@ -15,6 +21,9 @@ type PopoverProps = {
   label: string;
 };
 
+const phoneMargin = 12;
+const phoneBreakpoint = 640;
+
 export function Popover({
   trigger,
   children,
@@ -26,6 +35,7 @@ export function Popover({
   const [open, setOpen] = useState(false);
   const shell = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -53,6 +63,40 @@ export function Popover({
     };
   }, [open]);
 
+  // A phone pins the panel to the screen rather than the trigger, so the
+  // header stays clear of a keyboard band or footer below it. That pin still
+  // has to track which side of the trigger it opened from, or a panel near
+  // one edge of a narrow header lands nowhere near the control that opened it.
+  useLayoutEffect(() => {
+    if (!open) {
+      return;
+    }
+    const reposition = () => {
+      const panel = panelRef.current;
+      const anchor = triggerRef.current;
+      if (panel === null || anchor === null) {
+        return;
+      }
+      if (window.innerWidth >= phoneBreakpoint) {
+        panel.style.left = "";
+        return;
+      }
+      const anchorRect = anchor.getBoundingClientRect();
+      const panelWidth = panel.getBoundingClientRect().width;
+      const raw =
+        align === "right" ? anchorRect.right - panelWidth : anchorRect.left;
+      const maxLeft = window.innerWidth - phoneMargin - panelWidth;
+      const left = Math.min(
+        Math.max(raw, phoneMargin),
+        Math.max(maxLeft, phoneMargin),
+      );
+      panel.style.left = `${left}px`;
+    };
+    reposition();
+    window.addEventListener("resize", reposition);
+    return () => window.removeEventListener("resize", reposition);
+  }, [open, align]);
+
   return (
     <div ref={shell} className="relative">
       <button
@@ -68,11 +112,12 @@ export function Popover({
       </button>
       {open ? (
         <div
+          ref={panelRef}
           className={`rise absolute z-50 max-h-[70vh] overflow-y-auto overflow-x-clip rounded-xl border border-line-strong bg-panel p-1.5 shadow-[0_20px_60px_-12px_rgba(0,0,0,0.9)] ${
             align === "right" ? "right-0" : "left-0"
           } ${
             side === "top" ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]"
-          } max-sm:fixed max-sm:inset-x-3 max-sm:right-auto max-sm:left-3 max-sm:w-auto ${
+          } max-sm:fixed max-sm:right-auto max-sm:w-auto max-sm:max-w-[calc(100vw-1.5rem)] ${
             side === "bottom"
               ? "max-sm:top-16"
               : clearance === "keyboard"

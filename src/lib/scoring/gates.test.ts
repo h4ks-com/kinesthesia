@@ -129,3 +129,31 @@ describe("gateDeadline", () => {
     expect(gateDeadline(1, 1.02)).toBe(1.02);
   });
 });
+
+describe("choosing a part to play", () => {
+  function withKit(kitNotes: number, pitchedNotes: number): Song {
+    const built = song([
+      ...Array.from({ length: kitNotes }, (_one, index) =>
+        note(38, index * 0.1, 0),
+      ),
+      ...Array.from({ length: pitchedNotes }, (_one, index) =>
+        note(60, index * 0.1, 1),
+      ),
+    ]);
+    return {
+      ...built,
+      tracks: built.tracks.map((track) => ({
+        ...track,
+        percussion: track.index === 0,
+      })),
+    };
+  }
+
+  it("passes over a kit for something a keyboard can play", () => {
+    expect(busiestTrack(withKit(90, 20))).toBe(1);
+  });
+
+  it("falls back to the kit when the song is only drums", () => {
+    expect(busiestTrack(withKit(90, 0))).toBe(0);
+  });
+});

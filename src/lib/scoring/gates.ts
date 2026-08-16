@@ -57,10 +57,15 @@ export function gateIndexAt(gates: readonly Gate[], position: number): number {
   return index;
 }
 
+/** The part to hand a player. A kit is the busiest track in plenty of songs
+ * and the one thing a keyboard cannot play, so it is picked only when the song
+ * is nothing but drums. */
 export function busiestTrack(song: Song): number {
-  let best = song.tracks[0]?.index ?? 0;
+  const pitched = song.tracks.filter((track) => !track.percussion);
+  const choices = pitched.length > 0 ? pitched : song.tracks;
+  let best = choices[0]?.index ?? 0;
   let bestCount = -1;
-  for (const track of song.tracks) {
+  for (const track of choices) {
     if (track.noteCount > bestCount) {
       best = track.index;
       bestCount = track.noteCount;

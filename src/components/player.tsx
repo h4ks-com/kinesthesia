@@ -649,6 +649,8 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                 mode === "watch" ? (
                   <RenderMenu
                     song={song}
+                    url={params.url}
+                    transpose={transpose}
                     voicing={sound.voicing}
                     hiddenTracks={hiddenTracks}
                     plain={plainStyle}
@@ -656,6 +658,8 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                     speed={speed}
                     direction={background.direction}
                     skin={background.source}
+                    notationView={notationView}
+                    sheetTheme={sheetTheme}
                     title={songTitle}
                   />
                 ) : null

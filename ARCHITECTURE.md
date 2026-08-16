@@ -165,6 +165,9 @@ src/lib/
   sheet/load.ts               rereads a file's own MIDI for the tempo, meter
                               and key the converter needs, which `Song` does
                               not carry
+  sheet/theme.ts              the ink, paper and marker colours a notation
+                              theme reads in, resolved from the page's custom
+                              properties once so a render can carry them
   tour/steps.ts               what the walkthrough points at, per mode
   tour/use-walkthrough.ts     first-run auto play and the replay it hands back
   render/keyboard.ts          key geometry, sizing and the pitch under a point
@@ -189,6 +192,10 @@ src/lib/
   render/export.ts            the watch view as a render job: qualities and frame
   render/audio.ts             offline audio render to a WAV, at the live voicing
   render/video.ts             offline video render, WebCodecs with a recorder fallback
+  render/sheet.ts             the notation for a render: how the frame is split
+                              between notation and notes, the score engraved
+                              once into a bitmap, and the window and two
+                              markers a frame moves over it
   render/video-support.ts     what this browser can encode, without loading an
                               encoder to find out
   render/handback.ts          a render the address asked for: proving one was

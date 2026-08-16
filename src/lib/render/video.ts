@@ -14,6 +14,7 @@ import {
 } from "@/lib/render/export";
 import { keyWidthRange } from "@/lib/render/keyboard";
 import { PianoRollRenderer, type SkinReport } from "@/lib/render/piano-roll";
+import { sceneRegions, sheetPainter } from "@/lib/render/sheet";
 import { hasWebCodecs } from "@/lib/render/video-support";
 
 export type VideoProgress = (fraction: number) => void;
@@ -181,10 +182,7 @@ async function withWebCodecs(
   // a fallback can step it down.
   const { width, height, fps, gop } = renderQualities[encoders.quality];
   const totalFrames = Math.max(1, Math.ceil(renderDuration(config) * fps));
-  const scene = renderScene(config, width, height, fps);
-  // Nothing is encoded until the background has what it needs, or the opening
-  // seconds come out without it.
-  await scene.ready;
+  const scene = await renderScene(config, width, height, fps);
 
   const webm = encoders.container.extension === "webm";
   const sound = {
@@ -300,8 +298,7 @@ async function withMediaRecorder(
   // time, so it is given the smaller picture whatever was asked for: handing it
   // more pixels than it can keep up with drops frames instead of adding detail.
   const { width, height, fps } = renderQualities[defaultQuality];
-  const scene = renderScene(config, width, height, fps);
-  await scene.ready;
+  const scene = await renderScene(config, width, height, fps);
   const audioContext = new AudioContext({ sampleRate: audio.sampleRate });
   const destination = audioContext.createMediaStreamDestination();
   const source = audioContext.createBufferSource();
@@ -374,9 +371,6 @@ async function withMediaRecorder(
  * reads. A background is layered underneath exactly as the page stacks it. */
 type Scene = {
   readonly canvas: HTMLCanvasElement;
-  /** Settles once the background has whatever it had to fetch, so the opening
-   * seconds are not rendered bare. */
-  readonly ready: Promise<void>;
   draw(position: number, elapsed: number): Promise<void>;
   dispose(): void;
 };
@@ -394,85 +388,116 @@ function surface(width: number, height: number): HTMLCanvasElement {
   return canvas;
 }
 
-function renderScene(
+function context(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+  const ctx = canvas.getContext("2d");
+  if (ctx === null) {
+    throw new Error("Canvas 2D context is unavailable");
+  }
+  return ctx;
+}
+
+/** Everything is settled before the first frame: the background has whatever it
+ * had to fetch, and the score has been engraved once at this size. A song that
+ * cannot be engraved leaves the render on the falling notes. */
+async function renderScene(
   config: RenderConfig,
   width: number,
   height: number,
   fps: number,
-): Scene {
-  const roll = surface(width, height);
+): Promise<Scene> {
+  const wanted = sceneRegions(config.notation?.view ?? "off", width, height);
+  const painter =
+    config.notation === null || wanted.sheet === null
+      ? null
+      : await sheetPainter(config.notation, wanted.sheet).catch(() => null);
+  const regions =
+    painter === null ? sceneRegions("off", width, height) : wanted;
+  const stepMs = 1000 / fps;
+  const area = regions.roll;
+
+  if (area === null) {
+    const output = surface(width, height);
+    const ctx = context(output);
+    return {
+      canvas: output,
+      draw: async (position) => {
+        painter?.draw(ctx, position, stepMs);
+      },
+      dispose: () => painter?.dispose(),
+    };
+  }
+
+  const roll = surface(area.width, area.height);
   const renderer = new PianoRollRenderer(roll, keyWidthRange.min, {
-    width,
-    height,
+    width: area.width,
+    height: area.height,
     ratio: 1,
   });
 
-  const base = surface(width, height);
-  const overlay = surface(width, height);
+  const base = surface(area.width, area.height);
+  const overlay = surface(area.width, area.height);
   const skin = config.skin?.create({ base, overlay }) ?? null;
-  if (skin === null) {
+  if (skin === null && painter === null) {
     return {
       canvas: roll,
-      ready: Promise.resolve(),
       draw: async (position) => {
         renderer.draw(watchFrame(config, position));
       },
       dispose: () => {},
     };
   }
-  skin.resize(width, height, 1);
+  skin?.resize(area.width, area.height, 1);
+  await skin?.ready;
 
   const output = surface(width, height);
-  const ctx = output.getContext("2d");
-  if (ctx === null) {
-    skin.dispose();
-    return {
-      canvas: roll,
-      ready: Promise.resolve(),
-      draw: async (position) => {
-        renderer.draw(watchFrame(config, position));
-      },
-      dispose: () => {},
-    };
-  }
-
-  const report: SkinReport = { keyboardTop: 0, travellers: [], strikes: [] };
+  const ctx = context(output);
+  const report: SkinReport | null =
+    skin === null ? null : { keyboardTop: 0, travellers: [], strikes: [] };
   let cursor = 0;
   return {
     canvas: output,
-    ready: skin.ready ?? Promise.resolve(),
     async draw(position, elapsed) {
-      report.travellers.length = 0;
-      report.strikes.length = 0;
+      if (report !== null) {
+        report.travellers.length = 0;
+        report.strikes.length = 0;
+      }
       // The roll fills the report as it draws, so the background answers to
       // where the notes are this frame rather than the one before.
       renderer.draw(watchFrame(config, position, report));
-      const named = chordAt(config.song.harmony, position, cursor);
-      cursor = named.cursor;
-      // Awaited, because a background drawn in a worker answers on its own
-      // turn: encoding the frame before it lands would leave the opening
-      // frames bare and make the same song come out different every render.
-      await skin.draw({
-        keyboardTop: report.keyboardTop,
-        elapsed,
-        position,
-        // The rate a render lays frames down at, never a measured one: a
-        // background stepped by the wall clock would come out differently
-        // every time the same song was rendered.
-        step: 1 / fps,
-        travellers: report.travellers,
-        strikes: report.strikes,
-        pressed: noPressed,
-        chord: named.chord,
-        key: config.song.key,
-      });
+      if (skin !== null && report !== null) {
+        const named = chordAt(config.song.harmony, position, cursor);
+        cursor = named.cursor;
+        // Awaited, because a background drawn in a worker answers on its own
+        // turn: encoding the frame before it lands would leave the opening
+        // frames bare and make the same song come out different every render.
+        await skin.draw({
+          keyboardTop: report.keyboardTop,
+          elapsed,
+          position,
+          // The rate a render lays frames down at, never a measured one: a
+          // background stepped by the wall clock would come out differently
+          // every time the same song was rendered.
+          step: 1 / fps,
+          travellers: report.travellers,
+          strikes: report.strikes,
+          pressed: noPressed,
+          chord: named.chord,
+          key: config.song.key,
+        });
+      }
       ctx.fillStyle = ground;
       ctx.fillRect(0, 0, width, height);
-      ctx.drawImage(base, 0, 0, width, height);
-      ctx.drawImage(overlay, 0, 0, width, height);
-      ctx.drawImage(roll, 0, 0, width, height);
+      if (skin !== null) {
+        ctx.drawImage(base, area.x, area.y);
+        ctx.drawImage(overlay, area.x, area.y);
+      }
+      ctx.drawImage(roll, area.x, area.y);
+      painter?.draw(ctx, position, stepMs);
     },
-    dispose: () => skin.dispose(),
+    dispose: () => {
+      skin?.dispose();
+      painter?.dispose();
+    },
   };
 }
 

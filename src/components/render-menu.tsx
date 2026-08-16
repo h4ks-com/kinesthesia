@@ -15,7 +15,7 @@ import { Popover } from "@/components/ui/popover";
 import { renderReportUrl } from "@/lib/analytics-report";
 import type { SongVoicing } from "@/lib/audio/voicing";
 import { downloadBlob, downloadName } from "@/lib/download";
-import type { Song } from "@/lib/midi/song";
+import type { Song, Transpose } from "@/lib/midi/song";
 import {
   defaultQuality,
   type RenderConfig,
@@ -30,11 +30,19 @@ import {
   isExpected,
   type RenderKind,
 } from "@/lib/render/handback";
+import type { RenderNotation } from "@/lib/render/sheet";
 import { canRenderVideo, isFastVideo } from "@/lib/render/video-support";
+import { loadSheetMusic } from "@/lib/sheet/load";
+import { sheetColors } from "@/lib/sheet/theme";
+import type { NotationView, SheetTheme } from "@/lib/sheet/types";
 import type { BackdropSource, NoteDirection } from "@/lib/skins/types";
 
 type RenderMenuProps = {
   song: Song;
+  /** The file itself, since the notation is engraved from the song's own MIDI
+   * rather than from the notes the roll is drawing. */
+  url: string;
+  transpose: Transpose;
   voicing: SongVoicing;
   hiddenTracks: ReadonlySet<number>;
   plain: boolean;
@@ -44,6 +52,9 @@ type RenderMenuProps = {
   direction: NoteDirection;
   /** The background on screen, so the file carries it too. */
   skin: BackdropSource | null;
+  /** How much of the view the notation has, and the colours it reads in. */
+  notationView: NotationView;
+  sheetTheme: SheetTheme;
   title: string;
 };
 
@@ -73,6 +84,8 @@ type Job =
 
 export function RenderMenu({
   song,
+  url,
+  transpose,
   voicing,
   hiddenTracks,
   plain,
@@ -80,6 +93,8 @@ export function RenderMenu({
   speed,
   direction,
   skin,
+  notationView,
+  sheetTheme,
   title,
 }: RenderMenuProps) {
   const [job, setJob] = useState<Job | null>(null);
@@ -120,6 +135,24 @@ export function RenderMenu({
     });
   }, []);
 
+  /** The notation as the video needs it, engraved from the song's own file. A
+   * song that cannot be turned into notation renders as the falling notes
+   * alone rather than failing the whole job. */
+  async function renderNotation(): Promise<RenderNotation | null> {
+    if (notationView === "off") {
+      return null;
+    }
+    const music = await loadSheetMusic(url, song, transpose).catch(() => null);
+    return music === null
+      ? null
+      : {
+          view: notationView,
+          theme: sheetTheme,
+          colors: sheetColors(sheetTheme),
+          music,
+        };
+  }
+
   async function run(kind: RenderKind): Promise<void> {
     const config: RenderConfig = {
       song,
@@ -131,6 +164,9 @@ export function RenderMenu({
       direction,
       skin,
       quality,
+      // The video branch engraves its own once the dialog is up. Sound carries
+      // no picture and would wait on one for nothing.
+      notation: null,
     };
     const controller = new AbortController();
     abort.current = controller;
@@ -186,7 +222,7 @@ export function RenderMenu({
       begin("Encoding video", true, 0);
       const { renderSongVideo } = await import("@/lib/render/video");
       const video = await renderSongVideo(
-        config,
+        { ...config, notation: await renderNotation() },
         audio,
         (fraction) => {
           if (fraction < 1 && fraction - lastShown.current < 0.005) {

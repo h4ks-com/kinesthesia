@@ -8,6 +8,7 @@ import type {
 import { useEffect, useRef, useState } from "react";
 import type { Song, Transpose } from "@/lib/midi/song";
 import { loadSheetMusic } from "@/lib/sheet/load";
+import { sheetColors } from "@/lib/sheet/theme";
 import type { SheetMusic, SheetTheme } from "@/lib/sheet/types";
 
 type SheetViewProps = {
@@ -137,12 +138,6 @@ function fitCursor(element: HTMLImageElement | null): void {
   }
 }
 
-function cssVar(name: string): string {
-  return getComputedStyle(document.documentElement)
-    .getPropertyValue(name)
-    .trim();
-}
-
 function Notation({
   sheet,
   getPosition,
@@ -179,6 +174,7 @@ function Notation({
         if (cancelled) {
           return;
         }
+        const colors = sheetColors(theme);
         const options: IOSMDOptions = {
           backend: "svg",
           drawTitle: false,
@@ -188,21 +184,18 @@ function Notation({
           // the panel drives its own eased, pausable scroll instead, so both
           // must stay off or the two fight over the same scrollTop.
           followCursor: false,
-          defaultColorMusic: cssVar(theme === "light" ? "--ink" : "--text"),
+          defaultColorMusic: colors.music,
           cursorsOptions: [
             {
               type: CursorType.Standard,
-              color: cssVar(theme === "light" ? "--accent-ink" : "--accent"),
-              alpha: theme === "light" ? 0.4 : 0.3,
+              color: colors.cursor,
+              alpha: colors.cursorAlpha,
               follow: false,
             },
-            // Ink on paper takes more of the colour to read as strongly as it
-            // does on a dark ground, and what to play next has to be legible
-            // as a mark in its own right.
             {
               type: CursorType.ThinLeft,
-              color: cssVar(theme === "light" ? "--warn-ink" : "--warn"),
-              alpha: theme === "light" ? 0.85 : 0.7,
+              color: colors.next,
+              alpha: colors.nextAlpha,
               follow: false,
             },
           ],

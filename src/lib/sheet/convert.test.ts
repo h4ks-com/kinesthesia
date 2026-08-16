@@ -1,17 +1,25 @@
 import { describe, expect, it } from "vitest";
 import { songToSheetMusic } from "@/lib/sheet/convert";
-import type { SheetSource } from "@/lib/sheet/types";
+import type { SheetNote, SheetPart, SheetSource } from "@/lib/sheet/types";
 
 const bpm120Meter44 = { bpm: 120, meter: { beats: 4, value: 4 } } as const;
 
-function baseSource(overrides: Partial<SheetSource> = {}): SheetSource {
+type SourceOverrides = Partial<Omit<SheetSource, "parts">> & {
+  readonly notes?: readonly SheetNote[];
+  readonly parts?: readonly SheetPart[];
+};
+
+/** One piano read across a grand staff unless a test says otherwise, which is
+ * the shape every case here was written against. */
+function baseSource(overrides: SourceOverrides = {}): SheetSource {
+  const { notes = [], parts, ...rest } = overrides;
   return {
     title: "Test Song",
-    notes: [],
+    parts: parts ?? [{ name: "Piano", notes, split: true }],
     duration: 2,
     key: null,
     ...bpm120Meter44,
-    ...overrides,
+    ...rest,
   };
 }
 
@@ -361,5 +369,69 @@ describe("when each written moment is heard", () => {
       );
       expect(nearest).toBeLessThan(0.001);
     }
+  });
+});
+
+describe("a song of several instruments", () => {
+  const band: readonly SheetPart[] = [
+    {
+      name: "Lead",
+      notes: [{ pitch: 72, start: 0, duration: 1 }],
+      split: false,
+    },
+    {
+      name: "Bass",
+      notes: [{ pitch: 40, start: 0, duration: 1 }],
+      split: false,
+    },
+  ];
+
+  it("writes one line each rather than one player's two hands", () => {
+    const { musicXml } = songToSheetMusic(baseSource({ parts: band }));
+    const doc = parse(musicXml);
+    expect(doc.querySelectorAll("part-list > score-part")).toHaveLength(2);
+    expect(doc.querySelectorAll("score-partwise > part")).toHaveLength(2);
+    for (const part of doc.querySelectorAll("score-partwise > part")) {
+      expect(part.querySelector("attributes > staves")?.textContent).toBe("1");
+    }
+  });
+
+  it("names each line after the instrument playing it", () => {
+    const { musicXml } = songToSheetMusic(baseSource({ parts: band }));
+    const names = [
+      ...parse(musicXml).querySelectorAll("score-part > part-name"),
+    ].map((name) => name.textContent);
+    expect(names).toEqual(["Lead", "Bass"]);
+  });
+
+  // An instrument sitting low is written where a reader expects to find it.
+  it("gives a line the clef its register asks for", () => {
+    const { musicXml } = songToSheetMusic(baseSource({ parts: band }));
+    const signs = [...parse(musicXml).querySelectorAll("clef > sign")].map(
+      (sign) => sign.textContent,
+    );
+    expect(signs).toEqual(["G", "F"]);
+  });
+
+  it("marks every instrument's moment for the cursor", () => {
+    const { cursorOnsets } = songToSheetMusic(
+      baseSource({
+        parts: [
+          {
+            name: "Lead",
+            notes: [{ pitch: 72, start: 0.5, duration: 0.5 }],
+            split: false,
+          },
+          {
+            name: "Bass",
+            notes: [{ pitch: 40, start: 1.25, duration: 0.5 }],
+            split: false,
+          },
+        ],
+      }),
+    );
+    expect(cursorOnsets).toContain(0.5);
+    expect(cursorOnsets).toContain(1.25);
+    expect(cursorOnsets).toEqual([...cursorOnsets].sort((a, b) => a - b));
   });
 });

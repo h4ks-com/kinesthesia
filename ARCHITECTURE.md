@@ -154,8 +154,12 @@ src/lib/
                               theme settings
   sheet/spelling.ts           a key's diatonic pitch spelling, table and
                               fifths, and the chromatic notes it implies
+  sheet/parts.ts              which lines the score is written on: one per
+                              instrument, or one keyboard part read across two
+                              hands
   sheet/staff-split.ts        notes onto the grand staff by their own pitch
-                              median, not a fixed line
+                              median, not a fixed line, and the clef a single
+                              line reads best in
   sheet/notation.ts           quantises onto a 16th note grid, carries each
                               written moment's heard time through the
                               reduction, ties notes across a barline, and
@@ -164,7 +168,8 @@ src/lib/
                               exercise directly
   sheet/load.ts               rereads a file's own MIDI for the tempo, meter
                               and key the converter needs, which `Song` does
-                              not carry
+                              not carry, and picks out the notes the page is
+                              for
   sheet/theme.ts              the ink, paper and marker colours a notation
                               theme reads in, resolved from the page's custom
                               properties once so a render can carry them
@@ -251,20 +256,29 @@ falling notes, or full in their place. The header's View control, one eye
 icon, opens a vertical list naming the three: Notes, Split, Sheet only.
 Notation reads across the page and the
 notes fall down it, so the two are stacked rather than set side by side and
-each keeps the whole width. `src/lib/sheet/` turns a song into MusicXML:
-`convert.ts` quantises every note onto a 16th note grid, splits the notes
-across the grand staff by the same hand assignment the player uses, spells each
-pitch from the key `midi/analysis.ts` already detects, and writes measures,
-rests and
+each keeps the whole width.
+
+The page is written for what is in front of you. A channel is an instrument, so
+a song carrying several is read the way a score is: one line each, named after
+the instrument playing it, in the clef its register asks for, with no hands to
+divide because no one player has them all. A song on one channel is a keyboard
+part, and there the two staves are the two hands, assigned the same way the
+player assigns them. Silencing a track takes its line off the page, and
+learning writes only the part you owe, so what you read is what you have to
+play.
+
+`src/lib/sheet/` turns a song into MusicXML: `convert.ts` quantises every note
+onto a 16th note grid, spells each pitch from the key `midi/analysis.ts`
+already detects, and writes measures, rests and
 ties across a barline as plain MusicXML 3.1. Every onset earns an event, so a
 note struck while another is still ringing is written into the chord that
 follows rather than dropped, which is busier than an engraver would set it and
 is what lets the cursor stop on every note that sounds. It is pure and knows
 nothing of a
 live song; `load.ts` is the one place that rereads a file's own MIDI for the
-tempo, meter and key `Song` does not carry, and hands the converter a plain
-note list built from the notes already playing, transposed and past their
-runway.
+tempo, meter and key `Song` does not carry, and hands the converter the lines
+to write, built from the notes the player says are in front of you, transposed
+and past their runway.
 
 OpenSheetMusicDisplay, loaded only once the view opens, draws the MusicXML
 with two of its own cursors: the first highlights the notes sounding now, the

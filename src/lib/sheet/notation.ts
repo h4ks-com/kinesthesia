@@ -297,21 +297,41 @@ function noteXml(
     .join("");
 }
 
+export type StaffClef = "treble" | "bass";
+
+const clefSigns: Readonly<Record<StaffClef, { sign: string; line: number }>> = {
+  treble: { sign: "G", line: 2 },
+  bass: { sign: "F", line: 4 },
+};
+
+function clefXml(clef: StaffClef, staff: number): string {
+  const { sign, line } = clefSigns[clef];
+  return `<clef number="${staff}"><sign>${sign}</sign><line>${line}</line></clef>`;
+}
+
 function attributesXml(
   fifths: number,
   beats: number,
   beatType: number,
+  clefs: readonly StaffClef[],
 ): string {
   return (
     `<attributes><divisions>${divisions}</divisions>` +
     `<key><fifths>${fifths}</fifths></key>` +
     `<time><beats>${beats}</beats><beat-type>${beatType}</beat-type></time>` +
-    "<staves>2</staves>" +
-    '<clef number="1"><sign>G</sign><line>2</line></clef>' +
-    '<clef number="2"><sign>F</sign><line>4</line></clef>' +
+    `<staves>${clefs.length}</staves>` +
+    clefs.map((clef, index) => clefXml(clef, index + 1)).join("") +
     "</attributes>"
   );
 }
+
+/** One line of the written score: a single staff for an instrument, or the two
+ * of a grand staff, whose instructions carry the staff they belong to. */
+export type MusicXmlPart = {
+  readonly name: string;
+  readonly clefs: readonly StaffClef[];
+  readonly instructions: readonly NoteInstruction[];
+};
 
 export type MusicXmlInput = {
   readonly title: string;
@@ -320,40 +340,59 @@ export type MusicXmlInput = {
   readonly beatType: number;
   readonly measureCount: number;
   readonly measureUnits: number;
-  readonly treble: readonly NoteInstruction[];
-  readonly bass: readonly NoteInstruction[];
+  readonly parts: readonly MusicXmlPart[];
   readonly table: readonly Spelling[];
   readonly signature: Readonly<Record<Step, number>>;
 };
 
-export function buildMusicXml(input: MusicXmlInput): string {
+function partXml(part: MusicXmlPart, input: MusicXmlInput): string {
   const measures: string[] = [];
   for (let index = 0; index < input.measureCount; index += 1) {
-    const trebleXml = input.treble
-      .filter((instruction) => instruction.measureIndex === index)
-      .map((instruction) => noteXml(instruction, input.table, input.signature))
-      .join("");
-    const bassXml = input.bass
-      .filter((instruction) => instruction.measureIndex === index)
-      .map((instruction) => noteXml(instruction, input.table, input.signature))
-      .join("");
+    const staves = part.clefs.map((_clef, staffIndex) =>
+      part.instructions
+        .filter(
+          (instruction) =>
+            instruction.measureIndex === index &&
+            instruction.staff === staffIndex + 1,
+        )
+        .map((instruction) =>
+          noteXml(instruction, input.table, input.signature),
+        )
+        .join(""),
+    );
     const attributes =
       index === 0
-        ? attributesXml(input.fifths, input.beats, input.beatType)
+        ? attributesXml(input.fifths, input.beats, input.beatType, part.clefs)
         : "";
+    const backup = `<backup><duration>${input.measureUnits}</duration></backup>`;
     measures.push(
-      `<measure number="${index + 1}">${attributes}${trebleXml}` +
-        `<backup><duration>${input.measureUnits}</duration></backup>${bassXml}</measure>`,
+      `<measure number="${index + 1}">${attributes}${staves.join(backup)}</measure>`,
     );
   }
+  return measures.join("");
+}
+
+export function buildMusicXml(input: MusicXmlInput): string {
+  const listed = input.parts
+    .map(
+      (part, index) =>
+        `<score-part id="P${index + 1}"><part-name>${escapeXml(part.name)}</part-name></score-part>`,
+    )
+    .join("");
+  const written = input.parts
+    .map(
+      (part, index) =>
+        `<part id="P${index + 1}">${partXml(part, input)}</part>`,
+    )
+    .join("");
   return (
     '<?xml version="1.0" encoding="UTF-8"?>\n' +
     '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" ' +
     '"http://www.musicxml.org/dtds/partwise.dtd">\n' +
     '<score-partwise version="3.1">' +
     `<work><work-title>${escapeXml(input.title)}</work-title></work>` +
-    '<part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>' +
-    `<part id="P1">${measures.join("")}</part>` +
+    `<part-list>${listed}</part-list>` +
+    written +
     "</score-partwise>"
   );
 }

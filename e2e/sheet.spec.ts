@@ -298,3 +298,49 @@ test("a song the notation view fails to fetch shows a plain message, not a broke
   // The roll is unaffected by the notation view's own failure.
   await expect(page.locator("canvas")).toBeVisible();
 });
+
+type Box = { x: number; y: number; width: number; height: number };
+
+function boxesIntersect(a: Box, b: Box): boolean {
+  return (
+    a.x < b.x + b.width &&
+    a.x + a.width > b.x &&
+    a.y < b.y + b.height &&
+    a.y + a.height > b.y
+  );
+}
+
+async function requireBox(
+  locator: import("@playwright/test").Locator,
+): Promise<Box> {
+  const box = await locator.boundingBox();
+  if (box === null) {
+    throw new Error("element has no layout box");
+  }
+  return box;
+}
+
+test("the focus exit and the invert button stay clear of each other in focus mode", async ({
+  page,
+}) => {
+  await serveFixture(page);
+  await page.goto(`/watch?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  await openHalf(page);
+  await page.getByRole("button", { name: "Focus mode" }).click();
+
+  const exit = page.getByRole("button", { name: "Leave focus" });
+  const invert = page.getByRole("button", { name: "Invert notation colours" });
+  await expect(exit).toBeVisible();
+  await expect(invert).toBeVisible();
+
+  expect(boxesIntersect(await requireBox(exit), await requireBox(invert))).toBe(
+    false,
+  );
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(boxesIntersect(await requireBox(exit), await requireBox(invert))).toBe(
+    false,
+  );
+});

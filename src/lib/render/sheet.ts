@@ -149,7 +149,7 @@ async function engrave(
     // backend would have to be serialised and decoded to reach one.
     backend: "canvas",
     drawTitle: false,
-    drawPartNames: false,
+    drawPartNames: notation.music.partNames.length > 1,
     drawComposer: false,
     followCursor: false,
     defaultColorMusic: colors.music,

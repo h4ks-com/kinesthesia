@@ -7,7 +7,7 @@ import {
   sequenceStaff,
 } from "@/lib/sheet/notation";
 import { keySpelling } from "@/lib/sheet/spelling";
-import { splitStaves } from "@/lib/sheet/staff-split";
+import { clefFor, splitStaves } from "@/lib/sheet/staff-split";
 import type { SheetMusic, SheetSource } from "@/lib/sheet/types";
 
 const defaultBeats = 4;
@@ -34,9 +34,41 @@ export function songToSheetMusic(source: SheetSource): SheetMusic {
   const measureCount = Math.max(1, Math.ceil(rawUnits / measureUnits));
   const totalUnits = measureCount * measureUnits;
 
-  const { treble, bass } = splitStaves(source.notes);
-  const trebleEvents = sequenceStaff(quantizeNotes(treble, bpm), totalUnits);
-  const bassEvents = sequenceStaff(quantizeNotes(bass, bpm), totalUnits);
+  const written = (source.parts.length === 0 ? [blankPart] : source.parts).map(
+    (part) => {
+      if (!part.split) {
+        const events = sequenceStaff(
+          quantizeNotes(part.notes, bpm),
+          totalUnits,
+        );
+        return {
+          part: {
+            name: part.name,
+            clefs: [clefFor(part.notes)],
+            instructions: buildInstructions(events, measureUnits, 1),
+          },
+          events,
+        };
+      }
+      const { treble, bass } = splitStaves(part.notes);
+      const trebleEvents = sequenceStaff(
+        quantizeNotes(treble, bpm),
+        totalUnits,
+      );
+      const bassEvents = sequenceStaff(quantizeNotes(bass, bpm), totalUnits);
+      return {
+        part: {
+          name: part.name,
+          clefs: ["treble", "bass"] as const,
+          instructions: [
+            ...buildInstructions(trebleEvents, measureUnits, 1),
+            ...buildInstructions(bassEvents, measureUnits, 2),
+          ],
+        },
+        events: [...trebleEvents, ...bassEvents],
+      };
+    },
+  );
 
   const { table, fifths, signature } =
     source.key === null
@@ -50,20 +82,25 @@ export function songToSheetMusic(source: SheetSource): SheetMusic {
     beatType,
     measureCount,
     measureUnits,
-    treble: buildInstructions(trebleEvents, measureUnits, 1),
-    bass: buildInstructions(bassEvents, measureUnits, 2),
+    parts: written.map((one) => one.part),
     table,
     signature,
   });
 
   return {
     musicXml,
+    partNames:
+      source.parts.length === 0 ? [] : written.map((one) => one.part.name),
     cursorOnsets: onsetSeconds(
-      [...trebleEvents, ...bassEvents],
+      written.flatMap((one) => one.events),
       unitsPerSecond,
     ),
   };
 }
+
+/** A song with nothing to write still needs a page, so the panel shows an empty
+ * stave rather than failing to draw at all. */
+const blankPart = { name: "Piano", notes: [], split: false } as const;
 
 /** When each written moment is heard. The grid is one tempo because that is
  * what reads well, so it is never the clock: each note anchors its own moment

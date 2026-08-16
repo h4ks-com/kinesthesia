@@ -7,6 +7,7 @@ import {
 import type { Song, Transpose } from "@/lib/midi/song";
 import { readSongBytes } from "@/lib/midi/song";
 import { songToSheetMusic } from "@/lib/sheet/convert";
+import { sheetParts } from "@/lib/sheet/parts";
 import type { SheetMusic } from "@/lib/sheet/types";
 
 const chromaticNames = [
@@ -42,6 +43,11 @@ export async function loadSheetMusic(
   url: string,
   song: Song,
   transpose: Transpose,
+  /** Which notes the page is for: the part you owe when you are learning it,
+   * and whatever is still audible when you are watching. The player already
+   * knows both, so the notation is written from what it hands over rather than
+   * working the same question out a second way. */
+  noteIds: ReadonlySet<number>,
 ): Promise<SheetMusic> {
   const bytes = await readSongBytes(url);
   const midi = readMidi(bytes);
@@ -49,21 +55,23 @@ export async function loadSheetMusic(
   const meter = detectMeter(midi);
   const keyEstimate = estimateKey(midi);
 
-  const pitchedTracks = new Set(
-    song.tracks
-      .filter((track) => !track.percussion)
-      .map((track) => track.index),
-  );
+  const chosen = song.notes.filter((note) => noteIds.has(note.id));
 
   return songToSheetMusic({
     title: song.name,
-    notes: song.notes
-      .filter((note) => pitchedTracks.has(note.track))
-      .map((note) => ({
+    parts: sheetParts({
+      tracks: song.tracks.map((track) => ({
+        index: track.index,
+        name: track.name,
+        percussion: track.percussion,
+      })),
+      notes: chosen.map((note) => ({
+        track: note.track,
         pitch: note.pitch,
         start: note.start,
         duration: note.end - note.start,
       })),
+    }),
     duration: song.duration,
     bpm: tempo.bpm,
     meter: { beats: meter.beats, value: meter.value },

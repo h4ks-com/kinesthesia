@@ -542,8 +542,13 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
 
   // Focus hides every other control, so its own way out rides along with it,
   // including over the loading and failed frames where a phone has no Escape.
+  // Notation open in focus mode starts flush with the top of the screen, so its
+  // own invert button sits exactly here; this one drops below it rather than
+  // the two drawing on top of each other.
   const focusExit = focus ? (
-    <div className="fixed top-4 right-4 z-30">
+    <div
+      className={`fixed right-4 z-30 ${notationView === "off" ? "top-4" : "top-16"}`}
+    >
       <button
         type="button"
         onClick={() => changeFocus(false)}
@@ -651,6 +656,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                     song={song}
                     url={params.url}
                     transpose={transpose}
+                    sheetNotes={interactive ? owedIds : autoNotes}
                     voicing={sound.voicing}
                     hiddenTracks={hiddenTracks}
                     plain={plainStyle}
@@ -692,6 +698,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                   transpose={transpose}
                   getPosition={playback.getPosition}
                   playing={playback.playing}
+                  noteIds={interactive ? owedIds : autoNotes}
                   onSeek={matchActive ? null : seek}
                   theme={sheetTheme}
                   onTheme={changeSheetTheme}

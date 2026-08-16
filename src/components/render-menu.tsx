@@ -43,6 +43,9 @@ type RenderMenuProps = {
    * rather than from the notes the roll is drawing. */
   url: string;
   transpose: Transpose;
+  /** The notes the notation is written for, so a render shows the same page
+   * the screen does. */
+  sheetNotes: ReadonlySet<number>;
   voicing: SongVoicing;
   hiddenTracks: ReadonlySet<number>;
   plain: boolean;
@@ -86,6 +89,7 @@ export function RenderMenu({
   song,
   url,
   transpose,
+  sheetNotes,
   voicing,
   hiddenTracks,
   plain,
@@ -142,7 +146,9 @@ export function RenderMenu({
     if (notationView === "off") {
       return null;
     }
-    const music = await loadSheetMusic(url, song, transpose).catch(() => null);
+    const music = await loadSheetMusic(url, song, transpose, sheetNotes).catch(
+      () => null,
+    );
     return music === null
       ? null
       : {

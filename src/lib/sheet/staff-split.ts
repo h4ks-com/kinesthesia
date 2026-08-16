@@ -1,4 +1,5 @@
 import { assignHandsForSong } from "@/lib/midi/hands";
+import type { StaffClef } from "@/lib/sheet/notation";
 import type { SheetNote } from "@/lib/sheet/types";
 
 export type StaffSplit = {
@@ -24,13 +25,23 @@ const handReach = 16;
  * that never leaves the treble. A part inside one hand's reach goes on the one
  * staff its register puts it on.
  */
+/** Which clef a line of music reads best in, from where it sits rather than
+ * from what the instrument is called: a bass line named for its patch is still
+ * a bass line when the patch is missing. */
+export function clefFor(notes: readonly SheetNote[]): StaffClef {
+  if (notes.length === 0) {
+    return "treble";
+  }
+  return median(notes.map((note) => note.pitch)) >= middleC ? "treble" : "bass";
+}
+
 export function splitStaves(notes: readonly SheetNote[]): StaffSplit {
   if (notes.length === 0) {
     return { treble: [], bass: [] };
   }
   const pitches = notes.map((note) => note.pitch);
   if (Math.max(...pitches) - Math.min(...pitches) <= handReach) {
-    return median(pitches) >= middleC
+    return clefFor(notes) === "treble"
       ? { treble: notes, bass: [] }
       : { treble: [], bass: notes };
   }

@@ -19,6 +19,10 @@ type SheetViewProps = {
    * clock the falling notes read, so the notation cursor tracks it exactly. */
   getPosition: () => number;
   playing: boolean;
+  /** Which notes the page is for, so muting a track or practising one part
+   * writes the score for what is being played. A fresh set every render
+   * re-engraves the whole song. */
+  noteIds: ReadonlySet<number>;
   onSeek: ((position: number) => void) | null;
   theme: SheetTheme;
   onTheme: (next: SheetTheme) => void;
@@ -41,6 +45,7 @@ export function SheetView({
   transpose,
   getPosition,
   playing,
+  noteIds,
   onSeek,
   theme,
   onTheme,
@@ -50,7 +55,7 @@ export function SheetView({
   useEffect(() => {
     let cancelled = false;
     setState({ status: "loading" });
-    void loadSheetMusic(url, song, transpose)
+    void loadSheetMusic(url, song, transpose, noteIds)
       .then((sheet) => {
         if (!cancelled) {
           setState({ status: "ready", sheet });
@@ -71,7 +76,7 @@ export function SheetView({
     return () => {
       cancelled = true;
     };
-  }, [url, song, transpose]);
+  }, [url, song, transpose, noteIds]);
 
   if (state.status === "loading") {
     return (
@@ -84,6 +89,13 @@ export function SheetView({
     return (
       <div data-testid="sheet-view" className={shellClass(theme)}>
         {state.message}
+      </div>
+    );
+  }
+  if (state.sheet.partNames.length === 0) {
+    return (
+      <div data-testid="sheet-view" className={shellClass(theme)}>
+        Nothing playing here can be written as notation.
       </div>
     );
   }
@@ -178,7 +190,9 @@ function Notation({
         const options: IOSMDOptions = {
           backend: "svg",
           drawTitle: false,
-          drawPartNames: false,
+          // A score of several instruments has to say which line is which; one
+          // player's own part is already named by the page it is on.
+          drawPartNames: sheet.partNames.length > 1,
           drawComposer: false,
           // OSMD's own follow scrolls the page itself on every cursor.next();
           // the panel drives its own eased, pausable scroll instead, so both

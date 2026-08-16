@@ -16,11 +16,20 @@ export type SheetMeter = {
   readonly value: number;
 };
 
+/** One line of the score. An instrument in an ensemble is read as one line;
+ * a piano alone is read across a grand staff, which is the same question as
+ * which hand plays each note, so only that case is split. */
+export type SheetPart = {
+  readonly name: string;
+  readonly notes: readonly SheetNote[];
+  readonly split: boolean;
+};
+
 /** Everything the converter needs, decoupled from `Song` and from `Midi` so it
  * stays testable with plain note lists. */
 export type SheetSource = {
   readonly title: string;
-  readonly notes: readonly SheetNote[];
+  readonly parts: readonly SheetPart[];
   readonly duration: number;
   readonly bpm: number;
   readonly meter: SheetMeter;
@@ -29,6 +38,8 @@ export type SheetSource = {
 
 export type SheetMusic = {
   readonly musicXml: string;
+  /** What each written line is played by, in the order they are written. */
+  readonly partNames: readonly string[];
   /** Seconds at which the OSMD cursor should step forward: one entry per
    * distinct onset across both staves, ascending, including rests. */
   readonly cursorOnsets: readonly number[];

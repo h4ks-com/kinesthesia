@@ -409,7 +409,11 @@ async function renderScene(
   const painter =
     config.notation === null || wanted.sheet === null
       ? null
-      : await sheetPainter(config.notation, wanted.sheet).catch(() => null);
+      : await sheetPainter(
+          config.notation,
+          config.song.notes,
+          wanted.sheet,
+        ).catch(() => null);
   const regions =
     painter === null ? sceneRegions("off", width, height) : wanted;
   const stepMs = 1000 / fps;

@@ -4,7 +4,7 @@ import { tourFor } from "@/lib/tour/steps";
 import { playerQuery, serveFixture, songName, songUrl } from "./fixture";
 
 const skip = (page: Page) =>
-  page.getByRole("button", { name: "Skip tutorial" });
+  page.getByRole("button", { name: "Skip tutorial", exact: true });
 
 /** What keeps a walkthrough from coming back is the note that it was seen, so
  * that note is what a reload waits on rather than a span of time. */
@@ -150,55 +150,145 @@ test("the tour opens the tracks and points inside them", async ({ page }) => {
   ).toHaveCount(0);
 });
 
-test("on a phone the walkthrough fits and never covers what it points at", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 780 });
-  await serveFixture(page, { tour: true });
-  await page.goto(`/learn?${playerQuery()}`);
-  await expect(skip(page)).toBeVisible({ timeout: 15_000 });
-  // The replay button stays reachable on a phone.
-  await expect(
-    page.getByRole("button", { name: "Tutorial", exact: true }),
-  ).toBeVisible();
+type Box = { top: number; left: number; right: number; bottom: number };
 
-  for (let guard = 0; guard < 12; guard += 1) {
-    const showing = await step(page);
-    if (showing === null) {
-      break;
+type TourGeometry = {
+  dlg: Box;
+  spot: Box;
+  anchorBox: Box | null;
+  footerRows: readonly { top: number; bottom: number }[];
+};
+
+/** The dialog and the spotlight it floats beside, read off the DOM. Null while
+ * either has yet to render. */
+async function tourGeometry(
+  page: Page,
+  anchor: string,
+): Promise<TourGeometry | null> {
+  return page.evaluate((anchorAttr) => {
+    const dlg = document
+      .querySelector('[role="dialog"]')
+      ?.getBoundingClientRect();
+    const spot = document
+      .querySelector('.z-\\[70\\] > div[aria-hidden="true"]')
+      ?.getBoundingClientRect();
+    const footer = document.querySelector('[role="dialog"] > div:last-child');
+    if (dlg === undefined || spot === undefined || footer === null) {
+      return null;
     }
-    // The spotlight glides between steps, so this waits for it to land rather
-    // than guessing how long the glide takes on this machine.
-    const clear = async (): Promise<boolean> =>
-      page.evaluate(() => {
-        const dlg = document
-          .querySelector('[role="dialog"]')
-          ?.getBoundingClientRect();
-        const spot = document
-          .querySelector('.z-\\[70\\] > div[aria-hidden="true"]')
-          ?.getBoundingClientRect();
-        if (dlg === undefined || spot === undefined) {
-          return false;
-        }
-        const onScreen =
-          dlg.top >= -1 &&
-          dlg.bottom <= window.innerHeight + 1 &&
-          dlg.left >= -1 &&
-          dlg.right <= window.innerWidth + 1;
-        const apart =
-          dlg.right < spot.left ||
-          dlg.left > spot.right ||
-          dlg.bottom < spot.top ||
-          dlg.top > spot.bottom;
-        return onScreen && apart;
-      });
-    await expect.poll(clear, { timeout: 15_000 }).toBe(true);
-    await page.getByRole("button", { name: /^(Next|Done)$/ }).click();
-    await leftStep(page, showing);
-  }
-});
+    const footerRows = Array.from(footer.children).map((child) => {
+      const box = child.getBoundingClientRect();
+      return { top: box.top, bottom: box.bottom };
+    });
+    // Read in the same pass as the spotlight, so a step whose anchor is still
+    // animating into place (a popover opening, a list reflowing) cannot be
+    // caught between two separately timed reads.
+    const anchorEl = document.querySelector(`[data-tour="${anchorAttr}"]`);
+    const anchorRect = anchorEl?.getBoundingClientRect() ?? null;
+    return {
+      dlg: {
+        top: dlg.top,
+        left: dlg.left,
+        right: dlg.right,
+        bottom: dlg.bottom,
+      },
+      spot: {
+        top: spot.top,
+        left: spot.left,
+        right: spot.right,
+        bottom: spot.bottom,
+      },
+      anchorBox: anchorRect
+        ? {
+            top: anchorRect.top,
+            left: anchorRect.left,
+            right: anchorRect.right,
+            bottom: anchorRect.bottom,
+          }
+        : null,
+      footerRows,
+    };
+  }, anchor);
+}
 
 const modes: readonly PlayerMode[] = ["watch", "learn", "multiplayer"];
+
+/** Two real phones the reports were taken on: one where the dialog sat far
+ * from its target, one where it sat on top of it. */
+const phoneSizes = [
+  { width: 390, height: 844 },
+  { width: 360, height: 640 },
+] as const;
+
+for (const size of phoneSizes) {
+  for (const mode of modes) {
+    test(`on a ${size.width}x${size.height} phone the ${mode} walkthrough fits, never covers what it points at, and keeps its footer on one line`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(size);
+      await serveFixture(page, { tour: true });
+      await page.goto(`/${mode}?${playerQuery()}`);
+      await expect(skip(page)).toBeVisible({ timeout: 15_000 });
+      // The replay button stays reachable on a phone.
+      await expect(
+        page.getByRole("button", { name: "Tutorial", exact: true }),
+      ).toBeVisible();
+
+      for (const expected of tourFor(mode)) {
+        await expect(page.locator("#walkthrough-title")).toHaveText(
+          expected.title,
+        );
+
+        // The spotlight glides between steps and the dialog measures itself a
+        // frame later, so this waits for both to land on the real control
+        // rather than guessing how long that takes on this machine. Reading
+        // the anchor in the same pass as the spotlight keeps a step whose
+        // target is still animating into place from being caught between two
+        // separately timed reads.
+        const settled = async (): Promise<boolean> => {
+          const geometry = await tourGeometry(page, expected.anchor);
+          if (geometry === null || geometry.anchorBox === null) {
+            return false;
+          }
+          const { dlg, spot, anchorBox } = geometry;
+          const onScreen =
+            dlg.top >= -1 &&
+            dlg.bottom <= size.height + 1 &&
+            dlg.left >= -1 &&
+            dlg.right <= size.width + 1;
+          const apart =
+            dlg.right < spot.left ||
+            dlg.left > spot.right ||
+            dlg.bottom < spot.top ||
+            dlg.top > spot.bottom;
+          const onTarget =
+            anchorBox.left < spot.right &&
+            anchorBox.right > spot.left &&
+            anchorBox.top < spot.bottom &&
+            anchorBox.bottom > spot.top;
+          return onScreen && apart && onTarget;
+        };
+        await expect.poll(settled, { timeout: 15_000 }).toBe(true);
+
+        const geometry = await tourGeometry(page, expected.anchor);
+        if (geometry !== null) {
+          // The counter, the skip link and the step buttons never wrap: every
+          // child of the footer row shares some vertical band with the rest,
+          // which a taller button still does even though it centres on a
+          // slightly different top than a bare line of text.
+          const { footerRows } = geometry;
+          const bandTop = Math.max(...footerRows.map((row) => row.top));
+          const bandBottom = Math.min(...footerRows.map((row) => row.bottom));
+          expect(bandTop).toBeLessThan(bandBottom);
+        }
+
+        const showing = await step(page);
+        await page.getByRole("button", { name: /^(Next|Done)$/ }).click();
+        await leftStep(page, showing);
+      }
+    });
+  }
+}
 
 /** Walks every step a mode's tour defines and checks the control it names is
  * really on the page, so a renamed or removed control fails this test instead

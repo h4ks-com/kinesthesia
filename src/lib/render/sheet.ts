@@ -262,11 +262,10 @@ function paintGroup(
   faded: boolean,
 ): void {
   for (const id of ids) {
-    const boxes = marks.get(id);
-    if (boxes === undefined) {
-      continue;
-    }
-    for (const box of boxes) {
+    // Only where the note is struck, as the panel marks it: a tie is one note
+    // written in several places and played once.
+    const box = marks.get(id)?.[0];
+    if (box !== undefined) {
       paintBox(ctx, box, region, scroll, width, color, alpha, faded);
     }
   }

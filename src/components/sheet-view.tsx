@@ -1,6 +1,6 @@
 "use client";
 
-import { Contrast } from "lucide-react";
+import { Contrast, FileDown, LoaderCircle } from "lucide-react";
 import type {
   IOSMDOptions,
   OpenSheetMusicDisplay,
@@ -9,12 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createNoteSweep } from "@/lib/midi/part";
 import type { Song, SongNote, Transpose } from "@/lib/midi/song";
 import { loadSheetMusic } from "@/lib/sheet/load";
-import {
-  buildMarks,
-  nextMarkWidth,
-  nowMarkWidth,
-  type ScoreMark,
-} from "@/lib/sheet/marks";
+import { buildMarks, nextMarkWidth, type ScoreMark } from "@/lib/sheet/marks";
 import { dragScroll, pageWidth } from "@/lib/sheet/page";
 import { sheetColors } from "@/lib/sheet/theme";
 import type { SheetMusic, SheetTheme } from "@/lib/sheet/types";
@@ -22,6 +17,8 @@ import type { SheetMusic, SheetTheme } from "@/lib/sheet/types";
 type SheetViewProps = {
   url: string;
   song: Song;
+  /** The song's presented name, which is what a downloaded page is called. */
+  title: string;
   transpose: Transpose;
   /** The song position in seconds, read every animation frame: the same
    * clock the falling notes read, so the notation highlight tracks it
@@ -42,6 +39,14 @@ type LoadState =
   | { readonly status: "ready"; readonly sheet: SheetMusic }
   | { readonly status: "failed"; readonly message: string };
 
+function sheetButtonClass(theme: SheetTheme): string {
+  const surface =
+    theme === "light"
+      ? "border-ink/20 bg-paper/70 text-ink/60"
+      : "border-line-strong bg-panel/60 text-muted";
+  return `rounded-lg border p-1.5 pointer-coarse:min-h-11 pointer-coarse:min-w-11 backdrop-blur transition-colors hover:border-accent hover:text-accent disabled:opacity-50 ${surface}`;
+}
+
 function shellClass(theme: SheetTheme): string {
   const surface =
     theme === "light" ? "bg-paper text-ink/70" : "bg-panel text-muted";
@@ -51,6 +56,7 @@ function shellClass(theme: SheetTheme): string {
 export function SheetView({
   url,
   song,
+  title,
   transpose,
   getPosition,
   playing,
@@ -118,6 +124,7 @@ export function SheetView({
   return (
     <Notation
       sheet={state.sheet}
+      title={title}
       notes={notes}
       getPosition={getPosition}
       playing={playing}
@@ -208,29 +215,30 @@ function paintMarks(
 ): void {
   let used = 0;
   for (const id of ids) {
-    const boxes = marks.get(id);
-    if (boxes === undefined) {
+    // Only where the note is struck. A tie is one note written in several
+    // places, and marking every place it is held puts a marker in bars the
+    // reader has nothing to play in.
+    const mark = marks.get(id)?.[0];
+    if (mark === undefined) {
       continue;
     }
-    for (const mark of boxes) {
-      let element = pool[used];
-      if (element === undefined) {
-        element = document.createElement("div");
-        element.style.position = "absolute";
-        element.style.pointerEvents = "none";
-        element.dataset.testid = testId;
-        host.appendChild(element);
-        pool.push(element);
-      }
-      element.style.left = `${mark.left}px`;
-      element.style.top = `${mark.top}px`;
-      element.style.width = `${width}px`;
-      element.style.height = `${mark.height}px`;
-      element.style.background = background;
-      element.style.opacity = String(opacity);
-      element.style.display = "block";
-      used += 1;
+    let element = pool[used];
+    if (element === undefined) {
+      element = document.createElement("div");
+      element.style.position = "absolute";
+      element.style.pointerEvents = "none";
+      element.dataset.testid = testId;
+      host.appendChild(element);
+      pool.push(element);
     }
+    element.style.left = `${mark.left}px`;
+    element.style.top = `${mark.top}px`;
+    element.style.width = `${width}px`;
+    element.style.height = `${mark.height}px`;
+    element.style.background = background;
+    element.style.opacity = String(opacity);
+    element.style.display = "block";
+    used += 1;
   }
   for (let index = used; index < pool.length; index += 1) {
     const element = pool[index];
@@ -242,6 +250,7 @@ function paintMarks(
 
 function Notation({
   sheet,
+  title,
   notes,
   getPosition,
   playing,
@@ -250,6 +259,7 @@ function Notation({
   onTheme,
 }: {
   sheet: SheetMusic;
+  title: string;
   notes: readonly SongNote[];
   getPosition: () => number;
   playing: boolean;
@@ -258,15 +268,25 @@ function Notation({
   onTheme: (next: SheetTheme) => void;
 }) {
   const isLocked = playing && onSeek !== null;
+  const [saving, setSaving] = useState(false);
+  // Engraving every page again is seconds of work, so the button says so and
+  // refuses a second press until the file is handed over.
+  const savePdf = async (): Promise<void> => {
+    setSaving(true);
+    try {
+      const { downloadSheetPdf } = await import("@/lib/sheet/export-pdf");
+      await downloadSheetPdf(sheet, title);
+    } finally {
+      setSaving(false);
+    }
+  };
   const hostRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const osmdRef = useRef<OpenSheetMusicDisplay | null>(null);
   const marksRef = useRef<ReadonlyMap<number, readonly ScoreMark[]>>(new Map());
-  const nowWidthRef = useRef(0);
   const nextWidthRef = useRef(0);
-  const nowPoolRef = useRef<HTMLDivElement[]>([]);
   const nextPoolRef = useRef<HTMLDivElement[]>([]);
 
   useEffect(() => {
@@ -279,7 +299,6 @@ function Notation({
       return;
     }
     host.innerHTML = "";
-    nowPoolRef.current = [];
     nextPoolRef.current = [];
     void (async () => {
       try {
@@ -320,7 +339,6 @@ function Notation({
         osmd.render();
         osmdRef.current = osmd;
         marksRef.current = buildMarks(osmd, sheet.writtenNotes);
-        nowWidthRef.current = nowMarkWidth(osmd.zoom);
         nextWidthRef.current = nextMarkWidth(osmd.zoom);
         setReady(true);
       } catch {
@@ -458,8 +476,6 @@ function Notation({
     lastManualScroll.current = Number.NEGATIVE_INFINITY;
 
     const colors = sheetColors(theme);
-    const nowBackground = `linear-gradient(to right, transparent, ${colors.cursor} 20%, ${colors.cursor} 80%, transparent)`;
-
     let frame = 0;
     const step = (): void => {
       const now = performance.now();
@@ -478,16 +494,6 @@ function Notation({
       const marks = marksRef.current;
       paintMarks(
         host,
-        nowPoolRef.current,
-        sweep.sounding,
-        marks,
-        nowWidthRef.current,
-        nowBackground,
-        colors.cursorAlpha,
-        "sheet-mark-now",
-      );
-      paintMarks(
-        host,
         nextPoolRef.current,
         sweep.next,
         marks,
@@ -499,7 +505,7 @@ function Notation({
 
       if (scrollEl !== null) {
         const primary =
-          firstMark(sweep.sounding, marks) ?? firstMark(sweep.next, marks);
+          firstMark(sweep.next, marks) ?? firstMark(sweep.sounding, marks);
         if (primary !== null) {
           const maxScroll = Math.max(
             0,
@@ -574,26 +580,42 @@ function Notation({
             later resize of this scroll container untouched. */}
         <div ref={hostRef} aria-hidden="true" className="relative" />
       </div>
-      {/* `[data-tip]` in globals.css forces position:relative at the same
+      {/* Kept on the left, where nothing else in the page reaches: the focus
+          exit and the header's own controls all live in the top right corner.
+          `[data-tip]` in globals.css forces position:relative at the same
           specificity as the `absolute` utility, so the positioned element
-          has to be a plain wrapper around the button that carries the tip,
-          the same split the focus-exit button in player.tsx already uses. */}
-      <div className="absolute top-2 right-2 z-10">
+          has to be a plain wrapper around the buttons that carry the tips. */}
+      <div className="absolute top-2 left-2 z-10 flex gap-1.5">
         <button
           type="button"
           onClick={() => onTheme(theme === "light" ? "dark" : "light")}
           aria-pressed={theme === "light"}
           aria-label="Invert notation colours"
           data-tip={theme === "light" ? "Switch to dark" : "Switch to paper"}
-          data-tip-side="top"
-          data-tip-align="right"
-          className={`rounded-lg border p-1.5 pointer-coarse:min-h-11 pointer-coarse:min-w-11 backdrop-blur transition-colors hover:border-accent hover:text-accent ${
-            theme === "light"
-              ? "border-ink/20 bg-paper/70 text-ink/60"
-              : "border-line-strong bg-panel/60 text-muted"
-          }`}
+          data-tip-side="bottom"
+          data-tip-align="left"
+          className={sheetButtonClass(theme)}
         >
           <Contrast className="size-3.5" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void savePdf()}
+          disabled={saving}
+          aria-label="Download the sheet music"
+          data-tip={saving ? "Preparing the pages" : "Download as a PDF"}
+          data-tip-side="bottom"
+          data-tip-align="left"
+          className={sheetButtonClass(theme)}
+        >
+          {saving ? (
+            <LoaderCircle
+              className="size-3.5 animate-spin"
+              aria-hidden="true"
+            />
+          ) : (
+            <FileDown className="size-3.5" aria-hidden="true" />
+          )}
         </button>
       </div>
     </div>

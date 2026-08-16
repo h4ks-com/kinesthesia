@@ -35,6 +35,11 @@ const watch: readonly TourStep[] = [
     body: "Click the title for song info, the MIDI file, a link to copy, or to save it as a favorite.",
   },
   {
+    anchor: "speed",
+    title: "Speed, key and settings",
+    body: "Speed and key sit here, with settings next to them for key size, timing and how the notes look.",
+  },
+  {
     anchor: "focus",
     title: "Focus",
     body: "Strip the page back to the keys and the falling notes, for a clean recording. Esc brings the controls back.",
@@ -81,6 +86,11 @@ const learn: readonly TourStep[] = [
     body: "Press play, or the space bar. The song holds at each note until you hit the right key.",
   },
   {
+    anchor: "speed",
+    title: "Speed, key and settings",
+    body: "Speed and key sit here, so a hard passage can go slower or move to an easier key. Settings next to them cover key size and timing.",
+  },
+  {
     anchor: "modes",
     title: "More ways to play",
     body: "Watch it played back, or take on someone in Multiplayer.",
@@ -108,7 +118,7 @@ const multiplayer: readonly TourStep[] = [
   {
     anchor: "speed",
     title: "Shared for both",
-    body: "Speed and key are the same for both players, so you roll together.",
+    body: "Speed and key are the same for both players, so you roll together. Settings next to them are yours alone: key size, timing and how the notes look.",
   },
   {
     anchor: "invite",

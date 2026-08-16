@@ -62,34 +62,35 @@ test("the highlight follows which notes are actually sounding, by identity", asy
     .poll(async () => sheet.locator("svg path").count(), { timeout: 15_000 })
     .toBeGreaterThan(20);
 
-  const nowMarks = sheet.locator('[data-testid="sheet-mark-now"]:visible');
   const nextMarks = sheet.locator('[data-testid="sheet-mark-next"]:visible');
   const seek = page.getByRole("slider", { name: "Song position" });
 
-  // Before the runway's first note, nothing sounds, so nothing reads as
-  // sounding; what comes next still does.
+  // One bar, on the note that comes next. What is already sounding is in the
+  // notation itself; a second marker over it only crowds the page.
   await seek.fill("0");
-  await expect.poll(() => nowMarks.count()).toBe(0);
   await expect.poll(() => nextMarks.count()).toBeGreaterThan(0);
-
-  // The two read as distinct markers: a wide highlight on what is sounding,
-  // a narrow bar on what comes next, so they are never the same shape.
-  const nextBox = await nextMarks.first().boundingBox();
-  expect(nextBox?.height ?? 0).toBeGreaterThan(40);
+  const firstBox = await nextMarks.first().boundingBox();
+  expect(firstBox?.height ?? 0).toBeGreaterThan(40);
+  const positions = async (): Promise<number[]> =>
+    nextMarks.evaluateAll((nodes) => [
+      ...new Set(
+        nodes.map((node) => Math.round(node.getBoundingClientRect().x)),
+      ),
+    ]);
+  expect((await positions()).length).toBe(1);
 
   // Well inside the fixture's first notes (the runway shifts the whole file
-  // 2.5s forward), something is now sounding.
+  // 2.5s forward), the bar has moved on with the music.
   await seek.fill("2.6");
-  await expect.poll(() => nowMarks.count()).toBeGreaterThan(0);
-  const nowBox = await nowMarks.first().boundingBox();
-  expect(nowBox?.width ?? 0).toBeGreaterThan(nextBox?.width ?? 0);
-  expect(nowBox?.height ?? 0).toBeCloseTo(nextBox?.height ?? 0, 0);
+  await expect
+    .poll(async () => (await positions())[0] ?? 0)
+    .not.toBe(Math.round(firstBox?.x ?? 0));
+  expect((await positions()).length).toBe(1);
 
-  // Past the last note's own sound, the score has nothing left to mark: it
-  // ends when the music does rather than running on with an empty highlight.
+  // Past the last note, the score has nothing left to mark: it ends when the
+  // music does rather than running on with an empty marker.
   const max = await seek.getAttribute("max");
   await seek.fill(String(max));
-  await expect.poll(() => nowMarks.count()).toBe(0);
   await expect.poll(() => nextMarks.count()).toBe(0);
 });
 
@@ -406,12 +407,18 @@ test("the focus exit and the invert button stay clear of each other in focus mod
   await expect(exit).toBeVisible();
   await expect(invert).toBeVisible();
 
-  expect(boxesIntersect(await requireBox(exit), await requireBox(invert))).toBe(
-    false,
-  );
+  const save = page.getByRole("button", { name: "Download the sheet music" });
+  await expect(save).toBeVisible();
 
-  await page.setViewportSize({ width: 390, height: 844 });
-  expect(boxesIntersect(await requireBox(exit), await requireBox(invert))).toBe(
-    false,
-  );
+  for (const size of [null, { width: 390, height: 844 }]) {
+    if (size !== null) {
+      await page.setViewportSize(size);
+    }
+    const exitBox = await requireBox(exit);
+    expect(boxesIntersect(exitBox, await requireBox(invert))).toBe(false);
+    expect(boxesIntersect(exitBox, await requireBox(save))).toBe(false);
+    expect(
+      boxesIntersect(await requireBox(invert), await requireBox(save)),
+    ).toBe(false);
+  }
 });

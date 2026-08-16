@@ -15,6 +15,12 @@ type WalkthroughProps = {
   onClose: () => void;
 };
 
+/** How long a step waits for its control to lay out before it is given up as
+ * absent. Long enough for a popover's entrance and a first paint of the
+ * transport, short enough that a genuinely missing control does not hold the
+ * tour still. */
+const anchorFrames = 40;
+
 const pad = 8;
 const dialogWidth = 300;
 const gap = 14;
@@ -26,11 +32,48 @@ type Placement = {
   readonly height: number;
 };
 
+type AnchorBox = {
+  readonly top: number;
+  readonly left: number;
+  readonly width: number;
+  readonly height: number;
+};
+
 /** A `display: none` anchor is still in the DOM but has no box. A control a
  * mode hides on a phone counts as absent, so the tour skips its step. */
 function shownAnchor(anchor: string): Element | null {
   const el = document.querySelector(`[data-tour="${anchor}"]`);
   return el !== null && el.getClientRects().length > 0 ? el : null;
+}
+
+/** The part of an anchor's box a reader can actually see: clipped by every
+ * ancestor that scrolls or clips it, and by the viewport. A track list inside
+ * a capped popover panel is taller than the panel that scrolls it, so its raw
+ * box reaches past what is on screen, and the tour must not point at that. */
+function visibleBox(el: Element): AnchorBox | null {
+  const own = el.getBoundingClientRect();
+  let top = own.top;
+  let left = own.left;
+  let right = own.right;
+  let bottom = own.bottom;
+  for (let node = el.parentElement; node !== null; node = node.parentElement) {
+    const style = getComputedStyle(node);
+    if (style.overflowX === "visible" && style.overflowY === "visible") {
+      continue;
+    }
+    const box = node.getBoundingClientRect();
+    top = Math.max(top, box.top);
+    left = Math.max(left, box.left);
+    right = Math.min(right, box.right);
+    bottom = Math.min(bottom, box.bottom);
+  }
+  top = Math.max(top, 0);
+  left = Math.max(left, 0);
+  right = Math.min(right, window.innerWidth);
+  bottom = Math.min(bottom, window.innerHeight);
+  const width = right - left;
+  const height = bottom - top;
+  return width > 0 && height > 0 ? { top, left, width, height } : null;
 }
 
 function triggerButton(anchor: string): HTMLButtonElement | null {
@@ -49,61 +92,58 @@ function clickTrigger(anchor: string): void {
   triggerButton(anchor)?.click();
 }
 
-/** Sits the dialog below the spotlight, or above when the bottom is tight, and
- * keeps it on screen either way. On a phone it is pinned to the bottom. */
-function placeDialog(rect: DOMRect, dialogHeight: number): Placement {
+const minDialogHeight = 100;
+
+/** Sits the dialog right below the spotlight, or above it when the space
+ * below is too tight, whichever leaves it clear of the control it points at.
+ * A popover's own scroll cap keeps its anchor from ever eating the whole
+ * screen, so one side almost always has room; on the rare anchor tall enough
+ * to leave neither side comfortable, the dialog shrinks to what is left and
+ * scrolls internally rather than overlapping the control. On a phone the
+ * dialog spans the full width instead of sitting centred under the anchor. */
+function placeDialog(rect: AnchorBox, dialogHeight: number): Placement {
   const phone = window.innerWidth < 640;
-  if (phone) {
-    // Sit opposite the anchor's half so the dialog never covers the control it
-    // is pointing at. The header lives up top, the transport and keys below.
-    const anchorLow = rect.top + rect.height / 2 > window.innerHeight / 2;
-    return {
-      top: anchorLow ? gap : window.innerHeight - dialogHeight - gap,
-      left: gap,
-      width: window.innerWidth - gap * 2,
-      height: dialogHeight,
-    };
-  }
-  const below = rect.bottom + gap;
-  const above = rect.top - gap - dialogHeight;
-  const roomBelow = below + dialogHeight < window.innerHeight;
-  const top = Math.min(
-    Math.max(gap, roomBelow ? below : above),
-    window.innerHeight - dialogHeight - gap,
+  const width = phone ? window.innerWidth - gap * 2 : dialogWidth;
+
+  const roomBelow = window.innerHeight - gap * 2 - (rect.top + rect.height);
+  const roomAbove = rect.top - gap * 2;
+  const useBelow = roomBelow >= dialogHeight || roomBelow >= roomAbove;
+  const height = Math.min(
+    dialogHeight,
+    Math.max(minDialogHeight, useBelow ? roomBelow : roomAbove),
   );
-  const centred = rect.left + rect.width / 2 - dialogWidth / 2;
-  const left = Math.min(
-    Math.max(gap, centred),
-    window.innerWidth - dialogWidth - gap,
-  );
-  return { top, left, width: dialogWidth, height: dialogHeight };
+  const top = useBelow
+    ? rect.top + rect.height + gap
+    : Math.max(gap, rect.top - gap - height);
+
+  const left = phone
+    ? gap
+    : Math.min(
+        Math.max(gap, rect.left + rect.width / 2 - width / 2),
+        window.innerWidth - width - gap,
+      );
+
+  return { top, left, width, height };
 }
 
 export function Walkthrough({ steps, onClose }: WalkthroughProps) {
   const [live, setLive] = useState<readonly TourStep[]>([]);
   const [index, setIndex] = useState(0);
-  const [rect, setRect] = useState<DOMRect | null>(null);
+  const [rect, setRect] = useState<AnchorBox | null>(null);
   const [place, setPlace] = useState<Placement | null>(null);
   const dialog = useRef<HTMLDivElement | null>(null);
   const next = useRef<HTMLButtonElement | null>(null);
   const held = useRef<string | null>(null);
   const advanceRef = useRef<() => void>(() => {});
 
+  // Every step is kept and each one is settled when it is reached. Deciding
+  // the whole list up front drops a control that had not finished laying out
+  // yet, which is a step silently missing from the tour for the rest of the
+  // session; the per-step measure below is what skips one that never arrives.
   useLayoutEffect(() => {
-    // A step whose anchor lives inside a popover counts as present when its
-    // trigger is on the page, since the tour opens it to reveal the anchor.
-    const present = steps.filter(
-      (step) =>
-        shownAnchor(step.anchor) !== null ||
-        (step.open !== undefined && shownAnchor(step.open) !== null),
-    );
-    if (present.length === 0) {
-      onClose();
-      return;
-    }
-    setLive(present);
+    setLive(steps);
     setIndex(0);
-  }, [steps, onClose]);
+  }, [steps]);
 
   const step = live[index] ?? null;
 
@@ -123,15 +163,17 @@ export function Walkthrough({ steps, onClose }: WalkthroughProps) {
       clickTrigger(desired);
     }
     held.current = desired;
-    // Opening a popover lands the anchor a render later, so the rect is chased
-    // across a few frames before the step is given up as empty.
+    // Opening a popover lands the anchor a render later, and a popover's own
+    // entrance animation can leave it clipped to nothing for a frame, so the
+    // box is chased across a few frames before the step is given up as empty.
     let frame = 0;
     let tries = 0;
     const measure = () => {
       const el = shownAnchor(step.anchor);
-      if (el !== null) {
-        setRect(el.getBoundingClientRect());
-      } else if (tries++ < 20) {
+      const box = el === null ? null : visibleBox(el);
+      if (box !== null) {
+        setRect(box);
+      } else if (tries++ < anchorFrames) {
         frame = requestAnimationFrame(measure);
       } else {
         advanceRef.current();
@@ -152,7 +194,10 @@ export function Walkthrough({ steps, onClose }: WalkthroughProps) {
     if (rect === null) {
       return;
     }
-    setPlace(placeDialog(rect, dialog.current?.offsetHeight ?? 150));
+    // scrollHeight, not offsetHeight: a dialog already capped to a previous
+    // step's shorter room must still report its natural content height here,
+    // or that cap would lock in and never relax for a step with more room.
+    setPlace(placeDialog(rect, dialog.current?.scrollHeight ?? 150));
     if (!opened.current) {
       opened.current = true;
       next.current?.focus();
@@ -273,29 +318,35 @@ export function Walkthrough({ steps, onClose }: WalkthroughProps) {
         ref={dialog}
         role="dialog"
         aria-labelledby="walkthrough-title"
-        style={{ top: shown.top, left: shown.left, width: shown.width }}
-        className="rise pointer-events-auto absolute rounded-xl border border-line-strong bg-panel p-4 shadow-[0_20px_60px_-12px_rgba(0,0,0,0.9)]"
+        style={{
+          top: shown.top,
+          left: shown.left,
+          width: shown.width,
+          maxHeight: shown.height,
+        }}
+        className="rise pointer-events-auto absolute overflow-y-auto rounded-xl border border-line-strong bg-panel p-4 shadow-[0_20px_60px_-12px_rgba(0,0,0,0.9)]"
       >
         <h2 id="walkthrough-title" className="label text-accent">
           {step.title}
         </h2>
         <p className="mt-1.5 text-muted text-sm leading-relaxed">{step.body}</p>
         <div className="mt-3 flex items-center gap-3">
-          <span className="font-mono text-faint text-xs tabular-nums">
+          <span className="shrink-0 whitespace-nowrap font-mono text-faint text-xs tabular-nums">
             {index + 1} / {live.length}
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="mr-auto font-mono text-faint text-xs transition-colors hover:text-muted"
+            aria-label="Skip tutorial"
+            className="mr-auto shrink-0 whitespace-nowrap font-mono text-faint text-xs transition-colors hover:text-muted"
           >
-            Skip tutorial
+            Skip
           </button>
           {index === 0 ? null : (
             <button
               type="button"
               onClick={back}
-              className="rounded-lg border border-line-strong px-2.5 py-1 text-muted text-xs transition-colors hover:border-accent hover:text-accent"
+              className="shrink-0 whitespace-nowrap rounded-lg border border-line-strong px-2.5 py-1 text-muted text-xs transition-colors hover:border-accent hover:text-accent"
             >
               Back
             </button>
@@ -304,7 +355,7 @@ export function Walkthrough({ steps, onClose }: WalkthroughProps) {
             ref={next}
             type="button"
             onClick={advance}
-            className="rounded-lg bg-accent px-3 py-1 font-medium text-void text-xs transition-colors hover:bg-accent-glow"
+            className="shrink-0 whitespace-nowrap rounded-lg bg-accent px-3 py-1 font-medium text-void text-xs transition-colors hover:bg-accent-glow"
           >
             {last ? "Done" : "Next"}
           </button>

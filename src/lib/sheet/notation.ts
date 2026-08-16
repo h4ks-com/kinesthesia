@@ -381,6 +381,64 @@ export function decomposeDuration(
   return chunks;
 }
 
+export type BeamKind =
+  | "begin"
+  | "continue"
+  | "end"
+  | "forward hook"
+  | "backward hook";
+
+export type Beam = {
+  readonly number: number;
+  readonly kind: BeamKind;
+};
+
+/** Beam lines a value carries: one for an eighth, one more for each halving
+ * below it. A dot lengthens a note without adding a line. */
+function beamCount(units: number): number {
+  const value = valueByUnits.get(units);
+  if (value === undefined) {
+    return 0;
+  }
+  const depth = noteTypeNames.indexOf(value.type);
+  return Math.max(0, depth - noteTypeNames.indexOf("quarter"));
+}
+
+/** Every beam line of one group, level by level. A line spanning a single note
+ * is a hook, angled back into the group it hangs off, which is how a dotted
+ * eighth and its sixteenth beam together at all. */
+function beamKinds(counts: readonly number[]): Beam[][] {
+  const kinds: Beam[][] = counts.map(() => []);
+  const deepest = Math.max(...counts);
+  for (let level = 1; level <= deepest; level += 1) {
+    let index = 0;
+    while (index < counts.length) {
+      if ((counts[index] ?? 0) < level) {
+        index += 1;
+        continue;
+      }
+      let last = index;
+      while (last + 1 < counts.length && (counts[last + 1] ?? 0) >= level) {
+        last += 1;
+      }
+      if (last === index) {
+        kinds[index]?.push({
+          number: level,
+          kind: index === 0 ? "forward hook" : "backward hook",
+        });
+      } else {
+        kinds[index]?.push({ number: level, kind: "begin" });
+        for (let middle = index + 1; middle < last; middle += 1) {
+          kinds[middle]?.push({ number: level, kind: "continue" });
+        }
+        kinds[last]?.push({ number: level, kind: "end" });
+      }
+      index = last + 1;
+    }
+  }
+  return kinds;
+}
+
 type Draft = {
   measureIndex: number;
   positionInMeasure: number;
@@ -389,6 +447,44 @@ type Draft = {
   tieStart: boolean;
   tieStop: boolean;
 };
+
+/** Groups a voice's beamable noteheads by the beat they fall in, so a run of
+ * sixteenths reads as one group. A rest, a note a quarter or longer, and the
+ * end of a beat each close the group open at the time. */
+function beamsFor(drafts: readonly Draft[], grid: Grid): Beam[][] {
+  const beams: Beam[][] = drafts.map(() => []);
+  let run: number[] = [];
+  const flush = (): void => {
+    if (run.length > 1) {
+      const kinds = beamKinds(
+        run.map((at) => beamCount(drafts[at]?.durationUnits ?? 0)),
+      );
+      run.forEach((at, position) => {
+        beams[at] = kinds[position] ?? [];
+      });
+    }
+    run = [];
+  };
+
+  drafts.forEach((draft, index) => {
+    if (draft.tones.length === 0 || beamCount(draft.durationUnits) === 0) {
+      flush();
+      return;
+    }
+    const open = drafts[run.at(-1) ?? -1];
+    const beat = Math.floor(draft.positionInMeasure / grid.beatUnits);
+    if (
+      open !== undefined &&
+      (open.measureIndex !== draft.measureIndex ||
+        Math.floor(open.positionInMeasure / grid.beatUnits) !== beat)
+    ) {
+      flush();
+    }
+    run.push(index);
+  });
+  flush();
+  return beams;
+}
 
 export type NoteInstruction = {
   readonly measureIndex: number;
@@ -402,6 +498,7 @@ export type NoteInstruction = {
   readonly tieStop: boolean;
   readonly staff: 1 | 2;
   readonly voice: number;
+  readonly beams: readonly Beam[];
 };
 
 /** Splits a voice's events at measure boundaries, then at beats and written
@@ -457,7 +554,13 @@ export function buildInstructions(
       }
     }
   }
-  return drafts.map((draft) => ({ ...draft, staff, voice }));
+  const beams = beamsFor(drafts, grid);
+  return drafts.map((draft, index) => ({
+    ...draft,
+    staff,
+    voice,
+    beams: beams[index] ?? [],
+  }));
 }
 
 function escapeXml(value: string): string {
@@ -503,6 +606,9 @@ function noteXml(
     dots: 0,
   };
   const dotXml = "<dot/>".repeat(dots);
+  const beamXml = instruction.beams
+    .map((beam) => `<beam number="${beam.number}">${beam.kind}</beam>`)
+    .join("");
   const tieXml =
     (instruction.tieStop ? '<tie type="stop"/>' : "") +
     (instruction.tieStart ? '<tie type="start"/>' : "");
@@ -539,12 +645,15 @@ function noteXml(
       );
       const accidentalXml =
         accidental === null ? "" : `<accidental>${accidental}</accidental>`;
+      // MusicXML hangs a chord's beams off its first note alone, and orders a
+      // note's children: type, dot, accidental, staff, beam, notations.
       return (
         `<note>${chordXml}<pitch><step>${spelled.step}</step>${alterXml}` +
         `<octave>${spelled.octave}</octave></pitch>` +
         `<duration>${instruction.durationUnits}</duration>${tieXml}` +
         `<voice>${instruction.voice}</voice><type>${type}</type>${dotXml}` +
-        `${accidentalXml}<staff>${instruction.staff}</staff>${notationsXml}</note>`
+        `${accidentalXml}<staff>${instruction.staff}</staff>` +
+        `${index === 0 ? beamXml : ""}${notationsXml}</note>`
       );
     })
     .join("");

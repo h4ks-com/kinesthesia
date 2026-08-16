@@ -7,6 +7,7 @@ import {
   fillGaps,
   type Grid,
   meterGrid,
+  type NoteInstruction,
   type QuantizedNote,
   quantizeNotes,
   separateVoices,
@@ -334,5 +335,104 @@ describe("buildInstructions", () => {
     ]);
     expect(instructions[0]?.tieStart).toBe(true);
     expect(instructions[1]?.tieStop).toBe(true);
+  });
+});
+
+describe("beams", () => {
+  const sixteenth = divisions / 4;
+  const eighth = divisions / 2;
+  const tone = { pitch: 60, ids: [1] };
+
+  const run = (
+    lengths: readonly number[],
+    grid: Grid = common,
+  ): NoteInstruction[] => {
+    let at = 0;
+    return buildInstructions(
+      lengths.map((duration) => {
+        const event = { start: at, duration, tones: [tone] };
+        at += duration;
+        return event;
+      }),
+      grid,
+      1,
+      1,
+    );
+  };
+
+  const kinds = (
+    instructions: readonly NoteInstruction[],
+    level = 1,
+  ): (string | null)[] =>
+    instructions.map(
+      (one) => one.beams.find((beam) => beam.number === level)?.kind ?? null,
+    );
+
+  it("begins, continues and ends a group of sixteenths", () => {
+    expect(kinds(run([sixteenth, sixteenth, sixteenth, sixteenth]))).toEqual([
+      "begin",
+      "continue",
+      "continue",
+      "end",
+    ]);
+  });
+
+  it("draws the second beam line of a sixteenth group too", () => {
+    expect(kinds(run([sixteenth, sixteenth]), 2)).toEqual(["begin", "end"]);
+  });
+
+  it("leaves a note alone in its beat unbeamed", () => {
+    const instructions = buildInstructions(
+      [
+        { start: 0, duration: eighth, tones: [tone] },
+        { start: eighth, duration: eighth, tones: [] },
+        { start: divisions, duration: eighth, tones: [tone] },
+      ],
+      common,
+      1,
+      1,
+    );
+    expect(kinds(instructions)).toEqual([null, null, null]);
+  });
+
+  it("never beams across a beat", () => {
+    expect(kinds(run([eighth, eighth, eighth, eighth]))).toEqual([
+      "begin",
+      "end",
+      "begin",
+      "end",
+    ]);
+  });
+
+  it("beams a whole dotted-quarter beat together in 9/8", () => {
+    const beat = compound.beatUnits;
+    expect(
+      kinds(run([beat / 3, beat / 3, beat / 3, beat / 3], compound)),
+    ).toEqual(["begin", "continue", "end", null]);
+  });
+
+  it("breaks a beam at a rest", () => {
+    const instructions = buildInstructions(
+      [
+        { start: 0, duration: sixteenth, tones: [tone] },
+        { start: sixteenth, duration: sixteenth, tones: [] },
+        { start: sixteenth * 2, duration: sixteenth, tones: [tone] },
+        { start: sixteenth * 3, duration: sixteenth, tones: [tone] },
+      ],
+      common,
+      1,
+      1,
+    );
+    expect(kinds(instructions)).toEqual([null, null, "begin", "end"]);
+  });
+
+  it("hooks the shorter note of a dotted eighth and its sixteenth", () => {
+    const group = run([eighth * 1.5, sixteenth]);
+    expect(kinds(group)).toEqual(["begin", "end"]);
+    expect(kinds(group, 2)).toEqual([null, "backward hook"]);
+  });
+
+  it("leaves a quarter note and anything longer unbeamed", () => {
+    expect(kinds(run([divisions, divisions]))).toEqual([null, null]);
   });
 });

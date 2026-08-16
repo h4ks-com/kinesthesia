@@ -169,8 +169,9 @@ src/lib/
                               onto the subdivision its own onsets show,
                               separates a staff into voices so overlapping
                               notes each get written once, splits durations at
-                              beats and writes it all as MusicXML, carrying
-                              each written note's source ids through every step
+                              beats, beams by beat and writes it all as
+                              MusicXML, carrying each written note's source ids
+                              through every step
   sheet/convert.ts            the pure song to MusicXML pipeline the tests
                               exercise directly, and where each written note's
                               ids and score coordinates are collected
@@ -289,7 +290,7 @@ play.
 
 `src/lib/sheet/` turns a song into MusicXML: `convert.ts` quantises every note,
 spells each pitch from the key `midi/analysis.ts` already detects, and writes
-measures, rests and ties across a barline as plain MusicXML 3.1.
+measures, rests, beams and ties across a barline as plain MusicXML 3.1.
 
 The meter is read into a grid first: how many units a measure and a beat hold,
 where a compound meter like 9/8 is felt in dotted quarters rather than in its
@@ -313,7 +314,10 @@ Durations are split by reading the beat before the note: one that fills a beat
 is written once, one that starts inside a beat stops at the end of it, and one
 that starts on a beat may only run over further beats whole. Silence has no
 stem to read the beat off, so a rest is written beat by beat unless it takes
-the whole measure.
+the whole measure. Beams group by the same beat, broken by a rest and by
+anything a quarter note or longer; a beam line spanning one note alone is
+written as a hook, which is how a dotted eighth and its sixteenth beam
+together.
 
 Each staff is separated into up to four voices, streams where no
 two notes sound at once, so a note held under a moving line is written once for

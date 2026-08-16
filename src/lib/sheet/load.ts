@@ -48,6 +48,10 @@ export async function loadSheetMusic(
    * knows both, so the notation is written from what it hands over rather than
    * working the same question out a second way. */
   noteIds: ReadonlySet<number>,
+  /** The song's presented name, the same one the header shows: `song.name`
+   * is the raw file name, extension and all, which is not fit to print as a
+   * score's own title. */
+  title: string,
 ): Promise<SheetMusic> {
   const bytes = await readSongBytes(url);
   const midi = readMidi(bytes);
@@ -58,7 +62,7 @@ export async function loadSheetMusic(
   const chosen = song.notes.filter((note) => noteIds.has(note.id));
 
   return songToSheetMusic({
-    title: song.name,
+    title,
     parts: sheetParts({
       tracks: song.tracks.map((track) => ({
         index: track.index,

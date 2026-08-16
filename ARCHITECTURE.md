@@ -179,16 +179,17 @@ src/lib/
                               the live view and the render
   sheet/load.ts               rereads a file's own MIDI for the tempo, meter
                               and key the converter needs, which `Song` does
-                              not carry, and picks out the notes the page is
-                              for
+                              not carry, picks out the notes the page is for,
+                              and carries in the song's presented title rather
+                              than the file's raw name
   sheet/theme.ts              the ink, paper and marker colours a notation
                               theme reads in, resolved from the page's custom
                               properties once so a render can carry them
   sheet/page.ts               the fixed width the live view engraves at, and
                               where a drag leaves a scroll position, clamped
-  sheet/export-pdf.ts         paginates the whole engraved score into A4 pages,
-                              between systems and never through one, and hands
-                              back a downloaded PDF
+  sheet/export-pdf.ts         paginates the whole engraved score into concert-
+                              size pages, between systems and never through
+                              one, and hands back a downloaded PDF
   tour/steps.ts               what the walkthrough points at, per mode
   tour/use-walkthrough.ts     first-run auto play and the replay it hands back
   render/keyboard.ts          key geometry, sizing and the pitch under a point
@@ -353,16 +354,25 @@ both global settings, remembered the way key width and timing offset are, so
 they hold across every song and every mode, including focus mode, which
 shares the same stage the roll and the notation split.
 
-`sheet/export-pdf.ts` takes the notation to paper. It engraves the whole score
-off screen once, backend `svg` so the pages stay vector, black ink on white
-regardless of the screen's own theme. A page never starts inside a system:
-the cursor is walked across the whole score to read where each one begins,
-and `paginateSystems` breaks between them, greedily fitting as many as an A4
-page holds. Each page is a clone of that one engraved SVG, cropped to its own
-slice and pruned of every element outside it, since a crop by `viewBox` alone
-still carries the rest of the score underneath it into the PDF. `jsPDF` and
-`svg2pdf.js` turn each cropped clone into one page, and `downloadBlob` hands
-the file back the way a rendered video already does.
+`sheet/export-pdf.ts` takes the notation to paper. Its page is 9x12in, the
+concert/octavo size published piano and instrumental sheet music actually
+ships at, not A4: roomier in both directions, with 15mm margins. It engraves
+the whole score off screen once, backend `svg` so the pages stay vector,
+black ink on white regardless of the screen's own theme, into a container
+sized to the page's own printable width in CSS pixels rather than borrowed
+from the screen panel's, and at a zoom chosen to print a real engraver's
+staff height: about 7mm for a solo or piano line, smaller for a score of
+several instruments stacking more than one staff in a system. A page never
+starts inside a system: the cursor is walked across the whole score to read
+where each one begins, and `paginateSystems` breaks between them, greedily
+fitting as many as the page's printable height holds. Each page is a clone of
+that one engraved SVG, cropped to its own slice and pruned of every element
+outside it, since a crop by `viewBox` alone still carries the rest of the
+score underneath it into the PDF. `jsPDF` and `svg2pdf.js` turn each cropped
+clone into one page, scaling its native CSS pixels into the page's points,
+and `downloadBlob` hands the file back the way a rendered video already does.
+The title it prints is the song's own presented name, threaded in from
+`sheet/load.ts` rather than read back off the file's raw name.
 
 ## Modes
 

@@ -57,6 +57,31 @@ function longMidi(): Uint8Array {
   return new Uint8Array(midi.toArray());
 }
 
+/** A single track, so `sheetParts` writes it as one piano on a grand staff
+ * rather than an ensemble of separate lines: a simple right-hand tune over a
+ * left-hand bass note, many measures long, the shape a real piano piece for
+ * this test is meant to stand in for. */
+function pianoMidi(): Uint8Array {
+  const midi = new Midi();
+  const piano = midi.addTrack();
+  const pitches = [72, 74, 76, 77, 79, 81, 83, 84];
+  for (let measure = 0; measure < 60; measure += 1) {
+    for (let step = 0; step < 4; step += 1) {
+      piano.addNote({
+        midi: pitches[(measure + step) % pitches.length] ?? 72,
+        time: measure * 2 + step * 0.5,
+        duration: 0.5,
+      });
+    }
+    piano.addNote({
+      midi: 36 + (measure % 12),
+      time: measure * 2,
+      duration: 1.8,
+    });
+  }
+  return new Uint8Array(midi.toArray());
+}
+
 async function exportPdf(page: Page, bytes: Uint8Array, name: string) {
   await page.goto("about:blank");
   await page.addScriptTag({ content: harnessSource });
@@ -80,6 +105,23 @@ function countPages(bytes: Buffer): number {
   const text = bytes.toString("latin1");
   const matches = text.match(/\/Type\s*\/Page[^s]/g);
   return matches?.length ?? 0;
+}
+
+async function sheetPdfStats(page: Page, bytes: Uint8Array, name: string) {
+  await page.goto("about:blank");
+  await page.addScriptTag({ content: harnessSource });
+  const base64 = Buffer.from(bytes).toString("base64");
+  return page.evaluate(
+    async ({ base64, name }) => {
+      const binary = atob(base64);
+      const raw = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        raw[index] = binary.charCodeAt(index);
+      }
+      return window.sheetPdfStats(raw.buffer, name);
+    },
+    { base64, name },
+  );
 }
 
 test("a short song comes back as a one page pdf", async ({ page }) => {
@@ -107,4 +149,16 @@ test("a long song is split across several pages, none of them empty", async ({
   expect(pages).toBeGreaterThan(3);
   // A real page of engraved notation, not a handful of empty ones padded on.
   expect(bytes.byteLength / pages).toBeGreaterThan(20_000);
+});
+
+test("a piano piece prints several systems to a page, not a few bars alone", async ({
+  page,
+}) => {
+  test.setTimeout(60000);
+  const stats = await sheetPdfStats(page, pianoMidi(), "Piano Piece");
+  // 60 measures of a simple grand-staff tune: dense enough for several pages,
+  // nowhere near one page per bar or two.
+  expect(stats.pageCount).toBeGreaterThan(2);
+  expect(stats.pageCount).toBeLessThan(20);
+  expect(stats.maxSystemsOnAPage).toBeGreaterThan(1);
 });

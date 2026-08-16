@@ -15,6 +15,7 @@ import {
   nowMarkWidth,
   type ScoreMark,
 } from "@/lib/sheet/marks";
+import { dragScroll, pageWidth } from "@/lib/sheet/page";
 import { sheetColors } from "@/lib/sheet/theme";
 import type { SheetMusic, SheetTheme } from "@/lib/sheet/types";
 
@@ -148,6 +149,36 @@ const followSeekMs = 1200;
  * rather than snapping even across a big jump. */
 const followTauMs = 220;
 
+function paddedContentWidth(element: HTMLElement): number {
+  const style = getComputedStyle(element);
+  const padding =
+    Number.parseFloat(style.paddingLeft) +
+    Number.parseFloat(style.paddingRight);
+  return element.clientWidth - padding;
+}
+
+/** The panel's width the moment the score is about to be engraved, waited
+ * for rather than read once: right after a view switch mounts this panel,
+ * the flex layout that sizes it has not always settled yet, and engraving
+ * into a zero-width container is a real, silent failure OSMD only reports to
+ * the console. */
+function measureContentWidth(element: HTMLElement): Promise<number> {
+  const width = paddedContentWidth(element);
+  if (width > 0) {
+    return Promise.resolve(width);
+  }
+  return new Promise((resolve) => {
+    const observer = new ResizeObserver(() => {
+      const next = paddedContentWidth(element);
+      if (next > 0) {
+        observer.disconnect();
+        resolve(next);
+      }
+    });
+    observer.observe(element);
+  });
+}
+
 function firstMark(
   ids: ReadonlySet<number>,
   marks: ReadonlyMap<number, readonly ScoreMark[]>,
@@ -243,14 +274,24 @@ function Notation({
     setReady(false);
     setError(null);
     const host = hostRef.current;
-    if (host === null) {
+    const scrollEl = scrollRef.current;
+    if (host === null || scrollEl === null) {
       return;
     }
     host.innerHTML = "";
     nowPoolRef.current = [];
     nextPoolRef.current = [];
-    void import("opensheetmusicdisplay")
-      .then(async ({ OpenSheetMusicDisplay }) => {
+    void (async () => {
+      try {
+        const width = await measureContentWidth(scrollEl);
+        if (cancelled) {
+          return;
+        }
+        // A fixed pixel width, not a percentage: engraved once here, this
+        // never changes again, so a later viewport resize has nothing to
+        // make OSMD redo the whole layout for.
+        host.style.width = `${pageWidth(width)}px`;
+        const { OpenSheetMusicDisplay } = await import("opensheetmusicdisplay");
         if (cancelled) {
           return;
         }
@@ -265,6 +306,10 @@ function Notation({
           // OSMD's own follow scrolls the page itself; the panel drives its own
           // eased, pausable scroll instead, so this stays off.
           followCursor: false,
+          // Defaults on and re-engraves the whole score on every window
+          // resize; the page width above is deliberately independent of the
+          // viewport, so that listener has to stay off too.
+          autoResize: false,
           defaultColorMusic: colors.music,
         };
         const osmd = new OpenSheetMusicDisplay(host, options);
@@ -278,61 +323,82 @@ function Notation({
         nowWidthRef.current = nowMarkWidth(osmd.zoom);
         nextWidthRef.current = nextMarkWidth(osmd.zoom);
         setReady(true);
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) {
           setError("This song's notation could not be drawn.");
         }
-      });
+      }
+    })();
     return () => {
       cancelled = true;
       osmdRef.current = null;
     };
   }, [sheet, theme]);
 
-  // A resize of this panel (half turning to full, or a window resize the
-  // library's own listener does not catch because layout, not the window,
-  // changed) needs a fresh layout pass, or the notation stays the width it
-  // was first drawn at, and rewraps the system every mark's box was found on.
+  // A pointer held down and dragged pans the page directly, on a phone and on
+  // a desktop alike; touch's own native panning is turned off on this element
+  // so the two never fight over the same drag.
   useEffect(() => {
-    const host = hostRef.current;
-    if (host === null || !ready) {
+    if (!ready) {
       return;
     }
-    let pending: ReturnType<typeof setTimeout> | null = null;
-    const observer = new ResizeObserver(() => {
-      if (pending !== null) {
-        clearTimeout(pending);
-      }
-      pending = setTimeout(() => {
-        const osmd = osmdRef.current;
-        if (osmd === null) {
-          return;
-        }
-        osmd.render();
-        // The engraver clears its own container and redraws it from scratch,
-        // taking any mark this panel appended there down with it: the pool
-        // is abandoned rather than reused, so painting after this starts
-        // from a container that is actually still attached.
-        nowPoolRef.current = [];
-        nextPoolRef.current = [];
-        marksRef.current = buildMarks(osmd, sheet.writtenNotes);
-        nowWidthRef.current = nowMarkWidth(osmd.zoom);
-        nextWidthRef.current = nextMarkWidth(osmd.zoom);
-        // Laid out again, the marks are somewhere else on the page entirely,
-        // so the panel goes and finds them even with the music stopped.
-        chaseUntil.current = performance.now() + followSeekMs;
-        lastManualScroll.current = Number.NEGATIVE_INFINITY;
-      }, 120);
-    });
-    observer.observe(host);
-    return () => {
-      if (pending !== null) {
-        clearTimeout(pending);
-      }
-      observer.disconnect();
+    const scrollEl = scrollRef.current;
+    if (scrollEl === null) {
+      return;
+    }
+    let pointerId: number | null = null;
+    let startX = 0;
+    let startY = 0;
+    let startLeft = 0;
+    let startTop = 0;
+    scrollEl.style.touchAction = "none";
+    scrollEl.style.cursor = "grab";
+    const onPointerDown = (event: PointerEvent): void => {
+      pointerId = event.pointerId;
+      startX = event.clientX;
+      startY = event.clientY;
+      startLeft = scrollEl.scrollLeft;
+      startTop = scrollEl.scrollTop;
+      scrollEl.setPointerCapture(event.pointerId);
+      scrollEl.style.cursor = "grabbing";
     };
-  }, [ready, sheet]);
+    const onPointerMove = (event: PointerEvent): void => {
+      if (pointerId !== event.pointerId) {
+        return;
+      }
+      scrollEl.scrollLeft = dragScroll(
+        startLeft,
+        startX,
+        event.clientX,
+        scrollEl.scrollWidth - scrollEl.clientWidth,
+      );
+      scrollEl.scrollTop = dragScroll(
+        startTop,
+        startY,
+        event.clientY,
+        scrollEl.scrollHeight - scrollEl.clientHeight,
+      );
+    };
+    const endDrag = (event: PointerEvent): void => {
+      if (pointerId !== event.pointerId) {
+        return;
+      }
+      pointerId = null;
+      scrollEl.style.cursor = "grab";
+    };
+    scrollEl.addEventListener("pointerdown", onPointerDown);
+    scrollEl.addEventListener("pointermove", onPointerMove);
+    scrollEl.addEventListener("pointerup", endDrag);
+    scrollEl.addEventListener("pointercancel", endDrag);
+    return () => {
+      scrollEl.removeEventListener("pointerdown", onPointerDown);
+      scrollEl.removeEventListener("pointermove", onPointerMove);
+      scrollEl.removeEventListener("pointerup", endDrag);
+      scrollEl.removeEventListener("pointercancel", endDrag);
+      scrollEl.style.touchAction = "";
+      scrollEl.style.cursor = "";
+    };
+  }, [ready]);
 
   // Sweeps which of the song's own notes sound now and which come next on
   // the clock the falling notes already read, and paints the boxes those ids
@@ -488,7 +554,7 @@ function Notation({
       <div
         ref={scrollRef}
         data-testid="sheet-scroll"
-        className={`relative h-full min-w-0 flex-1 overflow-auto ${
+        className={`relative h-full min-w-0 flex-1 overflow-auto px-3 py-4 ${
           isLocked ? "pointer-events-none" : ""
         } ${theme === "light" ? "bg-paper" : "bg-panel"}`}
       >
@@ -502,12 +568,11 @@ function Notation({
         {/* The engraver fills this with hundreds of unnamed paths for the staves,
             stems and beams. The falling notes carry the same music in a form a
             screen reader can already be told about, so this stays out of the
-            tree rather than reading as a wall of graphics. */}
-        <div
-          ref={hostRef}
-          aria-hidden="true"
-          className="relative min-h-full w-full px-3 py-4"
-        />
+            tree rather than reading as a wall of graphics. Its width is set
+            directly in the load effect, once, to the fixed page it engraves
+            at: not a Tailwind class, since that width has to survive every
+            later resize of this scroll container untouched. */}
+        <div ref={hostRef} aria-hidden="true" className="relative" />
       </div>
       {/* `[data-tip]` in globals.css forces position:relative at the same
           specificity as the `absolute` utility, so the positioned element

@@ -97,9 +97,9 @@ test("the notation belongs to the music while it plays and to the reader once it
   page,
 }) => {
   await serveFixture(page);
-  // Narrow enough that eight bars of two-track notation wraps across more
-  // systems than a screen's worth, so following actually has to scroll.
-  await page.setViewportSize({ width: 390, height: 700 });
+  // Short enough that the fixed wide page this now always engraves at is
+  // still taller than the visible area, so following actually has to scroll.
+  await page.setViewportSize({ width: 390, height: 450 });
   await page.goto(`/watch?${playerQuery()}`);
   await expect(page.locator("canvas")).toBeVisible();
 
@@ -257,6 +257,90 @@ test("the notation view works on a phone-width screen", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Invert notation colours" }),
   ).toBeVisible();
+});
+
+test("a wide screen shows the whole page with no horizontal scrollbar", async ({
+  page,
+}) => {
+  await serveFixture(page);
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto(`/watch?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  await openHalf(page);
+  const scroller = page.getByTestId("sheet-scroll");
+  await expect
+    .poll(async () => scroller.locator("svg path").count(), {
+      timeout: 15_000,
+    })
+    .toBeGreaterThan(20);
+
+  const overflow = await scroller.evaluate(
+    (node) => node.scrollWidth - node.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test("a resize leaves the engraved score exactly as it was", async ({
+  page,
+}) => {
+  await serveFixture(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/watch?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  await openHalf(page);
+  const scroller = page.getByTestId("sheet-scroll");
+  await expect
+    .poll(async () => scroller.locator("svg path").count(), {
+      timeout: 15_000,
+    })
+    .toBeGreaterThan(20);
+  const before = await scroller.locator("svg path").count();
+
+  await page.setViewportSize({ width: 900, height: 700 });
+  // Nothing to poll for: the point is that a resize triggers no re-layout at
+  // all, so a beat of wall clock is the only way to give one the chance to
+  // happen before the assertion below would otherwise catch it too early.
+  await page.waitForTimeout(1_000);
+  await expect(scroller.locator("svg path")).toHaveCount(before);
+});
+
+test("a drag pans the page both ways while the music is stopped", async ({
+  page,
+}) => {
+  await serveFixture(page);
+  // Narrower and shorter than the fixed page this engraves at, so there is
+  // real room to pan in both directions.
+  await page.setViewportSize({ width: 600, height: 450 });
+  await page.goto(`/watch?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  await page.getByRole("button", { name: "View" }).click();
+  await page.getByRole("button", { name: "Sheet only", exact: true }).click();
+  const scroller = page.getByTestId("sheet-scroll");
+  await expect
+    .poll(async () => scroller.locator("svg path").count(), {
+      timeout: 15_000,
+    })
+    .toBeGreaterThan(20);
+
+  const box = await scroller.boundingBox();
+  expect(box).not.toBeNull();
+  if (box === null) {
+    return;
+  }
+  const startX = box.x + box.width * 0.7;
+  const startY = box.y + box.height * 0.7;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX - 150, startY - 100, { steps: 5 });
+  await page.mouse.up();
+
+  const scrollLeft = await scroller.evaluate((node) => node.scrollLeft);
+  const scrollTop = await scroller.evaluate((node) => node.scrollTop);
+  expect(scrollLeft).toBeGreaterThan(0);
+  expect(scrollTop).toBeGreaterThan(0);
 });
 
 test("a song the notation view fails to fetch shows a plain message, not a broken player", async ({

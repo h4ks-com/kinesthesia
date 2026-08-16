@@ -70,10 +70,12 @@ src/components/
                               match through its aside, overlay and footer slots
   player-header.tsx           the song menu, score, focus, and one control each
                               for mode and notation view
-  sheet-view.tsx              sheet music for the open song: two cursors that
-                              step with playback, an eased scroll that follows
-                              them while it plays and yields to the reader when
-                              it stops, and an ink-on-paper option
+  sheet-view.tsx              sheet music for the open song, engraved once at
+                              a fixed wide page rather than the panel's own
+                              width: two cursors that step with playback, an
+                              eased scroll that follows them while it plays
+                              and yields to a drag or a scroll once it stops,
+                              and an ink-on-paper option
   song-menu.tsx               what you can do with the open song: see its
                               analysis, download it, copy its link, favourite
                               it, put it online
@@ -181,6 +183,8 @@ src/lib/
   sheet/theme.ts              the ink, paper and marker colours a notation
                               theme reads in, resolved from the page's custom
                               properties once so a render can carry them
+  sheet/page.ts               the fixed width the live view engraves at, and
+                              where a drag leaves a scroll position, clamped
   sheet/export-pdf.ts         paginates the whole engraved score into A4 pages,
                               between systems and never through one, and hands
                               back a downloaded PDF
@@ -309,16 +313,30 @@ just a different set of ids, so nothing needs resetting or fast-forwarding.
 The render (`render/sheet.ts`) shares the same marks and the same sweep, so
 the video a song renders to agrees with what the live view showed.
 
+The panel engraves at a fixed width (`sheet/page.ts`), never the panel's own:
+as wide as the panel already is on first load, floored at a page wide enough
+to read comfortably even where the panel is narrower. That width, once set on
+the host element in pixels, is never revisited, so a later resize of the
+window or the panel moves nothing and asks OSMD to lay nothing out again;
+only opening the panel on a song or a theme it has not yet drawn engraves
+again. Engraving also waits for the panel to actually have a width first,
+since OSMD given zero fails silently. A panel narrower than the page it
+engraved scrolls to it instead of shrinking to fit, on a phone the same as on
+a desktop, and a pointer held down and dragged pans that scroll directly, in
+both directions at once; touch's own native panning is turned off on the
+panel so the two never fight over the same drag.
+
 While the song plays the notation belongs to it: the panel refuses pointer
 input and keeps the current system in view by easing its own scroll toward a
 point a third of the way down rather than jumping to it, reading the position
 of whichever box is steering follow straight from the marks already found
 rather than measuring the page again. Stopped, it belongs to the reader, holds
-wherever they leave it, and moves only to chase a seek. OSMD's own built-in
-follow would fight this over the same scroll position, so it stays off, and
-the panel tells its own scroll apart from one the reader made by comparing
-against the value it last wrote itself. The transport's own scrubber is the
-one seek control; the notation has none of its own.
+wherever they leave it or drag it to, and moves only to chase a seek. OSMD's
+own built-in follow and its own resize handling would each fight this over the
+same scroll position and the same fixed width, so both stay off, and the panel
+tells its own scroll apart from one the reader made by comparing against the
+value it last wrote itself. The transport's own scrubber is the one seek
+control; the notation has none of its own.
 
 A small button in the notation panel's own corner inverts it to dark ink on
 light paper instead of the app's usual light on dark, the way printed

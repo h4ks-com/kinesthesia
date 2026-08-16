@@ -11,6 +11,11 @@ export type StaffSplit = {
   readonly bass: readonly SheetNote[];
 };
 
+/** How much of each end of a part's range a clef choice ignores. A lone pedal
+ * note is not where a line lives, and neither is the pitch it happens to
+ * repeat most, so the decision reads the span with both ends trimmed. */
+const clefTrim = 0.1;
+
 /** Middle C, the note the two staves of a grand staff meet at. */
 const middleC = 60;
 
@@ -22,19 +27,19 @@ const handReach = 16;
  * from what the instrument is called: a bass line named for its patch is still
  * a bass line when the patch is missing.
  *
- * Read off the middle of the part's own range rather than its note-count
- * median: a left hand's line leans on one repeated inner voice far more often
- * than it dips to its lowest note, so the median sits wherever that voice is,
- * not where the register as a whole does. The range's own middle keeps the
- * outlier ends in view instead of drowning them in how often each pitch
- * repeats. */
+ * Read off the middle of the span the line actually occupies. How often a
+ * pitch repeats says where a line rests, not where it lives, and the bare
+ * extremes hand the answer to a single pedal note. */
 export function clefFor(notes: readonly SheetNote[]): StaffClef {
   if (notes.length === 0) {
     return "treble";
   }
-  const pitches = notes.map((note) => note.pitch);
-  const middle = (Math.min(...pitches) + Math.max(...pitches)) / 2;
-  return middle >= middleC ? "treble" : "bass";
+  const sorted = [...notes.map((note) => note.pitch)].sort(
+    (left, right) => left - right,
+  );
+  const low = sorted[Math.floor((sorted.length - 1) * clefTrim)] ?? middleC;
+  const high = sorted[Math.ceil((sorted.length - 1) * (1 - clefTrim))] ?? low;
+  return (low + high) / 2 >= middleC ? "treble" : "bass";
 }
 
 function widestChord(placed: readonly PlacedNote[]): number {

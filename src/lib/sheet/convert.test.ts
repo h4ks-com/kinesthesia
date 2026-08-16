@@ -112,14 +112,36 @@ describe("songToSheetMusic", () => {
     const doc = parse(musicXml);
     const list = measures(doc);
     expect(list).toHaveLength(1);
-    // One rest per staff, each covering the whole measure.
-    const trebleRests = notesOf(list[0] as Element, 1);
-    const bassRests = notesOf(list[0] as Element, 2);
-    expect(trebleRests).toHaveLength(1);
-    expect(bassRests).toHaveLength(1);
-    expect(trebleRests[0]?.querySelector("rest")).not.toBeNull();
-    expect(trebleRests[0]?.querySelector("type")?.textContent).toBe("whole");
+    // Nothing is played, so nothing needs a second staff to hold it.
+    expect(doc.querySelector("attributes > staves")?.textContent).toBe("1");
+    const rests = notesOf(list[0] as Element, 1);
+    expect(rests).toHaveLength(1);
+    expect(rests[0]?.querySelector("rest")).not.toBeNull();
+    expect(rests[0]?.querySelector("type")?.textContent).toBe("whole");
     expect(writtenNotes).toEqual([]);
+  });
+
+  // Practising one hand hands the converter that hand's notes alone, and a
+  // grand staff whose other half is rests for the whole piece is a page of
+  // nothing to play.
+  it("writes a one-handed part on the one staff it is played on", () => {
+    const melody = [50, 55, 60, 65, 70, 75, 80, 74, 68, 62, 57, 52].map(
+      (pitch, index) => ({
+        id: index,
+        pitch,
+        start: index * 0.5,
+        duration: 0.4,
+      }),
+    );
+    const { musicXml } = songToSheetMusic(
+      baseSource({ parts: [{ name: "Piano", notes: melody, split: true }] }),
+    );
+    const doc = parse(musicXml);
+    expect(doc.querySelector("attributes > staves")?.textContent).toBe("1");
+    expect(doc.querySelectorAll("clef")).toHaveLength(1);
+    for (const measure of measures(doc)) {
+      expect(notesOf(measure, 2)).toHaveLength(0);
+    }
   });
 
   it("infers enough measures to cover the last note actually played", () => {

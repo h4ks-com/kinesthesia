@@ -73,16 +73,18 @@ describe("splitStaves", () => {
     expect(treble).toHaveLength(melody.length);
   });
 
-  // The song's own median leans on the tenor register this line repeats, not
-  // on where the line as a whole actually sits, which is exactly the case
-  // Debussy's Clair de Lune left hand puts on the treble staff if the split
-  // reads the note count rather than the range.
-  it("puts a one-handed part that mostly repeats above middle C, but reaches well below it, on the bass staff", () => {
+  // Shaped like Debussy's Clair de Lune left hand, which leans on an inner
+  // voice just above middle C far more often than it visits the bass it
+  // actually lives in. Reading how often a pitch repeats puts the whole line
+  // on the treble staff.
+  it("puts a one-handed part that repeats above middle C but lives below it on the bass staff", () => {
     const notes: SheetNote[] = [];
     for (let at = 0; at < 20; at += 1) {
       notes.push(noteAt(61, at * 0.5));
     }
-    notes.push(noteAt(27, 20 * 0.5));
+    for (let at = 0; at < 8; at += 1) {
+      notes.push(noteAt(34 + at, at * 1.5 + 0.25));
+    }
 
     const { treble, bass } = splitStaves(notes);
 

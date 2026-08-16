@@ -102,6 +102,15 @@ export function songToSheetMusic(source: SheetSource): SheetMusic {
       collectWrittenNotes(writtenNotes, instructions, partIndex);
       return { name: part.name, clefs: [clefFor(part.notes)], instructions };
     }
+    // A part the split left entirely on one side is a one hand part: writing
+    // the other staff would print a page of rests nobody plays.
+    const played =
+      treble.length === 0 ? bass : bass.length === 0 ? treble : null;
+    if (played !== null) {
+      const instructions = staffInstructions(played, totalUnits, grid, 1);
+      collectWrittenNotes(writtenNotes, instructions, partIndex);
+      return { name: part.name, clefs: [clefFor(played)], instructions };
+    }
     const trebleInstructions = staffInstructions(treble, totalUnits, grid, 1);
     const bassInstructions = staffInstructions(bass, totalUnits, grid, 2);
     collectWrittenNotes(writtenNotes, trebleInstructions, partIndex);

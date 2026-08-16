@@ -238,7 +238,10 @@ export function PlayerHeader({
           </span>
         )}
       >
-        <fieldset className="flex w-40 flex-col gap-1 p-1">
+        {/* The panel clips what leaves it sideways and scrolls what makes it
+            taller, so what a choice means is written into the choice rather
+            than hung off it on hover, which no touch reaches anyway. */}
+        <fieldset className="flex w-56 flex-col gap-1 p-1">
           <legend className="sr-only">View</legend>
           {notationChoices.map(({ view, label, tip }) => (
             <button
@@ -246,20 +249,19 @@ export function PlayerHeader({
               type="button"
               aria-pressed={view === notationView}
               onClick={() => onNotationView(view)}
-              // The tip is drawn as generated content, which a browser folds
-              // into the name it reads out; naming the button keeps that to
-              // the word on it.
+              // A browser reads the description out as part of the name unless
+              // the button carries one of its own.
               aria-label={label}
-              data-tip={tip}
-              data-tip-wide=""
-              data-tip-align="right"
               className={`rounded-lg border px-2.5 py-2 pointer-coarse:min-h-11 text-left text-xs transition-colors ${
                 view === notationView
                   ? "border-accent text-accent"
                   : "border-line-strong text-muted hover:border-accent hover:text-accent"
               }`}
             >
-              {label}
+              <span className="block">{label}</span>
+              <span className="mt-0.5 block text-[0.6875rem] text-faint leading-snug">
+                {tip}
+              </span>
             </button>
           ))}
         </fieldset>

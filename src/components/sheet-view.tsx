@@ -150,11 +150,6 @@ export function SheetView({
  * forward wobble. */
 const rewindSlack = 0.05;
 
-/** Where the current system settles once following is running: a third of
- * the way down the panel, so there is always more of what is coming than of
- * what has passed. */
-const followBand = 1 / 3;
-
 /** How long a scroll the user made by hand keeps following paused. */
 const followResumeMs = 2200;
 
@@ -196,18 +191,26 @@ function measureContentWidth(element: HTMLElement): Promise<number> {
   });
 }
 
-function firstMark(
+type Span = { readonly top: number; readonly bottom: number };
+
+/** How far down the page this moment reaches, top and bottom across every
+ * staff sounding it. A score of nine instruments is one tall system, and
+ * following the first staff alone leaves the other eight off the screen. */
+function markSpan(
   ids: ReadonlySet<number>,
   marks: ReadonlyMap<number, readonly ScoreMark[]>,
-): ScoreMark | null {
+): Span | null {
+  let top = Number.POSITIVE_INFINITY;
+  let bottom = Number.NEGATIVE_INFINITY;
   for (const id of ids) {
-    const boxes = marks.get(id);
-    const box = boxes?.[0];
-    if (box !== undefined) {
-      return box;
+    const box = marks.get(id)?.[0];
+    if (box === undefined) {
+      continue;
     }
+    top = Math.min(top, box.top);
+    bottom = Math.max(bottom, box.top + box.height);
   }
-  return null;
+  return top === Number.POSITIVE_INFINITY ? null : { top, bottom };
 }
 
 /** Grows a pool of absolutely positioned marker divs to however many boxes
@@ -223,15 +226,18 @@ function paintMarks(
   opacity: number,
   testId: string,
 ): void {
+  // A moment the score has nothing written for, between phrases or past the
+  // last note, leaves the marker where it was rather than blinking out: the
+  // reader is still on that spot until something else is due.
+  const found = [...ids]
+    .map((id) => marks.get(id)?.[0])
+    .filter((mark): mark is ScoreMark => mark !== undefined);
+  if (found.length === 0) {
+    return;
+  }
+
   let used = 0;
-  for (const id of ids) {
-    // Only where the note is struck. A tie is one note written in several
-    // places, and marking every place it is held puts a marker in bars the
-    // reader has nothing to play in.
-    const mark = marks.get(id)?.[0];
-    if (mark === undefined) {
-      continue;
-    }
+  for (const mark of found) {
     let element = pool[used];
     if (element === undefined) {
       element = document.createElement("div");
@@ -439,7 +445,11 @@ function Notation({
   // panel keeps the current system in view with an eased scroll that yields
   // to a scroll the listener makes by hand.
   const lastPosition = useRef(Number.NEGATIVE_INFINITY);
-  const referenceMark = useRef<ScoreMark | null>(null);
+  /** Where the last moment the panel chased began on the page. */
+  const referenceMark = useRef<number | null>(null);
+  /** The last moment the score had something written for, kept so a gap in the
+   * music does not send the page backwards or blank the marker. */
+  const heldSpan = useRef<Span | null>(null);
   const expectedScrollTop = useRef(0);
   const lastManualScroll = useRef(Number.NEGATIVE_INFINITY);
   const lastFrameTime = useRef(0);
@@ -483,6 +493,7 @@ function Notation({
     lastPosition.current = Number.NEGATIVE_INFINITY;
     lastFrameTime.current = 0;
     referenceMark.current = null;
+    heldSpan.current = null;
     // Emptied and redrawn, the panel is briefly short enough that the browser
     // clamps how far it was scrolled, which arrives as a scroll nobody made.
     // Taking the position as it stands now is what keeps that from reading as
@@ -519,26 +530,45 @@ function Notation({
       );
 
       if (scrollEl !== null) {
-        const primary =
-          firstMark(sweep.next, marks) ?? firstMark(sweep.sounding, marks);
+        // What comes next is what the reader is heading for. A phrase that
+        // ends with nothing queued keeps the page where it is rather than
+        // stepping back to a note still ringing from bars ago.
+        const found =
+          markSpan(sweep.next, marks) ?? markSpan(sweep.sounding, marks);
+        const ahead =
+          found !== null &&
+          (isSeek ||
+            heldSpan.current === null ||
+            found.top >= heldSpan.current.top);
+        if (ahead) {
+          heldSpan.current = found;
+        }
+        // Stopped, the page answers to the reader alone, so it follows only
+        // what the score actually has at this moment and nothing remembered.
+        const primary = playingRef.current ? heldSpan.current : found;
         if (primary !== null) {
           const maxScroll = Math.max(
             0,
             scrollEl.scrollHeight - scrollEl.clientHeight,
           );
+          // Centred on the panel, so a system of nine instruments is on screen
+          // whole rather than hanging off the bottom. One taller than the panel
+          // starts at its top, and the two cases meet continuously, which is
+          // what keeps a tall chord from flipping the page between placements.
+          const spare = Math.max(
+            0,
+            scrollEl.clientHeight - (primary.bottom - primary.top),
+          );
           const target = Math.max(
             0,
-            Math.min(
-              maxScroll,
-              primary.top - scrollEl.clientHeight * followBand,
-            ),
+            Math.min(maxScroll, primary.top - spare / 2),
           );
           // A reached note is not the only reason to chase: a seek can land
           // back on a mark this panel already holds a reference to (the very
           // first note again, say), which leaves the reference identical
           // even though the reader plainly just asked to go there.
-          if (referenceMark.current !== primary || isSeek) {
-            referenceMark.current = primary;
+          if (referenceMark.current !== primary.top || isSeek) {
+            referenceMark.current = primary.top;
             chaseUntil.current = now + followSeekMs;
             // Asking for a bar is asking to be taken to it, so a seek
             // outranks a scroll made a moment earlier. The two windows

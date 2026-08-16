@@ -87,11 +87,14 @@ test("the highlight follows which notes are actually sounding, by identity", asy
     .not.toBe(Math.round(firstBox?.x ?? 0));
   expect((await positions()).length).toBe(1);
 
-  // Past the last note, the score has nothing left to mark: it ends when the
-  // music does rather than running on with an empty marker.
+  // Past the last note there is nothing left to mark, and the bar holds where
+  // it was rather than blinking out from under the reader.
+  const settled = (await positions())[0] ?? 0;
   const max = await seek.getAttribute("max");
   await seek.fill(String(max));
-  await expect.poll(() => nextMarks.count()).toBe(0);
+  await page.waitForTimeout(600);
+  await expect.poll(() => nextMarks.count()).toBeGreaterThan(0);
+  expect((await positions())[0] ?? 0).toBeGreaterThanOrEqual(settled);
 });
 
 test("the notation belongs to the music while it plays and to the reader once it stops", async ({
@@ -100,7 +103,10 @@ test("the notation belongs to the music while it plays and to the reader once it
   await serveFixture(page);
   // Short enough that the fixed wide page this now always engraves at is
   // still taller than the visible area, so following actually has to scroll.
-  await page.setViewportSize({ width: 390, height: 450 });
+  // Short enough that the fixed wide page this engraves at overflows it, which
+  // the score no longer does at a taller viewport now that it starts on the
+  // music rather than on the runway the falling notes need.
+  await page.setViewportSize({ width: 390, height: 320 });
   await page.goto(`/watch?${playerQuery()}`);
   await expect(page.locator("canvas")).toBeVisible();
 
@@ -307,13 +313,15 @@ test("a resize leaves the engraved score exactly as it was", async ({
   await expect(scroller.locator("svg path")).toHaveCount(before);
 });
 
-test("a drag pans the page both ways while the music is stopped", async ({
-  page,
-}) => {
+// Both axes go through one clamp, which `page.test.ts` covers directly; this
+// proves a drag reaches it at all. The fixture engraves to a single system, so
+// there is nothing below to pan to and only the horizontal half is measurable
+// here.
+test("a drag pans the page while the music is stopped", async ({ page }) => {
   await serveFixture(page);
   // Narrower and shorter than the fixed page this engraves at, so there is
   // real room to pan in both directions.
-  await page.setViewportSize({ width: 600, height: 450 });
+  await page.setViewportSize({ width: 600, height: 400 });
   await page.goto(`/watch?${playerQuery()}`);
   await expect(page.locator("canvas")).toBeVisible();
 
@@ -338,10 +346,13 @@ test("a drag pans the page both ways while the music is stopped", async ({
   await page.mouse.move(startX - 150, startY - 100, { steps: 5 });
   await page.mouse.up();
 
-  const scrollLeft = await scroller.evaluate((node) => node.scrollLeft);
-  const scrollTop = await scroller.evaluate((node) => node.scrollTop);
-  expect(scrollLeft).toBeGreaterThan(0);
-  expect(scrollTop).toBeGreaterThan(0);
+  const panned = await scroller.evaluate((node) => ({
+    left: node.scrollLeft,
+    top: node.scrollTop,
+    room: node.scrollHeight - node.clientHeight,
+  }));
+  expect(panned.left).toBeGreaterThan(0);
+  expect(panned.top).toBe(panned.room > 0 ? panned.top : 0);
 });
 
 test("a song the notation view fails to fetch shows a plain message, not a broken player", async ({

@@ -8,6 +8,10 @@ export type PartTrack = {
   readonly percussion: boolean;
 };
 
+/** How many lines a score may carry. Past this a page is a wall of staves
+ * nobody reads, and the busiest instruments are the ones worth the room. */
+const maxParts = 10;
+
 export type PartsInput = {
   readonly tracks: readonly PartTrack[];
   readonly notes: readonly PartNote[];
@@ -48,7 +52,20 @@ export function sheetParts(input: PartsInput): SheetPart[] {
     byTrack.set(note.track, kept);
   }
 
-  const sounding = [...byTrack.keys()].sort((left, right) => left - right);
+  // A page of more lines than this is unreadable however tall the paper is,
+  // so the quietest instruments give up their staff first.
+  const playing = [...byTrack.keys()].sort((left, right) => left - right);
+  const sounding =
+    playing.length <= maxParts
+      ? playing
+      : [...playing]
+          .sort(
+            (left, right) =>
+              (byTrack.get(right)?.length ?? 0) -
+              (byTrack.get(left)?.length ?? 0),
+          )
+          .slice(0, maxParts)
+          .sort((left, right) => left - right);
   const nameOf = new Map(
     input.tracks.map((track) => [track.index, track.name]),
   );

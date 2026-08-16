@@ -65,3 +65,26 @@ describe("sheetParts", () => {
     expect(parts[0]?.name).toBe("Part 4");
   });
 });
+
+describe("a score of many instruments", () => {
+  it("keeps the busiest lines and no more than a page can carry", () => {
+    const tracks = Array.from({ length: 14 }, (_value, index) => ({
+      index,
+      name: `Part ${index}`,
+      percussion: false,
+    }));
+    // Later tracks play more, so the quiet early ones are the ones to drop.
+    const notes = tracks.flatMap((track) =>
+      Array.from({ length: track.index + 1 }, (_value, at) =>
+        note(track.index, 60, at * 0.5),
+      ),
+    );
+
+    const parts = sheetParts({ tracks, notes });
+
+    expect(parts).toHaveLength(10);
+    expect(parts.map((part) => part.name)).toEqual(
+      tracks.slice(4).map((track) => track.name),
+    );
+  });
+});

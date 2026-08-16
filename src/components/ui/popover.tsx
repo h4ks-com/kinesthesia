@@ -62,7 +62,7 @@ export function Popover({
         aria-haspopup="dialog"
         aria-label={label}
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full rounded-lg"
+        className="inline-flex rounded-lg"
       >
         {trigger(open)}
       </button>

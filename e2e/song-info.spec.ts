@@ -50,6 +50,27 @@ test("the song info panel opens from the menu and shows real analysis", async ({
   await expect(dialog).toHaveCount(0);
 });
 
+test("clicking empty header space leaves the song menu closed", async ({
+  page,
+}) => {
+  await serveFixture(page);
+  await page.goto(`/watch?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  const title = page.getByRole("button", { name: "This song" });
+  const view = page.getByRole("button", { name: "View" });
+  const titleBox = await title.boundingBox();
+  const viewBox = await view.boundingBox();
+  if (titleBox === null || viewBox === null) {
+    throw new Error("header controls not found");
+  }
+
+  const emptySpaceX = (titleBox.x + titleBox.width + viewBox.x) / 2;
+  await page.mouse.click(emptySpaceX, titleBox.y + titleBox.height / 2);
+
+  await expect(page.getByRole("button", { name: "Song info" })).toHaveCount(0);
+});
+
 test("the chord timeline fits a phone as well as a desktop panel", async ({
   page,
 }) => {

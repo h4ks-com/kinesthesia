@@ -41,10 +41,14 @@ const modeCatalog = [
 }[];
 
 const notationChoices = [
-  { view: "off", label: "Notes" },
-  { view: "half", label: "Split" },
-  { view: "full", label: "Sheet only" },
-] as const satisfies readonly { view: NotationView; label: string }[];
+  { view: "off", label: "Notes", tip: "the falling notes only" },
+  { view: "half", label: "Split", tip: "the notation above the falling notes" },
+  { view: "full", label: "Sheet only", tip: "the notation alone" },
+] as const satisfies readonly {
+  view: NotationView;
+  label: string;
+  tip: string;
+}[];
 
 type PlayerHeaderProps = {
   mode: PlayerMode;
@@ -236,12 +240,19 @@ export function PlayerHeader({
       >
         <fieldset className="flex w-40 flex-col gap-1 p-1">
           <legend className="sr-only">View</legend>
-          {notationChoices.map(({ view, label }) => (
+          {notationChoices.map(({ view, label, tip }) => (
             <button
               key={view}
               type="button"
               aria-pressed={view === notationView}
               onClick={() => onNotationView(view)}
+              // The tip is drawn as generated content, which a browser folds
+              // into the name it reads out; naming the button keeps that to
+              // the word on it.
+              aria-label={label}
+              data-tip={tip}
+              data-tip-wide=""
+              data-tip-align="right"
               className={`rounded-lg border px-2.5 py-2 pointer-coarse:min-h-11 text-left text-xs transition-colors ${
                 view === notationView
                   ? "border-accent text-accent"

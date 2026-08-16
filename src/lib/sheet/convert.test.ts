@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { songToSheetMusic } from "@/lib/sheet/convert";
+import { voicesPerStaff } from "@/lib/sheet/notation";
 import type { SheetNote, SheetPart, SheetSource } from "@/lib/sheet/types";
 
 const bpm120Meter44 = { bpm: 120, meter: { beats: 4, value: 4 } } as const;
@@ -49,6 +50,49 @@ function notesOf(measure: Element, staff: 1 | 2): Element[] {
   return [...measure.querySelectorAll("note")].filter(
     (note) => note.querySelector("staff")?.textContent === String(staff),
   );
+}
+
+function pitchedNotes(doc: Document, pitch: string): Element[] {
+  return [...doc.querySelectorAll("part > measure > note")].filter((note) => {
+    const step = note.querySelector("pitch > step")?.textContent ?? "";
+    const octave = note.querySelector("pitch > octave")?.textContent ?? "";
+    const alter = note.querySelector("pitch > alter")?.textContent ?? "";
+    return `${step}${alter}${octave}` === pitch;
+  });
+}
+
+/** Replays a measure the way a reader does: every note and `<forward>` moves
+ * the cursor on, `<chord/>` does not, `<backup>` moves it back. What each
+ * voice covers has to be the whole measure or its notes sit at the wrong
+ * beats. */
+function replayMeasure(measure: Element): {
+  readonly covered: ReadonlyMap<string, number>;
+  readonly lowest: number;
+  readonly end: number;
+} {
+  const covered = new Map<string, number>();
+  let position = 0;
+  let lowest = 0;
+  for (const child of [...measure.children]) {
+    const duration = Number(
+      child.querySelector("duration")?.textContent ?? "0",
+    );
+    if (child.tagName === "backup") {
+      position -= duration;
+      lowest = Math.min(lowest, position);
+      continue;
+    }
+    if (child.tagName !== "forward" && child.tagName !== "note") {
+      continue;
+    }
+    if (child.querySelector("chord") !== null) {
+      continue;
+    }
+    const voice = child.querySelector("voice")?.textContent ?? "";
+    covered.set(voice, (covered.get(voice) ?? 0) + duration);
+    position += duration;
+  }
+  return { covered, lowest, end: position };
 }
 
 describe("songToSheetMusic", () => {
@@ -243,6 +287,146 @@ describe("songToSheetMusic", () => {
     expect(chordNotes[0]?.querySelector("chord")).toBeNull();
     expect(chordNotes[1]?.querySelector("chord")).not.toBeNull();
     expect(chordNotes[2]?.querySelector("chord")).not.toBeNull();
+  });
+});
+
+// Notes that overlap belong to different voices of the same staff, which is
+// what lets each be written once for the length it really sounds.
+describe("voices", () => {
+  const oneStaff = (notes: readonly NoteInput[]): SheetSource =>
+    baseSource({
+      parts: [
+        {
+          name: "Piano",
+          notes: notes.map((note, index) => ({
+            id: note.id ?? index,
+            pitch: note.pitch,
+            start: note.start,
+            duration: note.duration,
+          })),
+          split: false,
+        },
+      ],
+    });
+
+  const underAMovingLine: readonly NoteInput[] = [
+    { id: 1, pitch: 72, start: 0, duration: 2 },
+    { id: 2, pitch: 60, start: 0, duration: 0.5 },
+    { id: 3, pitch: 62, start: 0.5, duration: 0.5 },
+    { id: 4, pitch: 64, start: 1, duration: 0.5 },
+    { id: 5, pitch: 65, start: 1.5, duration: 0.5 },
+  ];
+
+  it("writes a held note once, for its whole length", () => {
+    const { musicXml } = songToSheetMusic(oneStaff(underAMovingLine));
+    const doc = parse(musicXml);
+    const held = pitchedNotes(doc, "C5");
+    expect(held).toHaveLength(1);
+    expect(held[0]?.querySelector("type")?.textContent).toBe("whole");
+    expect(held[0]?.querySelector("tie")).toBeNull();
+  });
+
+  it("puts the held note and the line that moves under it in different voices", () => {
+    const { musicXml } = songToSheetMusic(oneStaff(underAMovingLine));
+    const doc = parse(musicXml);
+    const heldVoice = pitchedNotes(doc, "C5")[0]?.querySelector(
+      "voice",
+    )?.textContent;
+    const movingVoice = pitchedNotes(doc, "C4")[0]?.querySelector(
+      "voice",
+    )?.textContent;
+    expect(heldVoice).not.toBeUndefined();
+    expect(heldVoice).not.toBe(movingVoice);
+  });
+
+  it("gives every voice of every measure the whole measure", () => {
+    const { musicXml } = songToSheetMusic(
+      oneStaff([
+        ...underAMovingLine,
+        { id: 6, pitch: 74, start: 1.75, duration: 1.5 },
+        { id: 7, pitch: 67, start: 2, duration: 0.75 },
+        { id: 8, pitch: 69, start: 2.75, duration: 0.25 },
+      ]),
+    );
+    const doc = parse(musicXml);
+    for (const measure of measures(doc)) {
+      const { covered, lowest, end } = replayMeasure(measure);
+      expect(lowest).toBe(0);
+      expect(end).toBe(16);
+      for (const units of covered.values()) {
+        expect(units).toBe(16);
+      }
+    }
+  });
+
+  it("fills a second voice's silence without printing a rest for it", () => {
+    const { musicXml } = songToSheetMusic(
+      oneStaff([
+        { id: 1, pitch: 72, start: 0, duration: 2 },
+        { id: 2, pitch: 60, start: 0, duration: 0.5 },
+        { id: 3, pitch: 62, start: 1.5, duration: 0.5 },
+      ]),
+    );
+    const doc = parse(musicXml);
+    const secondVoice = pitchedNotes(doc, "C4")[0]?.querySelector(
+      "voice",
+    )?.textContent;
+    const rests = [...doc.querySelectorAll("part > measure > note")].filter(
+      (note) =>
+        note.querySelector("rest") !== null &&
+        note.querySelector("voice")?.textContent === secondVoice,
+    );
+    expect(rests).toHaveLength(0);
+    const forwards = [...doc.querySelectorAll("part > measure > forward")];
+    expect(
+      forwards.some(
+        (one) => one.querySelector("voice")?.textContent === secondVoice,
+      ),
+    ).toBe(true);
+  });
+
+  it("ties a second voice's note across a barline", () => {
+    const { musicXml } = songToSheetMusic(
+      oneStaff([
+        { id: 1, pitch: 60, start: 0, duration: 3 },
+        { id: 2, pitch: 64, start: 0, duration: 0.5 },
+        { id: 3, pitch: 65, start: 0.5, duration: 0.5 },
+        { id: 4, pitch: 67, start: 1, duration: 0.5 },
+        { id: 5, pitch: 69, start: 1.5, duration: 0.5 },
+        { id: 6, pitch: 71, start: 2, duration: 0.5 },
+        { id: 7, pitch: 72, start: 2.5, duration: 0.5 },
+      ]),
+    );
+    const doc = parse(musicXml);
+    const held = pitchedNotes(doc, "C4");
+    expect(held).toHaveLength(2);
+    expect(held[0]?.querySelector('tie[type="start"]')).not.toBeNull();
+    expect(held[1]?.querySelector('tie[type="stop"]')).not.toBeNull();
+    expect(held[0]?.closest("measure")?.getAttribute("number")).toBe("1");
+    expect(held[1]?.closest("measure")?.getAttribute("number")).toBe("2");
+  });
+
+  it("numbers the second staff's voices after the first staff's", () => {
+    const { musicXml } = songToSheetMusic(
+      baseSource({
+        notes: [
+          { pitch: 84, start: 0, duration: 2 },
+          { pitch: 79, start: 0, duration: 0.5 },
+          { pitch: 36, start: 0, duration: 2 },
+          { pitch: 43, start: 0, duration: 0.5 },
+        ],
+      }),
+    );
+    const doc = parse(musicXml);
+    for (const measure of measures(doc)) {
+      for (const staff of [1, 2] as const) {
+        for (const note of notesOf(measure, staff)) {
+          const voice = Number(note.querySelector("voice")?.textContent ?? "0");
+          expect(voice > (staff - 1) * voicesPerStaff).toBe(true);
+          expect(voice <= staff * voicesPerStaff).toBe(true);
+        }
+      }
+    }
   });
 });
 

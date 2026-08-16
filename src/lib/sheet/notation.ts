@@ -67,75 +67,155 @@ function tonesOf(sounding: readonly QuantizedNote[]): ChordTone[] {
     .map(([pitch, ids]) => ({ pitch, ids }));
 }
 
-/**
- * Reduces a staff's quantized notes to one timeline of chords and rests
- * covering every unit from 0 to `totalUnits`.
- *
- * A note the score never carries is a note the cursor can never stop on, which
- * is why every onset gets an event: on a real piano piece, dropping the ones
- * that overlap loses more than a third of them.
- */
-export function sequenceStaff(
-  notes: readonly QuantizedNote[],
-  totalUnits: number,
-): StaffEvent[] {
-  if (notes.length === 0) {
-    return [{ start: 0, duration: totalUnits, tones: [] }];
-  }
-  const onsets = [...new Set(notes.map((note) => note.start))].sort(
-    (left, right) => left - right,
-  );
-  const bounds = [
-    ...new Set([
-      ...onsets,
-      ...notes.map((note) => note.start + note.duration),
-      totalUnits,
-    ]),
-  ]
-    .filter((unit) => unit <= totalUnits)
-    .sort((left, right) => left - right);
+/** How many voices one staff carries, which is what engravers set. A fifth
+ * simultaneous line has nowhere of its own to go, so it joins the nearest
+ * voice and cuts that voice's held note short where it starts. */
+export const voicesPerStaff = 4;
 
-  // Swept rather than searched: the notes and the bounds are both in order, so
-  // each note is admitted once as the cursor reaches it and dropped once as it
-  // passes, which keeps a dense piece linear in its note count.
-  const byStart = [...notes].sort((left, right) => left.start - right.start);
-  const sounding: QuantizedNote[] = [];
-  const events: StaffEvent[] = [];
-  let admitted = 0;
-  let cursor = 0;
-  for (const bound of bounds) {
-    if (bound <= cursor) {
+/** MusicXML numbers voices per part, so the second staff continues where the
+ * first leaves off: staff 1 owns 1..4 and staff 2 owns 5..8. */
+export function voiceNumber(staff: 1 | 2, index: number): number {
+  return (staff - 1) * voicesPerStaff + index + 1;
+}
+
+/** The voice the staff's rests are written in. The others fill their silence
+ * with `<forward>`, since a rest per voice per gap buries the notes. */
+export function isPrimaryVoice(voice: number): boolean {
+  return (voice - 1) % voicesPerStaff === 0;
+}
+
+type OpenEvent = {
+  start: number;
+  duration: number;
+  tones: ChordTone[];
+};
+
+function topPitch(event: OpenEvent): number {
+  return event.tones[0]?.pitch ?? 0;
+}
+
+function endOf(voice: readonly OpenEvent[]): number {
+  const last = voice.at(-1);
+  return last === undefined ? 0 : last.start + last.duration;
+}
+
+/** Notes struck together and released together are one chord: one stem, one
+ * written duration. Differing releases are what separates voices below. */
+function chordGroups(notes: readonly QuantizedNote[]): OpenEvent[] {
+  const groups = new Map<string, QuantizedNote[]>();
+  for (const note of notes) {
+    const key = `${note.start}:${note.duration}`;
+    const list = groups.get(key);
+    if (list === undefined) {
+      groups.set(key, [note]);
+    } else {
+      list.push(note);
+    }
+  }
+  return [...groups.values()]
+    .map((list) => ({
+      start: list[0]?.start ?? 0,
+      duration: list[0]?.duration ?? 1,
+      tones: tonesOf(list),
+    }))
+    .sort(
+      (left, right) =>
+        left.start - right.start || topPitch(right) - topPitch(left),
+    );
+}
+
+function nearestVoice(
+  candidates: readonly OpenEvent[][],
+  group: OpenEvent,
+): OpenEvent[] {
+  let best = candidates[0] ?? [];
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const voice of candidates) {
+    const last = voice.at(-1);
+    const distance =
+      last === undefined ? 0 : Math.abs(topPitch(last) - topPitch(group));
+    if (distance < bestDistance) {
+      best = voice;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+function absorb(into: OpenEvent, group: OpenEvent): void {
+  const byPitch = new Map<number, number[]>();
+  for (const tone of [...into.tones, ...group.tones]) {
+    const ids = byPitch.get(tone.pitch);
+    if (ids === undefined) {
+      byPitch.set(tone.pitch, [...tone.ids]);
+    } else {
+      ids.push(...tone.ids);
+    }
+  }
+  into.tones = [...byPitch.entries()]
+    .sort(([left], [right]) => right - left)
+    .map(([pitch, ids]) => ({ pitch, ids }));
+}
+
+/**
+ * Splits a staff's quantized notes into voices, each a stream where no two
+ * notes sound at once, so a note held under a moving line is written once for
+ * its real length rather than restated every time the line moves.
+ *
+ * A note joins the first voice free by the time it starts, preferring the one
+ * whose last pitch is nearest, and opens a new voice when none is free.
+ */
+export function separateVoices(
+  notes: readonly QuantizedNote[],
+): StaffEvent[][] {
+  const voices: OpenEvent[][] = [[]];
+  for (const group of chordGroups(notes)) {
+    const free = voices.filter((voice) => endOf(voice) <= group.start);
+    if (free.length > 0) {
+      nearestVoice(free, group).push(group);
       continue;
     }
-    while (admitted < byStart.length) {
-      const note = byStart[admitted];
-      if (note === undefined || note.start > cursor) {
-        break;
-      }
-      sounding.push(note);
-      admitted += 1;
+    if (voices.length < voicesPerStaff) {
+      voices.push([group]);
+      continue;
     }
-    for (let index = sounding.length - 1; index >= 0; index -= 1) {
-      const note = sounding[index];
-      if (note !== undefined && note.start + note.duration <= cursor) {
-        sounding.splice(index, 1);
-      }
+    const crowded = nearestVoice(voices, group);
+    const last = crowded.at(-1);
+    if (last === undefined) {
+      crowded.push(group);
+    } else if (last.start === group.start) {
+      absorb(last, group);
+    } else {
+      last.duration = group.start - last.start;
+      crowded.push(group);
     }
-    events.push({
-      start: cursor,
-      duration: bound - cursor,
-      tones: tonesOf(sounding),
-    });
-    cursor = bound;
+  }
+  return voices;
+}
+
+/** Pads a voice's notes with the silence between them, so every voice covers
+ * the same span and the measures line up. */
+export function fillGaps(
+  events: readonly StaffEvent[],
+  totalUnits: number,
+): StaffEvent[] {
+  const filled: StaffEvent[] = [];
+  let cursor = 0;
+  for (const event of events) {
+    if (event.start > cursor) {
+      filled.push({
+        start: cursor,
+        duration: event.start - cursor,
+        tones: [],
+      });
+    }
+    filled.push(event);
+    cursor = event.start + event.duration;
   }
   if (cursor < totalUnits) {
-    events.push({
-      start: cursor,
-      duration: totalUnits - cursor,
-      tones: [],
-    });
+    filled.push({ start: cursor, duration: totalUnits - cursor, tones: [] });
   }
-  return events;
+  return filled;
 }
 
 /** Standard note values in 16th-note units, longest first, so a greedy
@@ -183,9 +263,10 @@ export type NoteInstruction = {
   /** Continues a tie from an earlier chunk of the same original event. */
   readonly tieStop: boolean;
   readonly staff: 1 | 2;
+  readonly voice: number;
 };
 
-/** Splits a staff's events at measure boundaries, then further at standard
+/** Splits a voice's events at measure boundaries, then further at standard
  * note values within a measure, tying every chunk of one original event back
  * together whichever boundary caused the split. Every chunk keeps the tones
  * (and so the source ids) of the event it was split from, which is what lets
@@ -195,6 +276,7 @@ export function buildInstructions(
   events: readonly StaffEvent[],
   measureUnits: number,
   staff: 1 | 2,
+  voice: number,
 ): NoteInstruction[] {
   const out: NoteInstruction[] = [];
   for (const event of events) {
@@ -232,6 +314,7 @@ export function buildInstructions(
         tieStart: !isRest && index < values.length - 1,
         tieStop: !isRest && index > 0,
         staff,
+        voice,
       });
     });
   }
@@ -291,10 +374,17 @@ function noteXml(
     tiedXml === "" ? "" : `<notations>${tiedXml}</notations>`;
 
   if (instruction.tones.length === 0) {
+    if (!isPrimaryVoice(instruction.voice)) {
+      return (
+        `<forward><duration>${instruction.durationUnits}</duration>` +
+        `<voice>${instruction.voice}</voice>` +
+        `<staff>${instruction.staff}</staff></forward>`
+      );
+    }
     return (
       "<note><rest/>" +
       `<duration>${instruction.durationUnits}</duration>` +
-      `<voice>${instruction.staff}</voice><type>${type}</type>${dotXml}` +
+      `<voice>${instruction.voice}</voice><type>${type}</type>${dotXml}` +
       `<staff>${instruction.staff}</staff></note>`
     );
   }
@@ -314,7 +404,7 @@ function noteXml(
         `<note>${chordXml}<pitch><step>${spelled.step}</step>${alterXml}` +
         `<octave>${spelled.octave}</octave></pitch>` +
         `<duration>${instruction.durationUnits}</duration>${tieXml}` +
-        `<voice>${instruction.staff}</voice><type>${type}</type>${dotXml}` +
+        `<voice>${instruction.voice}</voice><type>${type}</type>${dotXml}` +
         `${accidentalXml}<staff>${instruction.staff}</staff>${notationsXml}</note>`
       );
     })
@@ -370,27 +460,44 @@ export type MusicXmlInput = {
 };
 
 function partXml(part: MusicXmlPart, input: MusicXmlInput): string {
+  const voices = [
+    ...new Set(part.instructions.map((instruction) => instruction.voice)),
+  ].sort((left, right) => left - right);
+  const streams = new Map<string, NoteInstruction[]>();
+  for (const instruction of part.instructions) {
+    const key = `${instruction.voice}:${instruction.measureIndex}`;
+    const list = streams.get(key);
+    if (list === undefined) {
+      streams.set(key, [instruction]);
+    } else {
+      list.push(instruction);
+    }
+  }
+
   const measures: string[] = [];
   for (let index = 0; index < input.measureCount; index += 1) {
-    const staves = part.clefs.map((_clef, staffIndex) =>
-      part.instructions
-        .filter(
-          (instruction) =>
-            instruction.measureIndex === index &&
-            instruction.staff === staffIndex + 1,
-        )
-        .map((instruction) =>
-          noteXml(instruction, input.table, input.signature),
-        )
-        .join(""),
-    );
+    const written = voices
+      .map((voice) => streams.get(`${voice}:${index}`) ?? [])
+      .filter(
+        (list) =>
+          list.length > 0 &&
+          (isPrimaryVoice(list[0]?.voice ?? 1) ||
+            list.some((instruction) => instruction.tones.length > 0)),
+      )
+      .map((list) =>
+        list
+          .map((instruction) =>
+            noteXml(instruction, input.table, input.signature),
+          )
+          .join(""),
+      );
     const attributes =
       index === 0
         ? attributesXml(input.fifths, input.beats, input.beatType, part.clefs)
         : "";
     const backup = `<backup><duration>${input.measureUnits}</duration></backup>`;
     measures.push(
-      `<measure number="${index + 1}">${attributes}${staves.join(backup)}</measure>`,
+      `<measure number="${index + 1}">${attributes}${written.join(backup)}</measure>`,
     );
   }
   return measures.join("");

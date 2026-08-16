@@ -165,10 +165,11 @@ src/lib/
   sheet/staff-split.ts        notes onto the grand staff by their own pitch
                               median, not a fixed line, and the clef a single
                               line reads best in
-  sheet/notation.ts           quantises onto a 16th note grid, ties notes
-                              across a barline and writes it all as MusicXML,
-                              carrying each written note's source ids through
-                              every step
+  sheet/notation.ts           quantises onto a 16th note grid, separates a
+                              staff into voices so overlapping notes each get
+                              written once, ties notes across a barline and
+                              writes it all as MusicXML, carrying each written
+                              note's source ids through every step
   sheet/convert.ts            the pure song to MusicXML pipeline the tests
                               exercise directly, and where each written note's
                               ids and score coordinates are collected
@@ -287,12 +288,17 @@ play.
 `src/lib/sheet/` turns a song into MusicXML: `convert.ts` quantises every note
 onto a 16th note grid, spells each pitch from the key `midi/analysis.ts`
 already detects, and writes measures, rests and ties across a barline as plain
-MusicXML 3.1. Every onset earns an event, so a note struck while another is
-still ringing is written into the chord that follows rather than dropped,
-which is busier than an engraver would set it. Every written note carries the
-source note ids it sounds for, tracked through the quantisation, the staff
-split and the tie splitting, so a tied note owns every chunk the barline cut
-it into. The measure count comes from the last of those written notes rather
+MusicXML 3.1. Each staff is separated into up to four voices, streams where no
+two notes sound at once, so a note held under a moving line is written once for
+the length it really sounds instead of restated every time the line moves. A
+note joins the first voice free when it starts, preferring the one whose last
+pitch is nearest; where a fifth line would be needed the newcomer joins the
+nearest voice and cuts that voice's held note short. Only the first voice of a
+staff writes its silence as rests, the others as `<forward>`, so the page keeps
+one readable rhythm rather than a rest per voice per gap. Every written note
+carries the source note ids it sounds for, tracked through the quantisation,
+the staff split and the tie splitting, so a tied note owns every chunk the
+barline cut it into. The measure count comes from the last of those written notes rather
 than from the audio's own length, so the score ends where the last note does
 regardless of a tempo change elsewhere in the piece. `convert.ts` is pure and
 knows nothing of a live song; `load.ts` is the one place that rereads a file's

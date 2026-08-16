@@ -2,10 +2,12 @@ import {
   buildInstructions,
   buildMusicXml,
   divisions,
+  fillGaps,
   type NoteInstruction,
   type QuantizedNote,
   quantizeNotes,
-  sequenceStaff,
+  separateVoices,
+  voiceNumber,
 } from "@/lib/sheet/notation";
 import { keySpelling } from "@/lib/sheet/spelling";
 import { clefFor, splitStaves } from "@/lib/sheet/staff-split";
@@ -46,6 +48,22 @@ function collectWrittenNotes(
   }
 }
 
+function staffInstructions(
+  notes: readonly QuantizedNote[],
+  totalUnits: number,
+  measureUnits: number,
+  staff: 1 | 2,
+): NoteInstruction[] {
+  return separateVoices(notes).flatMap((events, index) =>
+    buildInstructions(
+      fillGaps(events, totalUnits),
+      measureUnits,
+      staff,
+      voiceNumber(staff, index),
+    ),
+  );
+}
+
 /** Quantises, splits into staves and serialises a song to MusicXML. Pure: no
  * MIDI parsing or tempo detection happens here, so it is testable with plain
  * note lists. */
@@ -83,21 +101,24 @@ export function songToSheetMusic(source: SheetSource): SheetMusic {
   const writtenParts = parts.map((part, partIndex) => {
     const { treble, bass } = quantized[partIndex] ?? { treble: [], bass: [] };
     if (!part.split) {
-      const instructions = buildInstructions(
-        sequenceStaff(treble, totalUnits),
+      const instructions = staffInstructions(
+        treble,
+        totalUnits,
         measureUnits,
         1,
       );
       collectWrittenNotes(writtenNotes, instructions, partIndex);
       return { name: part.name, clefs: [clefFor(part.notes)], instructions };
     }
-    const trebleInstructions = buildInstructions(
-      sequenceStaff(treble, totalUnits),
+    const trebleInstructions = staffInstructions(
+      treble,
+      totalUnits,
       measureUnits,
       1,
     );
-    const bassInstructions = buildInstructions(
-      sequenceStaff(bass, totalUnits),
+    const bassInstructions = staffInstructions(
+      bass,
+      totalUnits,
       measureUnits,
       2,
     );

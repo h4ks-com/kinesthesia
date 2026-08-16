@@ -9,6 +9,12 @@ import { drawSongMap, pitchSpan } from "@/lib/render/minimap";
  * second to the next. */
 const seekStep = 0.05;
 
+/** Seeking by key, in seconds, since the arrows belong to the octave shift. */
+const pageSteps: Readonly<Record<string, number>> = {
+  PageUp: -10,
+  PageDown: 10,
+};
+
 type SongMinimapProps = {
   song: Song;
   hiddenTracks: ReadonlySet<number>;
@@ -145,9 +151,10 @@ export function SongMinimap({
         className="absolute inset-y-0 left-0 w-0.5 bg-accent shadow-[0_0_6px_var(--accent)]"
       />
       {/* A real range carries the seek semantics and the drag; the map is
-          drawn behind it. It never keeps keyboard focus: ArrowLeft and
-          ArrowRight are the computer keyboard's octave shift, and ordinary Tab
-          order or a lingering focus ring here would steal them from it. */}
+          drawn behind it. ArrowLeft and ArrowRight are the computer keyboard's
+          octave shift, so they are refused here and left to travel on: seeking
+          by key is Home, End and the page keys, and a pointer never leaves
+          focus behind for a later press to land on. */}
       <input
         type="range"
         min={0}
@@ -155,9 +162,24 @@ export function SongMinimap({
         step={seekStep}
         value={Math.min(elapsed, duration)}
         disabled={onSeek === null}
-        tabIndex={-1}
         onChange={(event) => onSeek?.(Number(event.target.value))}
         onPointerUp={(event) => event.currentTarget.blur()}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+            event.preventDefault();
+            return;
+          }
+          const step = pageSteps[event.key];
+          const target =
+            step === undefined
+              ? { Home: 0, End: duration }[event.key]
+              : elapsed + step;
+          if (target === undefined || onSeek === null) {
+            return;
+          }
+          event.preventDefault();
+          onSeek(Math.max(0, Math.min(duration, target)));
+        }}
         aria-label="Song position"
         aria-valuetext={formatClock(elapsed)}
         className="absolute inset-0 size-full cursor-pointer appearance-none bg-transparent opacity-0 outline-none disabled:cursor-default"

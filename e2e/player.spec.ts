@@ -427,3 +427,32 @@ test("a match does not start with its setup hidden", async ({ page }) => {
   // to focus by hand.
   await expect(page.getByRole("button", { name: "Focus mode" })).toBeVisible();
 });
+
+test("the song can be moved through by keyboard alone, without taking the octave keys", async ({
+  page,
+}) => {
+  await serveFixture(page);
+  await page.goto(`/learn?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+  await expect.poll(async () => reachBarLeft(page)).not.toBeNull();
+
+  // Reachable by keyboard at all: seeking is the one thing a mouse could do
+  // here that a keyboard could not, once the notation's own rail went.
+  const seek = page.getByRole("slider", { name: "Song position" });
+  await seek.focus();
+  await expect(seek).toBeFocused();
+
+  const at = async (): Promise<number> => Number(await seek.inputValue());
+  await page.keyboard.press("PageDown");
+  await expect.poll(at).toBeGreaterThan(1);
+  const moved = await at();
+  await page.keyboard.press("Home");
+  await expect.poll(at).toBe(0);
+
+  // Focused, it still refuses the octave keys rather than seeking with them.
+  const reach = await reachBarLeft(page);
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(async () => reachBarLeft(page)).toBeGreaterThan(reach ?? 0);
+  expect(await at()).toBe(0);
+  expect(moved).toBeGreaterThan(0);
+});

@@ -122,3 +122,30 @@ describe("new editing tools", () => {
     expect(text).toContain("unknown chord");
   });
 });
+
+describe("asking a link how the song is read", () => {
+  const song = { url: "http://localhost:3000/gen/a.mid", name: "x" };
+
+  it("carries the notation view and the paper an agent asks for", async () => {
+    const { text, isError } = await firstText(
+      await rpc("player_link", { ...song, notation: "full", paper: true }),
+    );
+    expect(isError).toBe(false);
+    expect(text).toContain("notation=full");
+    expect(text).toContain("paper=1");
+  });
+
+  it("says nothing where the agent asks for nothing, leaving the reader alone", async () => {
+    const { text, isError } = await firstText(await rpc("player_link", song));
+    expect(isError).toBe(false);
+    expect(text).not.toContain("notation=");
+    expect(text).not.toContain("paper=");
+  });
+
+  it("refuses a view the player has no name for", async () => {
+    const { isError } = await firstText(
+      await rpc("player_link", { ...song, notation: "sideways" }),
+    );
+    expect(isError).toBe(true);
+  });
+});

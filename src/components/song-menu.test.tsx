@@ -123,6 +123,8 @@ const song: PlayerParams = {
   focus: false,
   skin: null,
   rise: false,
+  notation: null,
+  sheetTheme: null,
   start: defaultStart,
 };
 

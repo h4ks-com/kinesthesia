@@ -475,6 +475,8 @@ export function Multiplayer({
         focus: false,
         skin: null,
         rise: false,
+        notation: null,
+        sheetTheme: null,
         start: defaultStart,
       });
       const { Peer } = await import("peerjs");

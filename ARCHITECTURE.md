@@ -512,9 +512,10 @@ opens the file and the song info panel reads straight off it: `midi_info`,
 `GET /api/midi/info` and the panel all show one report, so they cannot drift
 apart. `search_midi` returns a plain link
 per mode. `player_link` builds one carrying
-the speed, key, tracks, a hand of them, simplify and focus a caller asks for,
-which is what makes those settings reachable by an agent at all: they live only
-in the query string and nothing else advertises them. It clamps through the
+the speed, key, tracks, a hand of them, simplify, focus, the background and how
+the song is read a caller asks for, which is what makes those settings reachable
+by an agent at all: they live only in the query string and nothing else
+advertises them. It clamps through the
 same functions the player parses with, so a link it hands back cannot ask for a
 value the player would refuse. A setting the caller names is written down even
 at its
@@ -555,6 +556,15 @@ hold across every song.
 A link that states a song setting outright still wins, so a shared view
 reproduces itself. A locked match neither reads nor writes this memory, since
 its part is the prepared one.
+
+The notation view is a global setting a link may also ask for outright, on the
+same terms as the background: `notation=off|half|full` and `paper=1|0` show what
+they name whatever the listener last chose, and leave that stored choice where it
+is, so the next link that says nothing about them opens the way the listener
+reads. Saying nothing is how a link defers. Because a render is a browser opening
+the link and recording it, those two are also all it takes to render a video of
+the engraved score rather than of the falling notes, and `player_link` and
+`render_video` take them under the same names.
 
 How a song sounds is kept on the device that shaped it and shared from the
 account that saved it. Every edit lands in the browser as it settles, so a

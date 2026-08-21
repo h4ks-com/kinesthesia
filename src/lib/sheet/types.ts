@@ -64,12 +64,14 @@ export type SheetMusic = {
 };
 
 /** How much of the screen the notation takes: none, half alongside the
- * falling notes, or the whole view. A global setting, not a per song one, so
- * whatever a listener picks stays picked for the next song too. */
-export type NotationView = "off" | "half" | "full";
+ * falling notes, or the whole view. A listener's own choice, kept for the next
+ * song too, and a link may ask for one outright. */
+export const notationViews = ["off", "half", "full"] as const;
+
+export type NotationView = (typeof notationViews)[number];
 
 export function clampNotationView(value: unknown): NotationView {
-  return value === "half" || value === "full" ? value : "off";
+  return notationViews.find((view) => view === value) ?? "off";
 }
 
 /** Ink on the panel's own dark background, or dark ink on a light paper

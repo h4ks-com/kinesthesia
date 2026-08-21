@@ -10,6 +10,11 @@ import {
   type Transpose,
 } from "@/lib/midi/song";
 import {
+  clampNotationView,
+  type NotationView,
+  type SheetTheme,
+} from "@/lib/sheet/types";
+import {
   type BackgroundChoice,
   isAddedSkinId,
   readBackdrop,
@@ -50,6 +55,11 @@ export type PlayerParams = {
   /** Sends the notes out of the keys rather than onto them. A look rather than
    * a way to read ahead, so it rides in the link with the background. */
   readonly rise: boolean;
+  /** How much of the view the notation takes. Null leaves whatever the device
+   * remembers alone, so only a link that asks for a view imposes one. */
+  readonly notation: NotationView | null;
+  /** Which ground the notation is drawn on, on the same terms as the view. */
+  readonly sheetTheme: SheetTheme | null;
   /** Seconds the playhead opens at, so a link can start partway through. */
   readonly start: number;
 };
@@ -114,6 +124,16 @@ function readHand(raw: string | null): Hand | null {
 function readStart(raw: string | null): number {
   const value = Number(raw);
   return Number.isFinite(value) && value > 0 ? value : defaultStart;
+}
+
+/** Null where the link says nothing, which is what leaves the reader's own
+ * choice of view standing. */
+function readNotation(raw: string | null): NotationView | null {
+  return raw === null ? null : clampNotationView(raw);
+}
+
+function readSheetTheme(raw: string | null): SheetTheme | null {
+  return raw === null ? null : raw === "1" ? "light" : "dark";
 }
 
 /** The origins whose MIDI files are allowed to reach the player, read from a
@@ -190,6 +210,14 @@ export function buildPlayerUrl(
   }
   if (params.rise) {
     target.searchParams.set("rise", "1");
+  }
+  // Named only where the link means to impose one, the way a background is:
+  // saying nothing leaves the reader reading the way they already were.
+  if (params.notation !== null) {
+    target.searchParams.set("notation", params.notation);
+  }
+  if (params.sheetTheme !== null) {
+    target.searchParams.set("paper", params.sheetTheme === "light" ? "1" : "0");
   }
   if (params.focus) {
     target.searchParams.set("focus", "1");
@@ -295,6 +323,8 @@ export function parsePlayerParams(
     transpose: clampTranspose(transpose),
     focus: searchParams.get("focus") === "1",
     rise: searchParams.get("rise") === "1",
+    notation: readNotation(searchParams.get("notation")),
+    sheetTheme: readSheetTheme(searchParams.get("paper")),
     skin: readSkinChoice(searchParams.get("skin"), allowedOrigins),
     start: readStart(searchParams.get("start")),
   };

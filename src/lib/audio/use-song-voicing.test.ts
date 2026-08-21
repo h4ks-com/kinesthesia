@@ -90,6 +90,8 @@ const params: PlayerParams = {
   focus: false,
   skin: null,
   rise: false,
+  notation: null,
+  sheetTheme: null,
   start: 0,
 };
 

@@ -87,6 +87,8 @@ export function SongRow({
     focus: false,
     skin: null,
     rise: false,
+    notation: null,
+    sheetTheme: null,
     start: defaultStart,
   });
 
@@ -192,6 +194,8 @@ export function SongRow({
                 focus: false,
                 skin: null,
                 rise: false,
+                notation: null,
+                sheetTheme: null,
                 start: defaultStart,
               })}
               data-tip={tip}

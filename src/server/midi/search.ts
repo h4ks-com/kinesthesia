@@ -122,6 +122,8 @@ export async function searchMidi(
         focus: false,
         skin: null,
         rise: false,
+        notation: null,
+        sheetTheme: null,
         start: defaultStart,
       });
     return {

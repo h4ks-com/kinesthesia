@@ -37,6 +37,7 @@ import {
   readSkinChoice,
   speeds,
 } from "@/lib/player-url";
+import { type NotationView, notationViews } from "@/lib/sheet/types";
 import { skinSource, skins } from "@/lib/skins/registry";
 import { skinIds, skinReads } from "@/lib/skins/types";
 import { isPlayableUrl } from "@/lib/trusted-url";
@@ -148,6 +149,18 @@ const playerLinkShape = {
     .describe(
       "Send the notes out of the keys as they sound instead of onto them. A look rather than a way to read ahead, so it is watch only. Some backgrounds turn it on by themselves. Asking for it turns the notes around whatever the listener set, like the background",
     ),
+  notation: z
+    .enum(notationViews)
+    .optional()
+    .describe(
+      "How much of the view the printed score takes. off is the falling notes alone, with whatever background is asked for. half puts the score above the falling notes. full is the score alone, filling the view, which is what to ask for when the point is to read music rather than watch it fall. The score is engraved from the song itself: staves, clefs, key and time signature, beams and ties, one line per instrument for a song of several, or a grand staff split into two hands for a solo keyboard part. A bar marks the note being read. Left out leaves whatever the listener last chose alone; naming one shows it, the way naming a background does. render_video draws exactly what the link asks for, so this is how a notation video is asked for",
+    ),
+  paper: z
+    .boolean()
+    .optional()
+    .describe(
+      "Draw the score as black ink on white paper, the way printed sheet music reads, instead of pale ink on the dark panel. Only affects a link that shows notation. Left out leaves the listener's own choice alone",
+    ),
   start: z
     .number()
     .min(0)
@@ -173,6 +186,8 @@ type PlayerLinkInput = {
   readonly focus: boolean | undefined;
   readonly skin: string | undefined;
   readonly rise: boolean | undefined;
+  readonly notation: NotationView | undefined;
+  readonly paper: boolean | undefined;
   readonly start: number | undefined;
 };
 
@@ -256,6 +271,9 @@ function playerLink(input: PlayerLinkInput): PlayerLink {
       transpose: clampTranspose(input.transpose ?? defaultTranspose),
       focus: input.focus ?? false,
       rise: input.rise ?? false,
+      notation: input.notation ?? null,
+      sheetTheme:
+        input.paper === undefined ? null : input.paper ? "light" : "dark",
       skin: choice,
       start: input.start ?? defaultStart,
     }),
@@ -637,6 +655,24 @@ because naming one is showing something on purpose. A link that says nothing
 about it leaves their own choice alone. The visit does not overwrite what they
 have saved, so their background is back the next time they open a link that is
 quiet about it.
+
+The notation argument decides how the song is read rather than how it looks. off
+is the falling notes alone, which is the plain player and where a background
+belongs. half puts an engraved score above them. full gives the score the whole
+view, which is the one to ask for where the point is to read the music. The score
+is written from the song itself, with staves, clefs, key and time signature,
+beams and ties, one line per instrument for a song of several, or a grand staff
+divided into two hands for a solo keyboard part, and one bar marks the note being
+read. paper draws it as black ink on white, the way printed music reads, instead
+of pale ink on the dark panel. Both follow the same rule the background does:
+naming one shows it and leaves what the listener has saved untouched, and saying
+nothing leaves them reading the way they already were. A long score takes a few
+seconds to engrave when the page opens, and the panel says so while it works.
+
+render_video draws whatever the link asks for, so notation is also how a video of
+the sheet music is asked for: pass the same notation and paper to render_video
+that a player_link would take, and the file comes back showing the score, the bar
+moving through it, and the page following the music.
 
 player_link also accepts a direct .mid url in place of source and id, as long as
 the url is on an origin the deployment trusts. That is how a file from elsewhere,

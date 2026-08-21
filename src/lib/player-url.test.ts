@@ -20,6 +20,8 @@ const song: PlayerParams = {
   focus: false,
   skin: null,
   rise: false,
+  notation: null,
+  sheetTheme: null,
   start: defaultStart,
 };
 
@@ -314,5 +316,53 @@ describe("the hand a link carries", () => {
       parse(new URLSearchParams("name=x&url=https://x/a.mid&hand=nonsense"))
         ?.hand,
     ).toBeNull();
+  });
+});
+
+describe("how a link asks the song to be read", () => {
+  it("says nothing about the view unless the link means to impose one", () => {
+    const url = buildPlayerUrl("https://x", "watch", song, { explicit: true });
+    expect(url).not.toContain("notation=");
+    expect(url).not.toContain("paper=");
+  });
+
+  it("carries a view, so a shared link opens on the same page", () => {
+    for (const view of ["off", "half", "full"] as const) {
+      const url = buildPlayerUrl("https://x", "watch", {
+        ...song,
+        notation: view,
+      });
+      expect(url).toContain(`notation=${view}`);
+      expect(parse(new URL(url).searchParams)?.notation).toBe(view);
+    }
+  });
+
+  it("carries the ground the score is drawn on", () => {
+    const light = buildPlayerUrl("https://x", "watch", {
+      ...song,
+      sheetTheme: "light",
+    });
+    expect(light).toContain("paper=1");
+    expect(parse(new URL(light).searchParams)?.sheetTheme).toBe("light");
+
+    const dark = buildPlayerUrl("https://x", "watch", {
+      ...song,
+      sheetTheme: "dark",
+    });
+    expect(dark).toContain("paper=0");
+    expect(parse(new URL(dark).searchParams)?.sheetTheme).toBe("dark");
+  });
+
+  it("reads a link that says nothing as leaving the reader alone", () => {
+    const params = parse(new URLSearchParams("name=x&url=https://x/a.mid"));
+    expect(params?.notation).toBeNull();
+    expect(params?.sheetTheme).toBeNull();
+  });
+
+  it("reads a view it does not know as the falling notes alone", () => {
+    expect(
+      parse(new URLSearchParams("name=x&url=https://x/a.mid&notation=nonsense"))
+        ?.notation,
+    ).toBe("off");
   });
 });

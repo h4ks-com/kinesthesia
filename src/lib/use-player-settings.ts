@@ -46,6 +46,13 @@ type SongSettingsValue = {
 };
 type UrlChange = Partial<SongSettingsValue>;
 
+/** How the notation is being read, which the link carries so a shared address
+ * opens on the same page the sender was looking at. */
+type Reading = {
+  notation: NotationView;
+  sheetTheme: SheetTheme;
+};
+
 type Options = {
   mode: PlayerMode;
   params: PlayerParams;
@@ -113,14 +120,25 @@ export function usePlayerSettings({
   const [showKeyLabels, setShowKeyLabels] = useState(true);
   const [showNoteNames, setShowNoteNames] = useState(true);
   const [plainStyle, setPlainStyle] = useState(false);
-  const [notationView, setNotationView] = useState<NotationView>("off");
-  const [sheetTheme, setSheetTheme] = useState<SheetTheme>("dark");
+  const [notationView, setNotationView] = useState<NotationView>(
+    params.notation ?? "off",
+  );
+  const [sheetTheme, setSheetTheme] = useState<SheetTheme>(
+    params.sheetTheme ?? "dark",
+  );
   // A device with no fine pointer has no keyboard to letter the keys for.
   const [hasKeyboard, setHasKeyboard] = useState(false);
   const [simplified, setSimplified] = useState(params.simplified);
   const [melodyRate, setMelodyRate] = useState(params.melodyRate);
   const [hand, setHand] = useState(params.hand);
   const [transpose, setTranspose] = useState(params.transpose);
+
+  // Read at write time, like focus and the background: a view change reaches
+  // the URL in the same tick it is made, before the render that carries it.
+  const readingRef = useRef<Reading>({
+    notation: params.notation ?? "off",
+    sheetTheme: params.sheetTheme ?? "dark",
+  });
 
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const globalTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -176,7 +194,13 @@ export function usePlayerSettings({
         buildPlayerUrl(
           window.location.origin,
           mode,
-          { ...params, focus: getFocus(), ...getView(), ...merge(next) },
+          {
+            ...params,
+            focus: getFocus(),
+            ...getView(),
+            ...readingRef.current,
+            ...merge(next),
+          },
           { explicit: true },
         ),
       );
@@ -217,8 +241,15 @@ export function usePlayerSettings({
         setShowKeyLabels(stored.showKeyLabels ?? true);
         setShowNoteNames(stored.showNoteNames ?? true);
         setPlainStyle(stored.plainStyle ?? false);
-        setNotationView(clampNotationView(stored.notationView));
-        setSheetTheme(clampSheetTheme(stored.sheetTheme));
+        // A link that asks to be read a particular way is asking on purpose,
+        // so it stands over what this device remembers, and leaves the stored
+        // choice where it is for the next link that asks for nothing.
+        if (params.notation === null) {
+          setNotationView(clampNotationView(stored.notationView));
+        }
+        if (params.sheetTheme === null) {
+          setSheetTheme(clampSheetTheme(stored.sheetTheme));
+        }
       }
     });
     if (locked) {
@@ -326,12 +357,16 @@ export function usePlayerSettings({
 
   function changeNotationView(next: NotationView) {
     setNotationView(next);
+    readingRef.current = { ...readingRef.current, notation: next };
     settleGlobal({ notationView: next });
+    updateUrl({});
   }
 
   function changeSheetTheme(next: SheetTheme) {
     setSheetTheme(next);
+    readingRef.current = { ...readingRef.current, sheetTheme: next };
     settleGlobal({ sheetTheme: next });
+    updateUrl({});
   }
 
   function changeSimplified(next: boolean) {

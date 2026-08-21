@@ -68,6 +68,18 @@ function shellClass(theme: SheetTheme): string {
   return `flex h-full items-center justify-center px-4 text-center text-sm ${surface}`;
 }
 
+function SheetSpinner({ theme }: { theme: SheetTheme }) {
+  return (
+    <div
+      data-testid="sheet-loading"
+      className={`${shellClass(theme)} gap-2 absolute inset-0`}
+    >
+      <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+      Preparing the score
+    </div>
+  );
+}
+
 export function SheetView({
   url,
   song,
@@ -117,8 +129,8 @@ export function SheetView({
 
   if (state.status === "loading") {
     return (
-      <div data-testid="sheet-view" className={shellClass(theme)}>
-        Loading notation
+      <div data-testid="sheet-view" className="relative h-full">
+        <SheetSpinner theme={theme} />
       </div>
     );
   }
@@ -287,6 +299,12 @@ function Notation({
           autoResize: false,
           defaultColorMusic: colors.music,
         };
+        // Engraving holds the main thread for seconds on a long score, so a
+        // frame first is what puts the spinner on screen.
+        await painted();
+        if (cancelled) {
+          return;
+        }
         const osmd = new OpenSheetMusicDisplay(host, options);
         await osmd.load(sheet.musicXml);
         if (cancelled) {
@@ -529,6 +547,7 @@ function Notation({
             later resize of this scroll container untouched. */}
         <div ref={hostRef} aria-hidden="true" className="relative" />
       </div>
+      {ready || error !== null ? null : <SheetSpinner theme={theme} />}
       {/* Kept on the left, where nothing else in the page reaches: the focus
           exit and the header's own controls all live in the top right corner.
           `[data-tip]` in globals.css forces position:relative at the same

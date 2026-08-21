@@ -62,39 +62,32 @@ test("the highlight follows which notes are actually sounding, by identity", asy
     .poll(async () => sheet.locator("svg path").count(), { timeout: 15_000 })
     .toBeGreaterThan(20);
 
-  const nextMarks = sheet.locator('[data-testid="sheet-mark-next"]:visible');
+  const bar = sheet.locator('[data-testid="sheet-playhead"]:visible');
   const seek = page.getByRole("slider", { name: "Song position" });
 
   // One bar, on the note that comes next. What is already sounding is in the
   // notation itself; a second marker over it only crowds the page.
   await seek.fill("0");
-  await expect.poll(() => nextMarks.count()).toBeGreaterThan(0);
-  const firstBox = await nextMarks.first().boundingBox();
+  await expect.poll(() => bar.count()).toBe(1);
+  const firstBox = await bar.boundingBox();
   expect(firstBox?.height ?? 0).toBeGreaterThan(40);
-  const positions = async (): Promise<number[]> =>
-    nextMarks.evaluateAll((nodes) => [
-      ...new Set(
-        nodes.map((node) => Math.round(node.getBoundingClientRect().x)),
-      ),
-    ]);
-  expect((await positions()).length).toBe(1);
+  const across = async (): Promise<number> =>
+    Math.round((await bar.boundingBox())?.x ?? 0);
 
   // Well inside the fixture's first notes (the runway shifts the whole file
   // 2.5s forward), the bar has moved on with the music.
   await seek.fill("2.6");
-  await expect
-    .poll(async () => (await positions())[0] ?? 0)
-    .not.toBe(Math.round(firstBox?.x ?? 0));
-  expect((await positions()).length).toBe(1);
+  await expect.poll(across).not.toBe(Math.round(firstBox?.x ?? 0));
+  expect(await bar.count()).toBe(1);
 
   // Past the last note there is nothing left to mark, and the bar holds where
   // it was rather than blinking out from under the reader.
-  const settled = (await positions())[0] ?? 0;
+  const settled = await across();
   const max = await seek.getAttribute("max");
   await seek.fill(String(max));
   await page.waitForTimeout(600);
-  await expect.poll(() => nextMarks.count()).toBeGreaterThan(0);
-  expect((await positions())[0] ?? 0).toBeGreaterThanOrEqual(settled);
+  expect(await bar.count()).toBe(1);
+  expect(await across()).toBeGreaterThanOrEqual(settled);
 });
 
 test("the notation belongs to the music while it plays and to the reader once it stops", async ({

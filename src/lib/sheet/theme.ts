@@ -6,13 +6,10 @@ import type { SheetTheme } from "@/lib/sheet/types";
 export type SheetColors = {
   readonly music: string;
   readonly paper: string;
-  readonly cursor: string;
-  readonly cursorAlpha: number;
   /** Ink on paper takes more of the colour to read as strongly as it does on a
-   * dark ground, and what to play next has to be legible as a mark in its own
-   * right. */
-  readonly next: string;
-  readonly nextAlpha: number;
+   * dark ground, and the bar has to be legible as a mark in its own right. */
+  readonly playhead: string;
+  readonly playheadAlpha: number;
 };
 
 export function sheetColors(theme: SheetTheme): SheetColors {
@@ -20,10 +17,8 @@ export function sheetColors(theme: SheetTheme): SheetColors {
   return {
     music: cssVar(light ? "--ink" : "--text"),
     paper: cssVar(light ? "--paper" : "--panel"),
-    cursor: cssVar(light ? "--accent-ink" : "--accent"),
-    cursorAlpha: light ? 0.4 : 0.3,
-    next: cssVar(light ? "--warn-ink" : "--warn"),
-    nextAlpha: light ? 0.85 : 0.7,
+    playhead: cssVar(light ? "--warn-ink" : "--warn"),
+    playheadAlpha: light ? 0.85 : 0.7,
   };
 }
 

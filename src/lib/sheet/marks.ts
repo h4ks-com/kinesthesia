@@ -28,14 +28,10 @@ const unitsPerWholeNote = divisions * 4;
  * through a `Fraction`'s `RealValue` and back. */
 const positionTolerance = 0.01;
 
-/** Cursor widths OSMD itself draws its two cursor types at (`Cursor.ts`,
- * `CursorType.Standard` and `CursorType.ThinLeft`), reproduced here so a
- * self-drawn mark keeps exactly that look. */
-export function nowMarkWidth(zoom: number): number {
-  return 3 * osmdPxPerUnit * zoom;
-}
-
-export function nextMarkWidth(zoom: number): number {
+/** The width OSMD draws its own thin cursor at (`Cursor.ts`,
+ * `CursorType.ThinLeft`), reproduced here so a self-drawn bar keeps exactly
+ * that look. */
+export function playheadWidth(zoom: number): number {
   return 5 * zoom;
 }
 

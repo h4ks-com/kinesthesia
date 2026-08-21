@@ -44,9 +44,8 @@ type Picture = {
    * finds ink on paper and ink on a dark panel. */
   readonly dark: number;
   readonly bright: number;
-  /** Middles of the two markers, or null where one was never painted. */
-  readonly cursor: Point | null;
-  readonly nextMark: Point | null;
+  /** Middle of the reading bar, or null where it was never painted. */
+  readonly playhead: Point | null;
 };
 
 type Point = { readonly x: number; readonly y: number };
@@ -125,8 +124,7 @@ async function pictureFrom(
 
       let dark = 0;
       let bright = 0;
-      const cursor = { x: 0, y: 0, count: 0 };
-      const nextMark = { x: 0, y: 0, count: 0 };
+      const playhead = { x: 0, y: 0, count: 0 };
       const bottom = Math.floor(height * sheetShare);
       for (let y = 0; y < bottom; y += 1) {
         for (let x = 0; x < width; x += 1) {
@@ -137,28 +135,18 @@ async function pictureFrom(
           } else if (level > 500) {
             bright += 1;
           }
-          if (blue - red > 25 && blue > 60) {
-            cursor.x += x;
-            cursor.y += y;
-            cursor.count += 1;
-          } else if (red - blue > 60 && red > 90) {
-            nextMark.x += x;
-            nextMark.y += y;
-            nextMark.count += 1;
+          if (red - blue > 60 && red > 90) {
+            playhead.x += x;
+            playhead.y += y;
+            playhead.count += 1;
           }
         }
       }
-      const middle = (found: typeof cursor): { x: number; y: number } | null =>
+      const middle = (found: typeof playhead): Point | null =>
         found.count === 0
           ? null
           : { x: found.x / found.count, y: found.y / found.count };
-      return {
-        rows,
-        dark,
-        bright,
-        cursor: middle(cursor),
-        nextMark: middle(nextMark),
-      };
+      return { rows, dark, bright, playhead: middle(playhead) };
     },
     {
       data,
@@ -193,9 +181,8 @@ test("a split render stacks the notation above the notes", async ({ page }) => {
   expect(keyboard).toBeGreaterThan(140);
   // Staves, stems and noteheads, not an empty sheet of paper.
   expect(picture.dark).toBeGreaterThan(2000);
-  // Both markers ride along: what is sounding, and what comes next.
-  expect(picture.cursor).not.toBeNull();
-  expect(picture.nextMark).not.toBeNull();
+  // The reading bar rides along, the same one bar the panel draws.
+  expect(picture.playhead).not.toBeNull();
 });
 
 /** Sheet only: notation in place of the roll, on its own dark ground, and
@@ -211,10 +198,6 @@ test("a sheet only render fills the picture and follows the music", async ({
   await chooseView(page, "Sheet only");
 
   const file = await renderVideo(page);
-  // Nothing has sounded yet this early in the runway, so only what comes
-  // next is marked: a highlight on what is sounding is drawn for a note
-  // that is actually sounding, not for a clock position with nothing to
-  // show for it.
   const opening = await pictureFrom(page, file, 0.2, 1);
   const later = await pictureFrom(page, file, 6, 1);
   const [notation = 0, lower = 0, keyboard = 0] = later.rows;
@@ -223,13 +206,13 @@ test("a sheet only render fills the picture and follows the music", async ({
   // No roll means no keybed across the foot of the picture.
   expect(keyboard).toBeLessThan(90);
   expect(later.bright).toBeGreaterThan(2000);
-  expect(later.cursor).not.toBeNull();
-  expect(opening.nextMark).not.toBeNull();
-  // The marker has walked the score, or the score has walked under it.
-  const openingMark = opening.cursor ?? opening.nextMark;
+  // One bar, up from the first frame, still one bar six seconds in.
+  expect(opening.playhead).not.toBeNull();
+  expect(later.playhead).not.toBeNull();
+  // It has walked the score, or the score has walked under it.
   const moved =
-    Math.abs((later.cursor?.x ?? 0) - (openingMark?.x ?? 0)) +
-    Math.abs((later.cursor?.y ?? 0) - (openingMark?.y ?? 0));
+    Math.abs((later.playhead?.x ?? 0) - (opening.playhead?.x ?? 0)) +
+    Math.abs((later.playhead?.y ?? 0) - (opening.playhead?.y ?? 0));
   expect(moved).toBeGreaterThan(20);
 });
 

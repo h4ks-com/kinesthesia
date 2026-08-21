@@ -24,54 +24,39 @@ export function partLine(song: Song, part: Part): readonly SongNote[] {
     : line.filter((note) => song.hands.get(note.id) === part.hand);
 }
 
-export function soundingPitches(
-  notes: readonly SongNote[],
-  position: number,
-): ReadonlySet<number> {
-  const pitches = new Set<number>();
-  for (const note of notes) {
-    if (note.start <= position && position < note.end) {
-      pitches.add(note.pitch);
-    }
-  }
-  return pitches;
-}
+/** Slack against a small clock jitter before a lower reading counts as moving
+ * back, rather than the scheduler's normal forward wobble. */
+const rewindSlack = 0.05;
 
-/** Which ids sound at a moving position, and which come next, without
- * allocating on every step: both Sets are mutated in place, which is what
- * lets a per-frame highlight stay a lookup rather than a scan. */
+/** The furthest ahead one frame of playback can carry the clock, however slow
+ * that frame was. */
+const stepSeconds = 1;
+
+/** Which ids come next at a moving position, without allocating on every step:
+ * the Set is mutated in place, which is what lets a per-frame highlight stay a
+ * lookup rather than a scan. */
 export type NoteSweep = {
-  readonly sounding: ReadonlySet<number>;
   /** The very next attack after the current position, several ids where it
    * is a chord. Empty past the last one. */
   readonly next: ReadonlySet<number>;
-  /** Moves ahead to a position no earlier than the last one seen. */
-  advance(position: number): void;
-  /** Jumps to an arbitrary position, forward or back. */
-  seek(position: number): void;
-};
-
-type SweepEvent = {
-  readonly at: number;
-  readonly id: number;
-  readonly starts: boolean;
+  /**
+   * Moves to a position, forward or back, and answers whether the step was one
+   * playback could not have taken: the listener asked to be somewhere else.
+   *
+   * Everything that follows a moment across the score reads that one answer, so
+   * the panel and the render cannot disagree about what counts as a jump.
+   */
+  moveTo(position: number): boolean;
 };
 
 export function createNoteSweep(notes: readonly SongNote[]): NoteSweep {
-  const events: SweepEvent[] = [];
-  for (const note of notes) {
-    events.push({ at: note.start, id: note.id, starts: true });
-    events.push({ at: note.end, id: note.id, starts: false });
-  }
-  events.sort((left, right) => left.at - right.at);
   const attackTimes = [...new Set(notes.map((note) => note.start))].sort(
     (left, right) => left - right,
   );
 
-  const sounding = new Set<number>();
   const next = new Set<number>();
-  let eventIndex = 0;
   let attackIndex = 0;
+  let lastPosition = Number.NEGATIVE_INFINITY;
 
   function fillNext(): void {
     next.clear();
@@ -85,28 +70,9 @@ export function createNoteSweep(notes: readonly SongNote[]): NoteSweep {
       }
     }
   }
-
-  function reset(): void {
-    sounding.clear();
-    eventIndex = 0;
-    attackIndex = 0;
-    fillNext();
-  }
-  reset();
+  fillNext();
 
   function advance(position: number): void {
-    while ((events[eventIndex]?.at ?? Number.POSITIVE_INFINITY) <= position) {
-      const event = events[eventIndex];
-      if (event === undefined) {
-        break;
-      }
-      if (event.starts) {
-        sounding.add(event.id);
-      } else {
-        sounding.delete(event.id);
-      }
-      eventIndex += 1;
-    }
     let advanced = false;
     while ((attackTimes[attackIndex] ?? Number.POSITIVE_INFINITY) <= position) {
       attackIndex += 1;
@@ -118,12 +84,23 @@ export function createNoteSweep(notes: readonly SongNote[]): NoteSweep {
   }
 
   return {
-    sounding,
     next,
-    advance,
-    seek(position: number): void {
-      reset();
+    moveTo(position: number): boolean {
+      // Playback only ever carries the clock forward, and only so far in one
+      // frame, so a step back past the jitter slack and a long step ahead are
+      // both somebody asking to be somewhere else.
+      const rewound = position + rewindSlack < lastPosition;
+      const jumped =
+        lastPosition === Number.NEGATIVE_INFINITY ||
+        rewound ||
+        position - lastPosition > stepSeconds;
+      if (rewound) {
+        attackIndex = 0;
+        fillNext();
+      }
       advance(position);
+      lastPosition = position;
+      return jumped;
     },
   };
 }

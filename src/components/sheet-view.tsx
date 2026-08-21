@@ -9,8 +9,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createNoteSweep } from "@/lib/midi/part";
 import type { Song, SongNote, Transpose } from "@/lib/midi/song";
 import { loadSheetMusic } from "@/lib/sheet/load";
-import { buildMarks, nextMarkWidth, type ScoreMark } from "@/lib/sheet/marks";
+import { buildMarks, playheadWidth, type ScoreMark } from "@/lib/sheet/marks";
 import { dragScroll, pageWidth } from "@/lib/sheet/page";
+import {
+  easedScroll,
+  nextPlayhead,
+  playheadScrollTarget,
+} from "@/lib/sheet/playhead";
 import { sheetColors } from "@/lib/sheet/theme";
 import type { SheetMusic, SheetTheme } from "@/lib/sheet/types";
 
@@ -145,21 +150,12 @@ export function SheetView({
   );
 }
 
-/** Slack against a small clock jitter before treating a lower reading as a
- * seek backward and resetting the sweep, rather than the scheduler's normal
- * forward wobble. */
-const rewindSlack = 0.05;
-
 /** How long a scroll the user made by hand keeps following paused. */
 const followResumeMs = 2200;
 
 /** How long following chases a seek made while the music is stopped, which is
  * the one thing that moves the notation when nobody is playing. */
 const followSeekMs = 1200;
-
-/** Exponential time constant for the eased catch-up scroll, so it glides
- * rather than snapping even across a big jump. */
-const followTauMs = 220;
 
 function paddedContentWidth(element: HTMLElement): number {
   const style = getComputedStyle(element);
@@ -191,77 +187,16 @@ function measureContentWidth(element: HTMLElement): Promise<number> {
   });
 }
 
-type Span = { readonly top: number; readonly bottom: number };
-
-/** How far down the page this moment reaches, top and bottom across every
- * staff sounding it. A score of nine instruments is one tall system, and
- * following the first staff alone leaves the other eight off the screen. */
-function markSpan(
-  ids: ReadonlySet<number>,
-  marks: ReadonlyMap<number, readonly ScoreMark[]>,
-): Span | null {
-  let top = Number.POSITIVE_INFINITY;
-  let bottom = Number.NEGATIVE_INFINITY;
-  for (const id of ids) {
-    const box = marks.get(id)?.[0];
-    if (box === undefined) {
-      continue;
-    }
-    top = Math.min(top, box.top);
-    bottom = Math.max(bottom, box.top + box.height);
-  }
-  return top === Number.POSITIVE_INFINITY ? null : { top, bottom };
-}
-
-/** Grows a pool of absolutely positioned marker divs to however many boxes
- * this frame needs and hides the rest, rather than creating or destroying
- * any: a frame is a lookup and a few style writes. */
-function paintMarks(
-  host: HTMLDivElement,
-  pool: HTMLDivElement[],
-  ids: ReadonlySet<number>,
-  marks: ReadonlyMap<number, readonly ScoreMark[]>,
+function paintPlayhead(
+  bar: HTMLDivElement,
+  standing: ScoreMark,
   width: number,
-  background: string,
-  opacity: number,
-  testId: string,
 ): void {
-  // A moment the score has nothing written for, between phrases or past the
-  // last note, leaves the marker where it was rather than blinking out: the
-  // reader is still on that spot until something else is due.
-  const found = [...ids]
-    .map((id) => marks.get(id)?.[0])
-    .filter((mark): mark is ScoreMark => mark !== undefined);
-  if (found.length === 0) {
-    return;
-  }
-
-  let used = 0;
-  for (const mark of found) {
-    let element = pool[used];
-    if (element === undefined) {
-      element = document.createElement("div");
-      element.style.position = "absolute";
-      element.style.pointerEvents = "none";
-      element.dataset.testid = testId;
-      host.appendChild(element);
-      pool.push(element);
-    }
-    element.style.left = `${mark.left}px`;
-    element.style.top = `${mark.top}px`;
-    element.style.width = `${width}px`;
-    element.style.height = `${mark.height}px`;
-    element.style.background = background;
-    element.style.opacity = String(opacity);
-    element.style.display = "block";
-    used += 1;
-  }
-  for (let index = used; index < pool.length; index += 1) {
-    const element = pool[index];
-    if (element !== undefined) {
-      element.style.display = "none";
-    }
-  }
+  bar.style.left = `${standing.left}px`;
+  bar.style.top = `${standing.top}px`;
+  bar.style.width = `${width}px`;
+  bar.style.height = `${standing.height}px`;
+  bar.style.display = "block";
 }
 
 function Notation({
@@ -307,8 +242,8 @@ function Notation({
   const [error, setError] = useState<string | null>(null);
   const osmdRef = useRef<OpenSheetMusicDisplay | null>(null);
   const marksRef = useRef<ReadonlyMap<number, readonly ScoreMark[]>>(new Map());
-  const nextWidthRef = useRef(0);
-  const nextPoolRef = useRef<HTMLDivElement[]>([]);
+  const barWidthRef = useRef(0);
+  const barRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -320,7 +255,7 @@ function Notation({
       return;
     }
     host.innerHTML = "";
-    nextPoolRef.current = [];
+    barRef.current = null;
     void (async () => {
       try {
         const width = await measureContentWidth(scrollEl);
@@ -360,7 +295,16 @@ function Notation({
         osmd.render();
         osmdRef.current = osmd;
         marksRef.current = buildMarks(osmd, sheet.writtenNotes);
-        nextWidthRef.current = nextMarkWidth(osmd.zoom);
+        barWidthRef.current = playheadWidth(osmd.zoom);
+        const bar = document.createElement("div");
+        bar.style.position = "absolute";
+        bar.style.pointerEvents = "none";
+        bar.style.display = "none";
+        bar.style.background = colors.playhead;
+        bar.style.opacity = String(colors.playheadAlpha);
+        bar.dataset.testid = "sheet-playhead";
+        host.appendChild(bar);
+        barRef.current = bar;
         setReady(true);
       } catch {
         if (!cancelled) {
@@ -439,17 +383,10 @@ function Notation({
     };
   }, [ready]);
 
-  // Sweeps which of the song's own notes sound now and which come next on
-  // the clock the falling notes already read, and paints the boxes those ids
-  // own: no index, no stepping, a seek is simply a different set of ids. The
-  // panel keeps the current system in view with an eased scroll that yields
-  // to a scroll the listener makes by hand.
   const lastPosition = useRef(Number.NEGATIVE_INFINITY);
   /** Where the last moment the panel chased began on the page. */
   const referenceMark = useRef<number | null>(null);
-  /** The last moment the score had something written for, kept so a gap in the
-   * music does not send the page backwards or blank the marker. */
-  const heldSpan = useRef<Span | null>(null);
+  const playhead = useRef<ScoreMark | null>(null);
   const expectedScrollTop = useRef(0);
   const lastManualScroll = useRef(Number.NEGATIVE_INFINITY);
   const lastFrameTime = useRef(0);
@@ -493,7 +430,7 @@ function Notation({
     lastPosition.current = Number.NEGATIVE_INFINITY;
     lastFrameTime.current = 0;
     referenceMark.current = null;
-    heldSpan.current = null;
+    playhead.current = null;
     // Emptied and redrawn, the panel is briefly short enough that the browser
     // clamps how far it was scrolled, which arrives as a scroll nobody made.
     // Taking the position as it stands now is what keeps that from reading as
@@ -501,87 +438,54 @@ function Notation({
     expectedScrollTop.current = scrollEl?.scrollTop ?? 0;
     lastManualScroll.current = Number.NEGATIVE_INFINITY;
 
-    const colors = sheetColors(theme);
     let frame = 0;
     const step = (): void => {
       const now = performance.now();
       const dt = lastFrameTime.current === 0 ? 16 : now - lastFrameTime.current;
       lastFrameTime.current = now;
 
-      const position = getPosition();
-      const isSeek = position + rewindSlack < lastPosition.current;
-      if (isSeek) {
-        sweep.seek(position);
-      } else {
-        sweep.advance(position);
-      }
-      lastPosition.current = position;
-
-      const marks = marksRef.current;
-      paintMarks(
-        host,
-        nextPoolRef.current,
+      const jumped = sweep.moveTo(getPosition());
+      const standing = nextPlayhead(
+        playhead.current,
         sweep.next,
-        marks,
-        nextWidthRef.current,
-        colors.next,
-        colors.nextAlpha,
-        "sheet-mark-next",
+        marksRef.current,
+        jumped,
       );
+      playhead.current = standing;
+      const bar = barRef.current;
+      if (standing !== null && bar !== null) {
+        paintPlayhead(bar, standing, barWidthRef.current);
+      }
 
       if (scrollEl !== null) {
-        // What comes next is what the reader is heading for. A phrase that
-        // ends with nothing queued keeps the page where it is rather than
-        // stepping back to a note still ringing from bars ago.
-        const found =
-          markSpan(sweep.next, marks) ?? markSpan(sweep.sounding, marks);
-        const ahead =
-          found !== null &&
-          (isSeek ||
-            heldSpan.current === null ||
-            found.top >= heldSpan.current.top);
-        if (ahead) {
-          heldSpan.current = found;
-        }
-        // Stopped, the page answers to the reader alone, so it follows only
-        // what the score actually has at this moment and nothing remembered.
-        const primary = playingRef.current ? heldSpan.current : found;
-        if (primary !== null) {
-          const maxScroll = Math.max(
-            0,
-            scrollEl.scrollHeight - scrollEl.clientHeight,
-          );
-          // Centred on the panel, so a system of nine instruments is on screen
-          // whole rather than hanging off the bottom. One taller than the panel
-          // starts at its top, and the two cases meet continuously, which is
-          // what keeps a tall chord from flipping the page between placements.
-          const spare = Math.max(
-            0,
-            scrollEl.clientHeight - (primary.bottom - primary.top),
-          );
-          const target = Math.max(
-            0,
-            Math.min(maxScroll, primary.top - spare / 2),
+        if (standing !== null) {
+          const target = playheadScrollTarget(
+            standing,
+            scrollEl.clientHeight,
+            scrollEl.scrollHeight,
           );
           // A reached note is not the only reason to chase: a seek can land
           // back on a mark this panel already holds a reference to (the very
           // first note again, say), which leaves the reference identical
           // even though the reader plainly just asked to go there.
-          if (referenceMark.current !== primary.top || isSeek) {
-            referenceMark.current = primary.top;
+          if (referenceMark.current !== standing.top || jumped) {
+            referenceMark.current = standing.top;
             chaseUntil.current = now + followSeekMs;
             // Asking for a bar is asking to be taken to it, so a seek
             // outranks a scroll made a moment earlier. The two windows
             // overlap, and the older one would otherwise swallow it.
-            if (!playingRef.current) {
+            if (jumped || !playingRef.current) {
               lastManualScroll.current = Number.NEGATIVE_INFINITY;
             }
           }
           const hasYielded = now - lastManualScroll.current < followResumeMs;
           const isFollowing = playingRef.current || now < chaseUntil.current;
           if (!hasYielded && isFollowing) {
-            const alpha = 1 - Math.exp(-dt / followTauMs);
-            scrollEl.scrollTop += (target - scrollEl.scrollTop) * alpha;
+            // Gliding a page's worth of dense notation costs a full width
+            // repaint for every frame of the glide, so a jump lands in one.
+            scrollEl.scrollTop = jumped
+              ? target
+              : easedScroll(scrollEl.scrollTop, target, dt);
             expectedScrollTop.current = scrollEl.scrollTop;
           }
         }
@@ -593,7 +497,7 @@ function Notation({
       cancelAnimationFrame(frame);
       scrollEl?.removeEventListener("scroll", onScroll);
     };
-  }, [ready, notes, getPosition, theme]);
+  }, [ready, notes, getPosition]);
 
   return (
     <div data-testid="sheet-view" className="relative flex h-full">

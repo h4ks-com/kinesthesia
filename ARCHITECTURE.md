@@ -72,8 +72,8 @@ src/components/
                               for mode and notation view
   sheet-view.tsx              sheet music for the open song, engraved once at
                               a fixed wide page rather than the panel's own
-                              width: two cursors that step with playback, an
-                              eased scroll that follows them while it plays
+                              width: one bar that follows playback, an
+                              eased scroll that follows it while it plays
                               and yields to a drag or a scroll once it stops,
                               and an ink-on-paper option
   song-menu.tsx               what you can do with the open song: see its
@@ -128,10 +128,11 @@ src/lib/
                               so the three can never drift apart
   midi/compose.ts             chord voicing, a 5x7 text font and note primitives
   midi/project.ts             an editable song: beat-timed tracks and the edit ops
-  midi/part.ts                a side's tracks, the notes sounding right now,
-                              and a sweep that tracks sounding and next ids
+  midi/part.ts                a side's tracks, which of them are sounding right
+                              now, and a sweep that tracks the ids coming next
                               over a moving position without a scan or an
-                              allocation per step
+                              allocation per step, and answers whether a step
+                              was one playback could have taken
   midi/hands.ts               which hand plays each note of a track, for a
                               file that puts both hands on one
   midi/use-part-roll.ts       a part as the getters the roll draws with
@@ -180,12 +181,15 @@ src/lib/
                               graphical model by those coordinates and turns
                               it into a screen box, once per load, shared by
                               the live view and the render
+  sheet/playhead.ts           where the one reading bar stands and how far the
+                              page scrolls to hold its system, the same rule
+                              for the live panel and the render
   sheet/load.ts               rereads a file's own MIDI for the tempo, meter
                               and key the converter needs, which `Song` does
                               not carry, picks out the notes the page is for,
                               and carries in the song's presented title rather
                               than the file's raw name
-  sheet/theme.ts              the ink, paper and marker colours a notation
+  sheet/theme.ts              the ink, paper and playhead colours a notation
                               theme reads in, resolved from the page's custom
                               properties once so a render can carry them
   sheet/page.ts               the fixed width the live view engraves at, and
@@ -219,10 +223,9 @@ src/lib/
   render/video.ts             offline video render, WebCodecs with a recorder fallback
   render/sheet.ts             the notation for a render: how the frame is split
                               between notation and notes, the score engraved
-                              once into a bitmap, and the window and the
-                              highlights a frame draws over it, from the same
-                              marks and the same sounding notes the live view
-                              reads
+                              once into a bitmap, and the window and the one
+                              bar a frame draws over it, from the same marks,
+                              sweep and playhead rule the live view reads
   render/video-support.ts     what this browser can encode, without loading an
                               encoder to find out
   render/handback.ts          a render the address asked for: proving one was
@@ -343,13 +346,16 @@ OpenSheetMusicDisplay, loaded only once the view opens, draws the MusicXML.
 measure, staff and grid position against OSMD's own graphical model to find
 the screen box it was drawn in, keyed by the source ids it belongs to: a tied
 note or a doubled unison can own more than one box. The view has no index and
-does no stepping; every animation frame it asks `midi/part.ts`'s note sweep
-which ids sound now and which come next at the song's own clock position, and
-draws over the boxes those ids own: a wide translucent band on what is
-sounding, a narrow bar in the warning colour on what comes next. A seek is
-just a different set of ids, so nothing needs resetting or fast-forwarding.
-The render (`render/sheet.ts`) shares the same marks and the same sweep, so
-the video a song renders to agrees with what the live view showed.
+does no stepping; every animation frame it moves `midi/part.ts`'s note sweep to
+the song's own clock position, which answers with the ids coming next and with
+whether that step was one playback could have taken. `sheet/playhead.ts`
+turns those into the one place the bar stands: the furthest of them along the
+page, held where it was through a moment the score has nothing drawn for, and
+only ever moving forward until the listener asks to be somewhere else. A seek
+is just a different set of ids, so nothing needs resetting or fast-forwarding.
+The render (`render/sheet.ts`) shares the marks, the sweep and that same
+playhead rule, so the video a song renders to agrees with what the live view
+showed.
 
 The panel engraves at a fixed width (`sheet/page.ts`), never the panel's own:
 as wide as the panel already is on first load, floored at a page wide enough
@@ -365,10 +371,12 @@ both directions at once; touch's own native panning is turned off on the
 panel so the two never fight over the same drag.
 
 While the song plays the notation belongs to it: the panel refuses pointer
-input and keeps the current system in view by easing its own scroll toward a
-point a third of the way down rather than jumping to it, reading the position
-of whichever box is steering follow straight from the marks already found
-rather than measuring the page again. Stopped, it belongs to the reader, holds
+input and keeps the bar's system in view by easing its own scroll toward the
+middle of the panel, reading its position straight from the marks already
+found rather than measuring the page again. A step in the clock larger than a
+second is the listener asking to be somewhere else, so the page goes straight
+there: gliding a page's worth of dense notation costs a full width repaint for
+every frame of the glide. Stopped, the panel belongs to the reader, holds
 wherever they leave it or drag it to, and moves only to chase a seek. OSMD's
 own built-in follow and its own resize handling would each fight this over the
 same scroll position and the same fixed width, so both stay off, and the panel
@@ -393,15 +401,14 @@ black ink on white regardless of the screen's own theme, into a container
 sized to the page's own printable width in CSS pixels rather than borrowed
 from the screen panel's, and at a zoom chosen to print a real engraver's
 staff height: about 7mm for a solo or piano line, smaller for a score of
-several instruments stacking more than one staff in a system. A page never
-starts inside a system: the cursor is walked across the whole score to read
-where each one begins, and `paginateSystems` breaks between them, greedily
-fitting as many as the page's printable height holds. Each page is a clone of
-that one engraved SVG, cropped to its own slice and pruned of every element
-outside it, since a crop by `viewBox` alone still carries the rest of the
-score underneath it into the PDF. `jsPDF` and `svg2pdf.js` turn each cropped
-clone into one page, scaling its native CSS pixels into the page's points,
-and `downloadBlob` hands the file back the way a rendered video already does.
+several instruments stacking more than one staff in a system. Given that page
+format OSMD paginates the score itself, breaking between systems and drawing
+each page whole into its own SVG, which is what keeps a cut off the music:
+engraving one tall score and slicing it afterwards puts the break where the
+arithmetic lands and clips whatever straddles it. `jsPDF` and `svg2pdf.js`
+turn each of those SVGs into one page, scaling its native CSS pixels into the
+page's points, and `downloadBlob` hands the file back the way a rendered
+video already does.
 The title it prints is the song's own presented name, threaded in from
 `sheet/load.ts` rather than read back off the file's raw name.
 

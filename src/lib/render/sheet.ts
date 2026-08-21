@@ -1,12 +1,12 @@
 import type { OpenSheetMusicDisplay } from "opensheetmusicdisplay";
 import { createNoteSweep } from "@/lib/midi/part";
 import type { SongNote } from "@/lib/midi/song";
+import { buildMarks, playheadWidth, type ScoreMark } from "@/lib/sheet/marks";
 import {
-  buildMarks,
-  nextMarkWidth,
-  nowMarkWidth,
-  type ScoreMark,
-} from "@/lib/sheet/marks";
+  easedScroll,
+  nextPlayhead,
+  playheadScrollTarget,
+} from "@/lib/sheet/playhead";
 import type { SheetColors } from "@/lib/sheet/theme";
 import type { NotationView, SheetMusic, SheetTheme } from "@/lib/sheet/types";
 
@@ -56,43 +56,16 @@ export function sceneRegions(
   };
 }
 
-/** Where the current system settles: a third of the way down the panel, so
- * there is always more of what is coming than of what has passed. */
-const followBand = 1 / 3;
-
-export function sheetScrollTarget(
-  cursorTop: number,
-  viewHeight: number,
-  contentHeight: number,
-): number {
-  const furthest = Math.max(0, contentHeight - viewHeight);
-  return Math.max(0, Math.min(furthest, cursorTop - viewHeight * followBand));
-}
-
-/** Exponential time constant for the eased catch-up scroll, so it glides rather
- * than snapping even across a big jump. */
-const followTauMs = 220;
-
-/** Stepped by the frame the render is laying down rather than by a measured
- * one, so the same song scrolls the same way every time it is rendered. */
-export function easedScroll(
-  current: number,
-  target: number,
-  stepMs: number,
-): number {
-  return current + (target - current) * (1 - Math.exp(-stepMs / followTauMs));
-}
-
 export type SheetPainter = {
   /** Blits the window of the score the current moment sits in, with the
-   * highlight on what is sounding and the one on what comes next. */
+   * reading bar over it. */
   draw(ctx: CanvasRenderingContext2D, position: number, stepMs: number): void;
   dispose(): void;
 };
 
 /** Engraves the whole score once at render resolution and hands back something
- * that only moves a window and two highlights over it per frame. Null where
- * the engraver drew nothing, which leaves the render on the falling notes. */
+ * that only moves a window and one bar over it per frame. Null where the
+ * engraver drew nothing, which leaves the render on the falling notes. */
 export async function sheetPainter(
   notation: RenderNotation,
   notes: readonly SongNote[],
@@ -111,8 +84,6 @@ export async function sheetPainter(
       return null;
     }
     const marks = buildMarks(osmd, notation.music.writtenNotes);
-    const nowWidth = nowMarkWidth(osmd.zoom);
-    const nextWidth = nextMarkWidth(osmd.zoom);
     const relevant = notes.filter((note) => notation.noteIds.has(note.id));
     const sweep = createNoteSweep(relevant);
     // Kept as a bitmap rather than as a page: nothing is laid out again, and
@@ -121,8 +92,7 @@ export async function sheetPainter(
     return painterOver(
       score,
       marks,
-      nowWidth,
-      nextWidth,
+      playheadWidth(osmd.zoom),
       sweep,
       notation,
       region,
@@ -153,52 +123,30 @@ async function engrave(
   return osmd;
 }
 
-function firstMark(
-  ids: ReadonlySet<number>,
-  marks: ReadonlyMap<number, readonly ScoreMark[]>,
-): ScoreMark | null {
-  for (const id of ids) {
-    const box = marks.get(id)?.[0];
-    if (box !== undefined) {
-      return box;
-    }
-  }
-  return null;
-}
-
 function painterOver(
   score: HTMLCanvasElement,
   marks: ReadonlyMap<number, readonly ScoreMark[]>,
-  nowWidth: number,
-  nextWidth: number,
+  barWidth: number,
   sweep: ReturnType<typeof createNoteSweep>,
   notation: RenderNotation,
   region: Region,
 ): SheetPainter {
-  const { paper, cursor, cursorAlpha, next, nextAlpha } = notation.colors;
+  const { paper, playhead, playheadAlpha } = notation.colors;
   // The engraver lays the score down at the display's own density, so its
   // pixels are that much finer than the coordinates its marks stand in.
   const width = Number.parseFloat(score.style.width) || score.width;
   const density = score.width / width;
   const contentHeight = score.height / density;
   let scroll = 0;
-  let lastPosition = Number.NEGATIVE_INFINITY;
-  const rewindSlack = 0.05;
+  let standing: ScoreMark | null = null;
   return {
     draw(ctx, position, stepMs) {
-      if (position + rewindSlack < lastPosition) {
-        sweep.seek(position);
-      } else {
-        sweep.advance(position);
-      }
-      lastPosition = position;
-
-      const primary =
-        firstMark(sweep.sounding, marks) ?? firstMark(sweep.next, marks);
-      if (primary !== null) {
+      const jumped = sweep.moveTo(position);
+      standing = nextPlayhead(standing, sweep.next, marks, jumped);
+      if (standing !== null) {
         scroll = easedScroll(
           scroll,
-          sheetScrollTarget(primary.top, region.height, contentHeight),
+          playheadScrollTarget(standing, region.height, contentHeight),
           stepMs,
         );
       }
@@ -219,28 +167,16 @@ function painterOver(
         region.width,
         region.height,
       );
-      paintGroup(
-        ctx,
-        sweep.sounding,
-        marks,
-        region,
-        scroll,
-        nowWidth,
-        cursor,
-        cursorAlpha,
-        true,
-      );
-      paintGroup(
-        ctx,
-        sweep.next,
-        marks,
-        region,
-        scroll,
-        nextWidth,
-        next,
-        nextAlpha,
-        false,
-      );
+      if (standing !== null && standing.height > 0) {
+        ctx.globalAlpha = playheadAlpha;
+        ctx.fillStyle = playhead;
+        ctx.fillRect(
+          region.x + standing.left,
+          region.y + standing.top - scroll,
+          barWidth,
+          standing.height,
+        );
+      }
       ctx.restore();
     },
     dispose(): void {
@@ -248,56 +184,4 @@ function painterOver(
       score.height = 0;
     },
   };
-}
-
-function paintGroup(
-  ctx: CanvasRenderingContext2D,
-  ids: ReadonlySet<number>,
-  marks: ReadonlyMap<number, readonly ScoreMark[]>,
-  region: Region,
-  scroll: number,
-  width: number,
-  color: string,
-  alpha: number,
-  faded: boolean,
-): void {
-  for (const id of ids) {
-    // Only where the note is struck, as the panel marks it: a tie is one note
-    // written in several places and played once.
-    const box = marks.get(id)?.[0];
-    if (box !== undefined) {
-      paintBox(ctx, box, region, scroll, width, color, alpha, faded);
-    }
-  }
-}
-
-function paintBox(
-  ctx: CanvasRenderingContext2D,
-  box: ScoreMark,
-  region: Region,
-  scroll: number,
-  width: number,
-  color: string,
-  alpha: number,
-  faded: boolean,
-): void {
-  if (box.height === 0) {
-    return;
-  }
-  const x = region.x + box.left;
-  const y = region.y + box.top - scroll;
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  if (faded) {
-    const gradient = ctx.createLinearGradient(x, 0, x + width, 0);
-    gradient.addColorStop(0, "transparent");
-    gradient.addColorStop(0.2, color);
-    gradient.addColorStop(0.8, color);
-    gradient.addColorStop(1, "transparent");
-    ctx.fillStyle = gradient;
-  } else {
-    ctx.fillStyle = color;
-  }
-  ctx.fillRect(x, y, width, box.height);
-  ctx.restore();
 }

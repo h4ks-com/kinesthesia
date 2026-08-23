@@ -126,6 +126,11 @@ export type DeviceVoicing = {
   readonly updatedAt: number;
 };
 
+/** Free play has no file to key its tracks by, so they are kept under a name
+ * no url can take. Held on this device alone: there is no song here for anyone
+ * else to have shaped. */
+export const playVoicingKey = "free-play";
+
 /** Null where this device has never shaped the song, which is different from
  * an empty voicing: that is a listener asking for the instruments the file
  * itself names. */

@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  Check,
   Hand,
   Layers,
+  Palette,
   Radio,
   RotateCcw,
   SlidersHorizontal,
@@ -16,7 +18,12 @@ import {
   type SongVoicing,
   type Voicing,
 } from "@/lib/audio/voicing";
-import { trackColor } from "@/lib/midi/palette";
+import {
+  homeSlot,
+  paletteColor,
+  trackColor,
+  trackColorCount,
+} from "@/lib/midi/palette";
 import { soundingTracks } from "@/lib/midi/part";
 import type { SongNote, SongTrack } from "@/lib/midi/song";
 
@@ -78,6 +85,7 @@ export function TrackMenu({
   sound = null,
 }: TrackMenuProps) {
   const [shaping, setShaping] = useState<number | null>(null);
+  const [tinting, setTinting] = useState<number | null>(null);
   const [returning, setReturning] = useState<number | null>(null);
   const shapeButtons = useRef(new Map<number, HTMLButtonElement>());
   const liveDots = useRef(new Map<number, HTMLSpanElement>());
@@ -161,118 +169,150 @@ export function TrackMenu({
           {tracks.map((track) => {
             const visible = !hidden.has(track.index);
             const claimed = mine.has(track.index);
-            const color = trackColor(track.index);
+            const color = trackColor(track.index, voicing);
+            const shaping = voicing.get(track.index) ?? defaultVoicing(track);
             return (
-              <div
-                key={track.index}
-                className="flex min-w-0 items-center gap-0.5"
-              >
-                {single || !managed ? (
-                  <span className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-2 text-left">
-                    <span
-                      ref={registerDot(track.index)}
-                      className="track-dot size-2.5 shrink-0 rounded-full"
-                      style={{
-                        background: color.glow,
-                        boxShadow: `0 0 10px ${color.glow}`,
-                      }}
-                    />
-                    <span className="min-w-0 truncate text-sm">
-                      {track.name}
-                    </span>
-                    {track.noteCount > 0 ? (
-                      <span className="ml-auto shrink-0 font-mono text-faint text-[0.7rem]">
-                        {track.noteCount}
+              <div key={track.index}>
+                <div className="flex min-w-0 items-center gap-0.5">
+                  {single || !managed ? (
+                    <span className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-2 text-left">
+                      <span
+                        ref={registerDot(track.index)}
+                        className="track-dot size-2.5 shrink-0 rounded-full"
+                        style={{
+                          background: color.glow,
+                          boxShadow: `0 0 10px ${color.glow}`,
+                        }}
+                      />
+                      <span className="min-w-0 truncate text-sm">
+                        {track.name}
                       </span>
-                    ) : null}
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => onToggleVisible?.(track.index)}
-                    aria-pressed={visible}
-                    className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-raised"
-                    style={{ opacity: visible ? 1 : 0.4 }}
-                  >
-                    <span
-                      ref={registerDot(track.index)}
-                      className="track-dot size-2.5 shrink-0 rounded-full"
-                      style={{
-                        background: visible ? color.glow : "transparent",
-                        boxShadow: visible ? `0 0 10px ${color.glow}` : "none",
-                        border: visible ? "none" : `1.5px solid ${color.glow}`,
-                      }}
-                    />
-                    <span className="min-w-0 truncate text-sm">
-                      {track.name}
+                      {track.noteCount > 0 ? (
+                        <span className="ml-auto shrink-0 font-mono text-faint text-[0.7rem]">
+                          {track.noteCount}
+                        </span>
+                      ) : null}
                     </span>
-                    {track.noteCount > 0 ? (
-                      <span className="ml-auto shrink-0 font-mono text-faint text-[0.7rem]">
-                        {track.noteCount}
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onToggleVisible?.(track.index)}
+                      aria-pressed={visible}
+                      className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-raised"
+                      style={{ opacity: visible ? 1 : 0.4 }}
+                    >
+                      <span
+                        ref={registerDot(track.index)}
+                        className="track-dot size-2.5 shrink-0 rounded-full"
+                        style={{
+                          background: visible ? color.glow : "transparent",
+                          boxShadow: visible
+                            ? `0 0 10px ${color.glow}`
+                            : "none",
+                          border: visible
+                            ? "none"
+                            : `1.5px solid ${color.glow}`,
+                        }}
+                      />
+                      <span className="min-w-0 truncate text-sm">
+                        {track.name}
                       </span>
-                    ) : null}
-                  </button>
-                )}
-                {managed && !single ? (
-                  <button
-                    type="button"
-                    data-tour="track-solo"
-                    onClick={() => onSolo?.(track.index)}
-                    aria-pressed={soloed === track.index}
-                    aria-label={`Show only ${track.name}`}
-                    data-tip={soloed === track.index ? "Show all" : "Solo"}
-                    className={`shrink-0 rounded-lg p-1.5 transition-colors ${
-                      soloed === track.index
-                        ? "text-accent"
-                        : "text-faint hover:bg-raised hover:text-accent"
-                    }`}
-                  >
-                    <Radio className="size-4" aria-hidden="true" />
-                  </button>
-                ) : null}
-                {managed && interactive && canClaim && !single ? (
-                  <button
-                    type="button"
-                    data-tour="track-claim"
-                    onClick={() => onToggleMine?.(track.index)}
-                    aria-pressed={claimed}
-                    aria-label={`Play ${track.name} yourself`}
-                    data-tip="Play this part"
-                    className={`shrink-0 rounded-lg p-1.5 transition-colors ${
-                      claimed
-                        ? "bg-accent text-void"
-                        : "text-faint hover:bg-raised hover:text-accent"
-                    }`}
-                  >
-                    <Hand className="size-4" aria-hidden="true" />
-                  </button>
-                ) : null}
-                {onVoicing === null ? null : (
-                  <button
-                    ref={(node) => {
-                      if (node === null) {
-                        shapeButtons.current.delete(track.index);
-                        return;
+                      {track.noteCount > 0 ? (
+                        <span className="ml-auto shrink-0 font-mono text-faint text-[0.7rem]">
+                          {track.noteCount}
+                        </span>
+                      ) : null}
+                    </button>
+                  )}
+                  {managed && !single ? (
+                    <button
+                      type="button"
+                      data-tour="track-solo"
+                      onClick={() => onSolo?.(track.index)}
+                      aria-pressed={soloed === track.index}
+                      aria-label={`Show only ${track.name}`}
+                      data-tip={soloed === track.index ? "Show all" : "Solo"}
+                      className={`shrink-0 rounded-lg p-1.5 transition-colors ${
+                        soloed === track.index
+                          ? "text-accent"
+                          : "text-faint hover:bg-raised hover:text-accent"
+                      }`}
+                    >
+                      <Radio className="size-4" aria-hidden="true" />
+                    </button>
+                  ) : null}
+                  {managed && interactive && canClaim && !single ? (
+                    <button
+                      type="button"
+                      data-tour="track-claim"
+                      onClick={() => onToggleMine?.(track.index)}
+                      aria-pressed={claimed}
+                      aria-label={`Play ${track.name} yourself`}
+                      data-tip="Play this part"
+                      className={`shrink-0 rounded-lg p-1.5 transition-colors ${
+                        claimed
+                          ? "bg-accent text-void"
+                          : "text-faint hover:bg-raised hover:text-accent"
+                      }`}
+                    >
+                      <Hand className="size-4" aria-hidden="true" />
+                    </button>
+                  ) : null}
+                  {onVoicing === null ? null : (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setTinting(tinting === track.index ? null : track.index)
                       }
-                      shapeButtons.current.set(track.index, node);
-                    }}
-                    type="button"
-                    data-tour="track-sound"
-                    onClick={() => setShaping(track.index)}
-                    aria-label={`Change how ${track.name} sounds`}
-                    data-tip="Edit instrument"
-                    className={`shrink-0 rounded-lg p-1.5 transition-colors ${
-                      isDefaultVoicing(
-                        voicing.get(track.index) ?? defaultVoicing(track),
-                        track,
-                      )
-                        ? "text-faint hover:bg-raised hover:text-accent"
-                        : "text-accent hover:bg-raised"
-                    }`}
-                  >
-                    <SlidersHorizontal className="size-4" aria-hidden="true" />
-                  </button>
-                )}
+                      aria-expanded={tinting === track.index}
+                      aria-label={`Change the colour of ${track.name}`}
+                      data-tip="Edit colour"
+                      className={`shrink-0 rounded-lg p-1.5 transition-colors ${
+                        tinting === track.index
+                          ? "text-accent"
+                          : "text-faint hover:bg-raised hover:text-accent"
+                      }`}
+                    >
+                      <Palette className="size-4" aria-hidden="true" />
+                    </button>
+                  )}
+                  {onVoicing === null ? null : (
+                    <button
+                      ref={(node) => {
+                        if (node === null) {
+                          shapeButtons.current.delete(track.index);
+                          return;
+                        }
+                        shapeButtons.current.set(track.index, node);
+                      }}
+                      type="button"
+                      data-tour="track-sound"
+                      onClick={() => setShaping(track.index)}
+                      aria-label={`Change how ${track.name} sounds`}
+                      data-tip="Edit instrument"
+                      className={`shrink-0 rounded-lg p-1.5 transition-colors ${
+                        isDefaultVoicing(shaping, track)
+                          ? "text-faint hover:bg-raised hover:text-accent"
+                          : "text-accent hover:bg-raised"
+                      }`}
+                    >
+                      <SlidersHorizontal
+                        className="size-4"
+                        aria-hidden="true"
+                      />
+                    </button>
+                  )}
+                </div>
+                {tinting === track.index && onVoicing !== null ? (
+                  <Swatches
+                    name={track.name}
+                    chosen={shaping.color}
+                    home={homeSlot(track.index)}
+                    onPick={(slot) =>
+                      onVoicing(track.index, { ...shaping, color: slot })
+                    }
+                  />
+                ) : null}
               </div>
             );
           })}
@@ -288,18 +328,18 @@ export function TrackMenu({
                       ? "Yours, not saved"
                       : "Kept on this device"
                     : sound.playing === ""
-                      ? "The sounds in the file"
-                      : `Sound by ${sound.playing}`}
+                      ? "As the file arrived"
+                      : `Shaped by ${sound.playing}`}
                 </p>
                 {sound.others.length === 0 ? null : (
                   <label className="mt-1 flex items-center gap-1.5 font-mono text-[0.7rem] text-faint">
-                    <span className="sr-only">Whose sound to play</span>
+                    <span className="sr-only">Whose version to play</span>
                     <select
                       value=""
                       onChange={(event) => sound.onAdopt(event.target.value)}
                       className="min-w-0 flex-1 rounded-lg border border-line-strong bg-panel px-1.5 py-1 text-muted outline-none focus:border-accent"
                     >
-                      <option value="">Hear someone else's</option>
+                      <option value="">Play someone else's version</option>
                       {sound.others.map((author) => (
                         <option key={author.id} value={author.id}>
                           {author.name}
@@ -321,8 +361,8 @@ export function TrackMenu({
               <button
                 type="button"
                 onClick={sound.onReset}
-                aria-label="Reset all instruments"
-                data-tip="Reset all instruments"
+                aria-label="Reset every track"
+                data-tip="Reset every track"
                 className="shrink-0 rounded-lg p-1.5 text-faint transition-colors hover:bg-raised hover:text-accent"
               >
                 <RotateCcw className="size-4" aria-hidden="true" />
@@ -342,6 +382,64 @@ export function TrackMenu({
         />
       )}
     </Popover>
+  );
+}
+
+const paletteSlots = Array.from({ length: trackColorCount }, (_, slot) => slot);
+
+/** The palette a channel can be drawn in. The same entries the roll cycles
+ * through by position, so a recoloured channel still sits in the set of hues
+ * chosen to stay apart from one another. */
+function Swatches({
+  name,
+  chosen,
+  home,
+  onPick,
+}: {
+  name: string;
+  chosen: number;
+  /** The entry this channel's position gives it, which is what a reset is. */
+  home: number;
+  onPick: (slot: number) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 px-2 pt-0.5 pb-2">
+      {paletteSlots.map((slot) => {
+        const color = paletteColor(slot);
+        const picked = slot === chosen;
+        return (
+          <button
+            key={slot}
+            type="button"
+            onClick={() => onPick(slot)}
+            aria-pressed={picked}
+            aria-label={`${color.name} for ${name}`}
+            data-tip={color.name}
+            // Marked by a glyph rather than a ring, which at this size reads as
+            // a slightly larger dot and is covered by the focus outline.
+            className="flex size-6 shrink-0 items-center justify-center rounded-full transition-transform hover:scale-110 pointer-coarse:size-9"
+            style={{ background: color.glow }}
+          >
+            <Check
+              className={`size-3.5 text-void pointer-coarse:size-5 ${picked ? "" : "invisible"}`}
+              aria-hidden="true"
+            />
+          </button>
+        );
+      })}
+      {/* Held rather than hidden once the colour is home, so pressing it does
+          not unmount what the reader is standing on. */}
+      <button
+        type="button"
+        onClick={() => onPick(home)}
+        disabled={chosen === home}
+        aria-label={`Reset the colour of ${name}`}
+        data-tip="Reset colour"
+        className="ml-auto shrink-0 rounded-lg p-1.5 text-faint transition-colors hover:bg-raised hover:text-accent disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-faint"
+      >
+        <RotateCcw className="size-4" aria-hidden="true" />
+      </button>
+    </div>
   );
 }
 

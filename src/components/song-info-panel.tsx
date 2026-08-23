@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { ChordTimeline } from "@/components/chord-timeline";
+import type { SongVoicing } from "@/lib/audio/voicing";
 import { formatClock } from "@/lib/format/clock";
 import type { Digest } from "@/lib/midi/analysis";
 import { trackColor } from "@/lib/midi/palette";
@@ -23,10 +24,16 @@ type SongInfoPanelProps = {
   /** The song's own name, without its file extension. */
   title: string;
   report: Digest;
+  voicing: SongVoicing;
   onClose: () => void;
 };
 
-export function SongInfoPanel({ title, report, onClose }: SongInfoPanelProps) {
+export function SongInfoPanel({
+  title,
+  report,
+  voicing,
+  onClose,
+}: SongInfoPanelProps) {
   const panel = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -149,7 +156,7 @@ export function SongInfoPanel({ title, report, onClose }: SongInfoPanelProps) {
         <h3 className="label mt-3 mb-1.5">Tracks · {report.tracks.length}</h3>
         <ul className="flex flex-col gap-0.5">
           {report.tracks.map((track) => {
-            const color = trackColor(track.index);
+            const color = trackColor(track.index, voicing);
             return (
               <li
                 key={track.index}

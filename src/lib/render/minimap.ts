@@ -1,3 +1,4 @@
+import type { SongVoicing } from "@/lib/audio/voicing";
 import { trackColor } from "@/lib/midi/palette";
 import type { SongNote } from "@/lib/midi/song";
 
@@ -36,6 +37,7 @@ type MapOptions = {
   readonly song: MappedSong;
   readonly span: PitchSpan;
   readonly hiddenTracks: ReadonlySet<number>;
+  readonly voicing: SongVoicing;
   readonly width: number;
   readonly height: number;
   /** Lit is the material already behind the playhead. Both passes are drawn
@@ -49,7 +51,7 @@ type MapOptions = {
  * is the shape of the music and a passage is recognisable by its contour. */
 export function drawSongMap(
   ctx: CanvasRenderingContext2D,
-  { song, span, hiddenTracks, width, height, lit }: MapOptions,
+  { song, span, hiddenTracks, voicing, width, height, lit }: MapOptions,
 ): void {
   ctx.clearRect(0, 0, width, height);
   const duration = Math.max(song.duration, 0.001);
@@ -61,7 +63,7 @@ export function drawSongMap(
     if (hiddenTracks.has(note.track)) {
       continue;
     }
-    const color = trackColor(note.track);
+    const color = trackColor(note.track, voicing);
     ctx.fillStyle = lit ? color.glow : color.flat;
     const x = (note.start / duration) * width;
     const sounded = ((note.end - note.start) / duration) * width;

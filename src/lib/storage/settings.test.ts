@@ -79,6 +79,7 @@ describe("song voicing", () => {
     release: 300,
     brightness: 8000,
     volume: 90,
+    color: 4,
   };
 
   it("comes back for the song it was shaped on", async () => {

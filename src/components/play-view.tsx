@@ -8,7 +8,13 @@ import { SkinPicker } from "@/components/skin-picker";
 import { TopBar } from "@/components/top-bar";
 import { TrackMenu } from "@/components/track-menu";
 import { PlaybackEngine } from "@/lib/audio/engine";
-import type { SongVoicing, Voicing } from "@/lib/audio/voicing";
+import { useDeviceVoicing } from "@/lib/audio/use-device-voicing";
+import {
+  clampVoicing,
+  type SongVoicing,
+  type StoredVoicing,
+  type Voicing,
+} from "@/lib/audio/voicing";
 import { keyLabelsFor, reachFor } from "@/lib/input/keyboard-map";
 import { useMidiShortcuts } from "@/lib/input/midi-shortcuts";
 import { type InputChannel, useNoteInput } from "@/lib/input/use-note-input";
@@ -19,6 +25,7 @@ import {
   channelPart,
   keyboardPart,
   type PlayPart,
+  partKey,
   partToTrack,
 } from "@/lib/play/parts";
 import { usePlayNotes } from "@/lib/play/use-play-notes";
@@ -26,6 +33,8 @@ import { clampKeyWidth, defaultKeyWidth } from "@/lib/render/keyboard";
 import {
   type GlobalSettings,
   loadGlobalSettings,
+  loadSongVoicing,
+  playVoicingKey,
   updateGlobalSettings,
 } from "@/lib/storage/settings";
 import { useBackground } from "@/lib/use-background";
@@ -74,7 +83,9 @@ export function PlayView({
   const [parts, setParts] = useState<readonly PlayPart[]>(() => [
     keyboardPart(keyboardTrack),
   ]);
-  const [voicing, setVoicing] = useState<SongVoicing>(new Map());
+  /** Kept by what each part answers to, since a reload hands the parts new
+   * ids in whatever order the channels speak that session. */
+  const [shaped, setShaped] = useState<StoredVoicing>({});
   const [keyWidth, setKeyWidth] = useState(defaultKeyWidth);
   const [showKeyLabels, setShowKeyLabels] = useState(true);
   const [showNoteNames, setShowNoteNames] = useState(true);
@@ -83,6 +94,24 @@ export function PlayView({
   const [hasKeyboard, setHasKeyboard] = useState(false);
   const [focus, setFocus] = useState(false);
   const [started, setStarted] = useState(false);
+
+  const shapedRef = useRef(shaped);
+  shapedRef.current = shaped;
+  const device = useDeviceVoicing(playVoicingKey);
+
+  /** The parts as they stand now, under the ids this session gave them. */
+  const voicing = useMemo<SongVoicing>(
+    () =>
+      new Map(
+        parts.flatMap((part) => {
+          const kept = shaped[partKey(part)];
+          return kept === undefined
+            ? []
+            : [[part.id, clampVoicing(kept, part.id)] as const];
+        }),
+      ),
+    [parts, shaped],
+  );
 
   const engineRef = useRef<PlaybackEngine | null>(null);
   const startedRef = useRef(false);
@@ -121,6 +150,11 @@ export function PlayView({
         setShowKeyLabels(stored.showKeyLabels ?? true);
         setShowNoteNames(stored.showNoteNames ?? true);
         setPlainStyle(stored.plainStyle ?? false);
+      }
+    });
+    void loadSongVoicing(playVoicingKey).then((stored) => {
+      if (stored !== null) {
+        setShaped(stored.tracks);
       }
     });
   }, []);
@@ -405,9 +439,22 @@ export function PlayView({
     return () => window.removeEventListener("keydown", onKey);
   }, [focus]);
 
-  const onVoicing = useCallback((track: number, next: Voicing): void => {
-    setVoicing((current) => new Map(current).set(track, next));
-  }, []);
+  const onVoicing = useCallback(
+    (track: number, next: Voicing): void => {
+      const part = partsRef.current.find((one) => one.id === track);
+      if (part === undefined) {
+        return;
+      }
+      const merged = {
+        ...shapedRef.current,
+        [partKey(part)]: clampVoicing(next, track),
+      };
+      shapedRef.current = merged;
+      setShaped(merged);
+      device.write(merged);
+    },
+    [device],
+  );
 
   const focusButton = (
     <button
@@ -460,6 +507,7 @@ export function PlayView({
 
         <PianoRollView
           skin={background.source}
+          voicing={voicing}
           direction="up"
           song={song}
           hiddenTracks={noAutoNotes}

@@ -24,6 +24,7 @@ import { Walkthrough } from "@/components/walkthrough";
 import { judgedPosition, suggestedOffset } from "@/lib/audio/latency";
 import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
 import { useSongVoicing } from "@/lib/audio/use-song-voicing";
+import type { SongVoicing } from "@/lib/audio/voicing";
 import { keyLabelsFor, reachFor } from "@/lib/input/keyboard-map";
 import { useMidiShortcuts } from "@/lib/input/midi-shortcuts";
 import { type NoteInput, useNoteInput } from "@/lib/input/use-note-input";
@@ -81,7 +82,7 @@ type PlayerProps = {
   matchActive?: boolean;
   /** A match hangs its other half, its overlay and its invite off the player,
    * so one timeline spans both sides and stays on the clock that drives them. */
-  aside?: ReactNode;
+  aside?: (voicing: SongVoicing) => ReactNode;
   /** Stands on the line between the two halves, above both rolls. */
   seam?: ReactNode;
   overlay?: ReactNode;
@@ -571,7 +572,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
             </p>
             {overlay}
           </div>
-          {aside}
+          {aside?.(sound.voicing)}
         </div>
         {footerExtra === null ? null : (
           <TransportBar>
@@ -732,6 +733,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
                   getOwed={gates.owed}
                   getYours={yours}
                   rate={speed}
+                  voicing={sound.voicing}
                   playTrack={ownedTrack}
                   reach={interactive ? reachFor(input.octave) : null}
                   keyLabels={
@@ -762,12 +764,13 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
           </div>
           {overlay}
         </div>
-        {aside}
+        {aside?.(sound.voicing)}
       </div>
 
       {focus ? null : (
         <TransportBar>
           <PlayerTransport
+            voicing={sound.voicing}
             playing={playback.playing}
             elapsed={playback.elapsed}
             duration={song.duration}

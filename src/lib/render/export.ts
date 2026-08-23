@@ -109,6 +109,7 @@ export function watchFrame(
     report,
     rate: config.rate,
     playTrack: 0,
+    voicing: config.voicing,
     hiddenTracks: config.hiddenTracks,
     pressed: noPitches,
     owed: noPitches,

@@ -13,6 +13,7 @@ import {
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { SongInfoPanel } from "@/components/song-info-panel";
 import { Popover } from "@/components/ui/popover";
+import type { SongVoicing } from "@/lib/audio/voicing";
 import { downloadBlob, downloadName } from "@/lib/download";
 import type { Digest } from "@/lib/midi/analysis";
 import { readSongBytes } from "@/lib/midi/song";
@@ -34,6 +35,7 @@ type SongMenuProps = {
   trackCount: number;
   /** Tempo, key, meter and chords, computed once when the song was parsed. */
   report: Digest;
+  voicing: SongVoicing;
   signedIn: boolean;
   shareEnabled: boolean;
   /** Where the file landed, for whoever owns the address this page is on. */
@@ -48,6 +50,7 @@ export function SongMenu({
   title,
   trackCount,
   report,
+  voicing,
   signedIn,
   shareEnabled,
   onPublished,
@@ -231,6 +234,7 @@ export function SongMenu({
 
       {infoOpen ? (
         <SongInfoPanel
+          voicing={voicing}
           title={title}
           report={report}
           onClose={() => setInfoOpen(false)}

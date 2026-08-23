@@ -28,7 +28,7 @@ src/server/
   db/schema.ts                Drizzle tables
   db/client.ts                libSQL connection and migration runner
   scores/store.ts             leaderboard queries
-  voicings/store.ts           how people made a song sound, one save each
+  voicings/store.ts           how people shaped a song's tracks, one save each
   storage/bucket.ts           uploads generated MIDI and project specs to the object store
   render/jobs.ts              renders in flight, each with the one key that may
                               hand its file back. In memory, like the rooms
@@ -90,7 +90,7 @@ src/components/
   render-menu.tsx             render the watch view to a video or audio file
   piano-roll-view.tsx         canvas, the frame loop, touch input and panning
   track-menu.tsx              show, hide, solo and claim tracks, and the way
-                              into how each one sounds
+                              into how each one sounds and what colour it takes
   sound-view.tsx              one track's instrument and shaping, in place of
                               the track list
   instrument-picker.tsx       the 128 General MIDI programs, grouped and searchable
@@ -136,7 +136,8 @@ src/lib/
   midi/hands.ts               which hand plays each note of a track, for a
                               file that puts both hands on one
   midi/use-part-roll.ts       a part as the getters the roll draws with
-  midi/palette.ts             per track and per pitch colours
+  midi/palette.ts             per track and per pitch colours, and which entry
+                              of the palette a track's notes are drawn in
   play/use-play-notes.ts      the notes play mode emits, rising from the keys
   audio/transport.ts          song position on the audio clock
   audio/stage.ts              the one audio device and its decoded recordings,
@@ -148,7 +149,8 @@ src/lib/
                               bend, an envelope and a pause all reach it
   audio/soundfont-samples.ts  a soundfont file as decoded buffers, each marked
                               where it loops
-  audio/voicing.ts            the instrument and shaping a track sounds with
+  audio/voicing.ts            the instrument, shaping and palette entry a track
+                              is played and drawn with
   audio/use-song-voicing.ts   whose sound is playing, kept on this device and
                               saved to your account
   audio/general-midi.ts       program number to soundfont name
@@ -566,15 +568,20 @@ the link and recording it, those two are also all it takes to render a video of
 the engraved score rather than of the falling notes, and `player_link` and
 `render_video` take them under the same names.
 
-How a song sounds is kept on the device that shaped it and shared from the
-account that saved it. Every edit lands in the browser as it settles, so a
-listener with no account keeps what they made and an unsaved edit survives a
-reload. A signed in listener can save it to their account, one saved version
-per person per song, and everyone reads from the same table. What plays is
-what you picked this session, then what this device last shaped, then your own
-saved version, then whoever shaped it last, then the instruments the file
-named. It stays out of the URL: there is a version per track and a link
-carrying all of it would be unreadable.
+How a song sounds and how it is coloured are one record per track, kept on the
+device that shaped it and shared from the account that saved it. Every edit
+lands in the browser as it settles, so a listener with no account keeps what
+they made and an unsaved edit survives a reload. A signed in listener can save
+it to their account, one saved version per person per song, and everyone reads
+from the same table. What plays is what you picked this session, then what
+this device last shaped, then your own saved version, then whoever shaped it
+last, then the instruments the file named and the colours a track's position
+gives it. One save carries both, so an offline render draws what the watcher
+was looking at and playing someone else's version shows their colours too. It
+stays out of the URL: there is a version per track and a link carrying all of
+it would be unreadable. Free play has no file to key its
+tracks by, so it keeps its own under a name no url can take, on the device
+alone.
 
 A song is its url. A voicing is keyed on that alone, on the device and in the
 table, so one file has one sound however the link that opened it named where

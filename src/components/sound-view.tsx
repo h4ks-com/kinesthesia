@@ -53,7 +53,11 @@ export function SoundView({
         {home ? null : (
           <button
             type="button"
-            onClick={() => onChange(defaultVoicing(track))}
+            // The colour is the track's too, and this button speaks for the
+            // sound alone, so it is carried across.
+            onClick={() =>
+              onChange({ ...defaultVoicing(track), color: voicing.color })
+            }
             aria-label="Reset instrument"
             data-tip="Reset instrument"
             className="shrink-0 rounded-lg p-1.5 text-faint transition-colors hover:bg-raised hover:text-accent"

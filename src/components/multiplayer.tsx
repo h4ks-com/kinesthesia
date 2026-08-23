@@ -712,9 +712,10 @@ export function Multiplayer({
             />
           ) : null
         }
-        aside={
+        aside={(voicing) =>
           theirSong !== null ? (
             <OpponentPanel
+              voicing={voicing}
               song={theirSong}
               part={theirSide}
               onPart={canBuildTheirSide ? setOpponentPart : null}

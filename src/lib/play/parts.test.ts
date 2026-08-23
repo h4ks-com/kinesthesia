@@ -3,6 +3,7 @@ import {
   channelPart,
   keyboardPart,
   partInstrument,
+  partKey,
   partLabel,
   partToTrack,
 } from "@/lib/play/parts";
@@ -22,6 +23,14 @@ describe("play parts", () => {
     expect(
       partInstrument({ id: 1, channel: 9, program: 40, percussion: true }),
     ).toBe("Drums");
+  });
+
+  it("names a part by what it answers to, not by the id this session gave it", () => {
+    expect(partKey(keyboardPart(0))).toBe("keys");
+    expect(partKey(keyboardPart(3))).toBe("keys");
+    // The same channel through two different ids, since ids are handed out in
+    // the order channels first speak.
+    expect(partKey(channelPart(1, 5, 0))).toBe(partKey(channelPart(4, 5, 0)));
   });
 
   it("derives a track keyed by the part id", () => {

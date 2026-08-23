@@ -73,19 +73,21 @@ describe("clampVoicing", () => {
       release: 99999,
       brightness: 1,
       volume: 400,
+      color: 99,
     };
-    expect(clampVoicing(wild)).toEqual({
+    expect(clampVoicing(wild, 0)).toEqual({
       program: 127,
       attack: 0,
       release: 4000,
       brightness: 200,
       volume: 150,
+      color: 3,
     });
   });
 
   it("reads an unusable value as the bottom of its range", () => {
     expect(
-      clampVoicing({ ...defaultVoicing(track), attack: Number.NaN }).attack,
+      clampVoicing({ ...defaultVoicing(track), attack: Number.NaN }, 0).attack,
     ).toBe(0);
   });
 });

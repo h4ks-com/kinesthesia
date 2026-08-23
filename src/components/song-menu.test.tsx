@@ -137,6 +137,7 @@ function open(
   const merged = { ...song, ...params };
   render(
     <SongMenu
+      voicing={new Map()}
       mode="watch"
       params={merged}
       title={merged.name.replace(/\.midi?$/i, "")}

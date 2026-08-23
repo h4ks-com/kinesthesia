@@ -12,6 +12,7 @@ import { PartControls } from "@/components/part-controls";
 import { PianoRollView } from "@/components/piano-roll-view";
 import { TimingRail } from "@/components/timing-rail";
 import { ScoreReadout } from "@/components/ui/score-readout";
+import type { SongVoicing } from "@/lib/audio/voicing";
 import { clampMelodyRate, defaultMelodyRate } from "@/lib/midi/melody";
 import {
   type Part,
@@ -29,6 +30,9 @@ import { loadGlobalSettings } from "@/lib/storage/settings";
 
 type OpponentPanelProps = {
   song: Song;
+  /** The song's tracks as they are drawn on this device, so both rolls agree
+   * about what colour a part is. */
+  voicing: SongVoicing;
   /** What they play: the host's own line in a battle, the one the host built
    * for them in a co-op. Null until we know it. */
   part: Part | null;
@@ -56,6 +60,7 @@ const noHits: ReadonlySet<number> = new Set();
 
 export function OpponentPanel({
   song,
+  voicing,
   part,
   onPart,
   coop,
@@ -182,7 +187,7 @@ export function OpponentPanel({
           hand={part?.hand ?? null}
           onHand={onPart === null ? null : (next) => change({ hand: next })}
           whose="theirs"
-          voicing={new Map()}
+          voicing={voicing}
           onVoicing={null}
           sound={null}
           lockedNote={
@@ -204,6 +209,7 @@ export function OpponentPanel({
           getOwed={roll.getOwed}
           getYours={roll.getYours}
           getHits={getHits}
+          voicing={voicing}
           plain={plain}
         />
         <HitFlag hit={state === "playing" ? hit : null} />

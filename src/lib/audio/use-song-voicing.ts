@@ -1,22 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useDeviceVoicing } from "@/lib/audio/use-device-voicing";
 import {
+  asRecord,
+  asVoicing,
   clampVoicing,
   type SongVoicing,
   type StoredVoicing,
   type Voicing,
 } from "@/lib/audio/voicing";
 import type { PlayerParams } from "@/lib/player-url";
-import {
-  forgetSongVoicing,
-  loadSongVoicing,
-  saveSongVoicing,
-} from "@/lib/storage/settings";
-
-/** Long enough that a hand still moving has not written yet, short enough that
- * a song left straight after an edit keeps it. */
-const settleMs = 250;
+import { forgetSongVoicing, loadSongVoicing } from "@/lib/storage/settings";
 
 /** One shared identity for "nothing is shaped", so the render loop is not
  * handed a new map on every frame. */
@@ -52,15 +47,6 @@ export type SongVoicingState = {
   readonly save: () => Promise<void>;
 };
 
-function asVoicing(tracks: StoredVoicing): SongVoicing {
-  return new Map(
-    Object.entries(tracks).map(([track, voicing]) => [
-      Number(track),
-      clampVoicing(voicing),
-    ]),
-  );
-}
-
 /** Two voicings sound the same when they name the same tracks and shape each
  * one the same way. */
 function same(one: SongVoicing, other: SongVoicing): boolean {
@@ -75,18 +61,13 @@ function same(one: SongVoicing, other: SongVoicing): boolean {
       against.attack !== voicing.attack ||
       against.release !== voicing.release ||
       against.brightness !== voicing.brightness ||
-      against.volume !== voicing.volume
+      against.volume !== voicing.volume ||
+      against.color !== voicing.color
     ) {
       return false;
     }
   }
   return true;
-}
-
-function asRecord(voicing: SongVoicing): StoredVoicing {
-  return Object.fromEntries(
-    [...voicing].map(([track, entry]) => [String(track), entry]),
-  );
 }
 
 /** Precedence, in one place: what you picked this session, then your own saved
@@ -146,20 +127,20 @@ export function useSongVoicing(
     Promise.all([
       loadSongVoicing(url).catch(() => null),
       load().catch(() => []),
-    ]).then(([device, rows]) => {
+    ]).then(([kept, rows]) => {
       if (!live) {
         return;
       }
       setSaved(rows);
-      if (device === null || shaped.current !== at) {
+      if (kept === null || shaped.current !== at) {
         return;
       }
       const mine = rows.find((row) => row.authorId === viewer.current) ?? null;
-      if (mine !== null && mine.updatedAt > device.updatedAt) {
+      if (mine !== null && mine.updatedAt > kept.updatedAt) {
         void forgetSongVoicing(url).catch(() => {});
         return;
       }
-      setEdited(asVoicing(device.tracks));
+      setEdited(asVoicing(kept.tracks));
     });
     return () => {
       live = false;
@@ -174,54 +155,17 @@ export function useSongVoicing(
   const base = useRef(voicing);
   base.current = voicing;
 
-  const pending = useRef<StoredVoicing | null>(null);
-  const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const device = useDeviceVoicing(url);
 
-  const cancel = useCallback(() => {
-    if (settle.current !== null) {
-      clearTimeout(settle.current);
-      settle.current = null;
-    }
-    pending.current = null;
-  }, []);
-
-  /** Under the url the edit was made on, since a song can be left before what
-   * was shaped on it has settled. */
-  const flush = useCallback(
-    (target: string) => {
-      const tracks = pending.current;
-      cancel();
-      if (tracks !== null) {
-        void saveSongVoicing(target, tracks).catch(() => {});
-      }
-    },
-    [cancel],
-  );
-
-  useEffect(() => () => flush(url), [flush, url]);
-
-  /** Every edit is kept on this device, so a listener with no account keeps
-   * what they shaped and a signed in one keeps it while it is still unsaved.
-   *
-   * The first is written at once, since picking an instrument and leaving is
-   * one gesture. What follows within the window is held for the end of it:
-   * dragging an envelope handle shapes the track on every pointer move, and
-   * each write is a database transaction of its own. */
   const change = useCallback(
     (track: number, next: Voicing) => {
       const merged = new Map(base.current);
-      merged.set(track, clampVoicing(next));
+      merged.set(track, clampVoicing(next, track));
       setEdited(merged);
       shaped.current += 1;
-      const tracks = asRecord(merged);
-      if (settle.current !== null) {
-        pending.current = tracks;
-        return;
-      }
-      void saveSongVoicing(url, tracks).catch(() => {});
-      settle.current = setTimeout(() => flush(url), settleMs);
+      device.write(asRecord(merged));
     },
-    [flush, url],
+    [device],
   );
 
   const adopt = useCallback(
@@ -229,10 +173,10 @@ export function useSongVoicing(
       setPicked(authorId);
       setEdited(null);
       shaped.current += 1;
-      cancel();
+      device.cancel();
       void forgetSongVoicing(url).catch(() => {});
     },
-    [cancel, url],
+    [device, url],
   );
 
   /** An empty voicing is a choice: it asks for the file's own instruments,
@@ -242,9 +186,9 @@ export function useSongVoicing(
     setPicked(null);
     setEdited(new Map());
     shaped.current += 1;
-    cancel();
-    void saveSongVoicing(url, {}).catch(() => {});
-  }, [cancel, url]);
+    device.cancel();
+    device.write({});
+  }, [device]);
 
   const save = useCallback(async () => {
     const at = shaped.current;
@@ -256,7 +200,7 @@ export function useSongVoicing(
     if (!response.ok) {
       return;
     }
-    cancel();
+    device.cancel();
     await forgetSongVoicing(url).catch(() => {});
     const rows = await load();
     setSaved(rows);
@@ -266,7 +210,7 @@ export function useSongVoicing(
       setEdited(null);
       setPicked(null);
     }
-  }, [cancel, url, load]);
+  }, [device, url, load]);
 
   return {
     voicing,

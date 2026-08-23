@@ -4,6 +4,7 @@ import type { Context } from "hono";
 import { apiBase, renderReportPath } from "@/lib/analytics-report";
 import { readMidi } from "@/lib/midi/analysis";
 import { hands as handIds } from "@/lib/midi/hands";
+import { trackColorCount } from "@/lib/midi/palette";
 import { renderQualityIds } from "@/lib/render/export";
 import { renderKinds } from "@/lib/render/handback";
 import { skinSource, skins } from "@/lib/skins/registry";
@@ -687,6 +688,15 @@ const voicingShape = z.object({
     .max(20000)
     .describe("Low-pass filter cutoff, hertz"),
   volume: z.number().int().min(0).max(150).describe("Track gain, percent"),
+  // Optional so a row stored before tracks could be recoloured still reads
+  // back through this schema rather than being dropped as unparseable.
+  color: z
+    .number()
+    .int()
+    .min(0)
+    .max(trackColorCount - 1)
+    .optional()
+    .describe("Palette entry the track's notes are drawn in"),
 });
 
 const songVoicingShape = z.record(z.string(), voicingShape);
@@ -707,7 +717,7 @@ const listVoicingsRoute = createRoute({
   path: "/voicings",
   summary: "List song voicings",
   description:
-    "Per-track voicings saved for a song, newest first, one per author. A voicing sets each track's instrument, envelope, filter and gain.",
+    "Per-track voicings saved for a song, newest first, one per author. A voicing sets each track's instrument, envelope, filter, gain and colour.",
   request: { query: z.object(songQuery) },
   responses: {
     200: {
@@ -726,7 +736,7 @@ const saveVoicingRoute = createRoute({
   path: "/voicings",
   summary: "Save a song voicing",
   description:
-    "Stores the authenticated user's per-track voicing for a song, replacing their previous one.",
+    "Stores the authenticated user's per-track voicing for a song, replacing their previous one. A voicing sets each track's instrument, envelope, filter, gain and colour.",
   request: {
     body: {
       content: {
@@ -755,7 +765,7 @@ const deleteVoicingRoute = createRoute({
   path: "/voicings",
   summary: "Delete a song voicing",
   description:
-    "Removes the authenticated user's voicing for a song, reverting to the file's own instruments.",
+    "Removes the authenticated user's voicing for a song, reverting to the file's own instruments and colours.",
   request: { query: z.object(songQuery) },
   responses: {
     200: {

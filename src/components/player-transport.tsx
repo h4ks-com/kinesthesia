@@ -5,6 +5,7 @@ import { SettingsMenu } from "@/components/settings-menu";
 import { SongMinimap } from "@/components/song-minimap";
 import { Popover } from "@/components/ui/popover";
 import { SliderRow } from "@/components/ui/slider-row";
+import type { SongVoicing } from "@/lib/audio/voicing";
 import { formatClock } from "@/lib/format/clock";
 import type { InputStatus } from "@/lib/input/use-note-input";
 import {
@@ -33,6 +34,7 @@ type PlayerTransportProps = {
   /** Null while the key is fixed, for the same reason the tempo is. */
   onTranspose: ((semitones: Transpose) => void) | null;
   keyWidth: number;
+  voicing: SongVoicing;
   onKeyWidth: (width: number) => void;
   octave: number | null;
   inputStatus: InputStatus;
@@ -69,6 +71,7 @@ export function PlayerTransport({
   transpose,
   onTranspose,
   keyWidth,
+  voicing,
   onKeyWidth,
   octave,
   inputStatus,
@@ -126,6 +129,7 @@ export function PlayerTransport({
       <SongMinimap
         song={song}
         hiddenTracks={hiddenTracks}
+        voicing={voicing}
         elapsed={elapsed}
         getPosition={getPosition}
         onSeek={onSeek}

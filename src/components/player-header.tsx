@@ -151,6 +151,7 @@ export function PlayerHeader({
 
       <div className="min-w-0 flex-1">
         <SongMenu
+          voicing={voicing}
           mode={mode}
           params={params}
           title={title}

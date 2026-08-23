@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
+import { defaultVoicing, type SongVoicing } from "@/lib/audio/voicing";
 import { trackColor, trackColorCount } from "@/lib/midi/palette";
+
+const noVoicing: SongVoicing = new Map();
+
+const plainVoicing = defaultVoicing({
+  index: 0,
+  name: "one",
+  instrument: "Acoustic grand piano",
+  program: 0,
+  percussion: false,
+  noteCount: 1,
+});
+
+function drawnIn(track: number, color: number): SongVoicing {
+  return new Map([[track, { ...plainVoicing, color }]]);
+}
 
 function hueOf(hex: string): number {
   const value = hex.replace("#", "");
@@ -30,22 +46,22 @@ describe("trackColor", () => {
   it("gives each track its own colour up to the whole palette", () => {
     const glows = new Set<string>();
     for (let track = 0; track < trackColorCount; track += 1) {
-      glows.add(trackColor(track).glow);
+      glows.add(trackColor(track, noVoicing).glow);
     }
     expect(glows.size).toBe(trackColorCount);
   });
 
   it("keeps neighbouring tracks far apart in hue", () => {
     for (let track = 0; track < trackColorCount; track += 1) {
-      const here = hueOf(trackColor(track).glow);
-      const next = hueOf(trackColor(track + 1).glow);
+      const here = hueOf(trackColor(track, noVoicing).glow);
+      const next = hueOf(trackColor(track + 1, noVoicing).glow);
       expect(apart(here, next)).toBeGreaterThan(60);
     }
   });
 
   it("spreads the whole palette round the wheel", () => {
     const hues = Array.from({ length: trackColorCount }, (_, track) =>
-      hueOf(trackColor(track).glow),
+      hueOf(trackColor(track, noVoicing).glow),
     ).sort((left, right) => left - right);
     for (let index = 0; index < hues.length; index += 1) {
       const here = hues[index] ?? 0;
@@ -54,7 +70,17 @@ describe("trackColor", () => {
     }
   });
 
+  it("draws a track in the palette entry the song gives it", () => {
+    expect(trackColor(0, drawnIn(0, 3))).toEqual(trackColor(3, noVoicing));
+  });
+
+  it("leaves a track the song says nothing about on its own entry", () => {
+    expect(trackColor(1, drawnIn(0, 3))).toEqual(trackColor(1, noVoicing));
+  });
+
   it("wraps round for a song with more tracks than colours", () => {
-    expect(trackColor(trackColorCount)).toEqual(trackColor(0));
+    expect(trackColor(trackColorCount, noVoicing)).toEqual(
+      trackColor(0, noVoicing),
+    );
   });
 });

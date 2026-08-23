@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { SongVoicing } from "@/lib/audio/voicing";
 import type { SongNote } from "@/lib/midi/song";
 import { drawSongMap, type MappedSong, pitchSpan } from "@/lib/render/minimap";
+
+const noVoicing: SongVoicing = new Map();
 
 let next = 0;
 
@@ -83,6 +86,7 @@ describe("drawSongMap", () => {
       song,
       span: pitchSpan(song),
       hiddenTracks: new Set(),
+      voicing: noVoicing,
       lit: true,
     });
 
@@ -102,6 +106,7 @@ describe("drawSongMap", () => {
       song,
       span: pitchSpan(song),
       hiddenTracks: new Set([1]),
+      voicing: noVoicing,
       lit: true,
     });
 
@@ -119,6 +124,7 @@ describe("drawSongMap", () => {
       song,
       span: pitchSpan(song),
       hiddenTracks: new Set(),
+      voicing: noVoicing,
       lit: true,
     });
 
@@ -137,6 +143,7 @@ describe("drawSongMap", () => {
       song,
       span: pitchSpan(song),
       hiddenTracks: new Set<number>(),
+      voicing: noVoicing,
     };
     const dim = recorder();
     const lit = recorder();

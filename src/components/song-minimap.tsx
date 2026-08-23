@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { defaultVoicing, type SongVoicing } from "@/lib/audio/voicing";
 import { formatClock } from "@/lib/format/clock";
+import { trackSlot } from "@/lib/midi/palette";
 import type { Song } from "@/lib/midi/song";
 import { drawSongMap, pitchSpan } from "@/lib/render/minimap";
 
@@ -22,6 +24,7 @@ type SongMinimapProps = {
    * The playhead runs off the clock instead, because a position held in React
    * state can only move as often as the component re-renders. */
   elapsed: number;
+  voicing: SongVoicing;
   getPosition: () => number;
   onSeek: ((position: number) => void) | null;
 };
@@ -34,6 +37,7 @@ type Layers = { readonly dim: string; readonly lit: string };
 function paint(
   song: Song,
   hiddenTracks: ReadonlySet<number>,
+  voicing: SongVoicing,
   width: number,
   height: number,
 ): Layers | null {
@@ -48,7 +52,7 @@ function paint(
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   const span = pitchSpan(song);
   const layer = (lit: boolean): string => {
-    drawSongMap(ctx, { song, span, hiddenTracks, width, height, lit });
+    drawSongMap(ctx, { song, span, hiddenTracks, voicing, width, height, lit });
     return canvas.toDataURL();
   };
   return { dim: layer(false), lit: layer(true) };
@@ -57,6 +61,7 @@ function paint(
 export function SongMinimap({
   song,
   hiddenTracks,
+  voicing,
   elapsed,
   getPosition,
   onSeek,
@@ -74,6 +79,22 @@ export function SongMinimap({
     () => [...hiddenTracks].sort((one, next) => one - next).join(","),
     [hiddenTracks],
   );
+  /** The map reads nothing of a voicing but the colours, and a voicing is a new
+   * object on every shaping of the sound, envelope handle included, so the same
+   * rule applies: what it holds is what says the picture is out of date. */
+  const colorKey = useMemo(
+    () => song.tracks.map((track) => trackSlot(track.index, voicing)).join(","),
+    [song, voicing],
+  );
+  const colors = useMemo<SongVoicing>(() => {
+    const slots = colorKey === "" ? [] : colorKey.split(",").map(Number);
+    return new Map(
+      song.tracks.map((track, at) => [
+        track.index,
+        { ...defaultVoicing(track), color: slots[at] ?? track.index },
+      ]),
+    );
+  }, [song, colorKey]);
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -95,13 +116,13 @@ export function SongMinimap({
       width = box.width;
       height = box.height;
       widthRef.current = width;
-      setLayers(paint(song, hidden, width, height));
+      setLayers(paint(song, hidden, colors, width, height));
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(frame);
     return () => observer.disconnect();
-  }, [song, hiddenKey]);
+  }, [song, hiddenKey, colors]);
 
   useEffect(() => {
     // Moved by writing two styles a frame rather than by re-rendering, so the

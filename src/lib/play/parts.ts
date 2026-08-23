@@ -3,7 +3,8 @@ import type { SongTrack } from "@/lib/midi/song";
 
 /** One voice you play into during free roam. A part answers to one MIDI
  * channel, or to the computer keyboard and touch when `channel` is null. Its
- * `id` is stable and keys its colour, its voicing and its engine voice. */
+ * `id` keys its voicing and its engine voice for as long as the page is open;
+ * across reloads it is `partKey` that names the part. */
 export type PlayPart = {
   readonly id: number;
   readonly channel: number | null;
@@ -13,6 +14,12 @@ export type PlayPart = {
 
 /** General MIDI reserves channel 10 (index 9) for the drum kit. */
 export const drumChannel = 9;
+
+/** What a part is called across sessions. Its `id` is handed out in the order
+ * channels first speak, so only the thing it answers to survives a reload. */
+export function partKey(part: PlayPart): string {
+  return part.channel === null ? "keys" : String(part.channel);
+}
 
 export function partLabel(part: PlayPart): string {
   if (part.channel === null) {

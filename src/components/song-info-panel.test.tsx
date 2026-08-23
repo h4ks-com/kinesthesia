@@ -53,7 +53,12 @@ const report: Digest = {
 describe("SongInfoPanel", () => {
   it("shows the song's name, tempo, meter, key and duration", () => {
     render(
-      <SongInfoPanel title="Fixture Song" report={report} onClose={vi.fn()} />,
+      <SongInfoPanel
+        voicing={new Map()}
+        title="Fixture Song"
+        report={report}
+        onClose={vi.fn()}
+      />,
     );
 
     expect(screen.getByText("Fixture Song")).toBeTruthy();
@@ -68,7 +73,12 @@ describe("SongInfoPanel", () => {
 
   it("lists every track with its note count, range and percussion", () => {
     render(
-      <SongInfoPanel title="Fixture Song" report={report} onClose={vi.fn()} />,
+      <SongInfoPanel
+        voicing={new Map()}
+        title="Fixture Song"
+        report={report}
+        onClose={vi.fn()}
+      />,
     );
 
     expect(screen.getByText("Piano")).toBeTruthy();
@@ -79,7 +89,12 @@ describe("SongInfoPanel", () => {
 
   it("draws the chord progression as a timeline, sized by how long each chord holds", () => {
     render(
-      <SongInfoPanel title="Fixture Song" report={report} onClose={vi.fn()} />,
+      <SongInfoPanel
+        voicing={new Map()}
+        title="Fixture Song"
+        report={report}
+        onClose={vi.fn()}
+      />,
     );
 
     expect(screen.getByText("C")).toBeTruthy();
@@ -89,6 +104,7 @@ describe("SongInfoPanel", () => {
   it("says so when no chords were detected", () => {
     render(
       <SongInfoPanel
+        voicing={new Map()}
         title="Fixture Song"
         report={{ ...report, timeline: [] }}
         onClose={vi.fn()}
@@ -101,7 +117,12 @@ describe("SongInfoPanel", () => {
   it("closes on Escape", () => {
     const onClose = vi.fn();
     render(
-      <SongInfoPanel title="Fixture Song" report={report} onClose={onClose} />,
+      <SongInfoPanel
+        voicing={new Map()}
+        title="Fixture Song"
+        report={report}
+        onClose={onClose}
+      />,
     );
 
     fireEvent.keyDown(window, { key: "Escape" });
@@ -111,7 +132,12 @@ describe("SongInfoPanel", () => {
   it("closes from its own close button", () => {
     const onClose = vi.fn();
     render(
-      <SongInfoPanel title="Fixture Song" report={report} onClose={onClose} />,
+      <SongInfoPanel
+        voicing={new Map()}
+        title="Fixture Song"
+        report={report}
+        onClose={onClose}
+      />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -121,6 +147,7 @@ describe("SongInfoPanel", () => {
   it("says when a key could not be found", () => {
     render(
       <SongInfoPanel
+        voicing={new Map()}
         title="Fixture Song"
         report={{ ...report, key: null }}
         onClose={vi.fn()}

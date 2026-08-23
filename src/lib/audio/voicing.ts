@@ -1,8 +1,10 @@
+import { homeSlot, paletteSlot } from "@/lib/midi/palette";
 import type { SongNote, SongTrack } from "@/lib/midi/song";
 
-/** How one track is made to sound: which instrument plays it, and the shaping
- * laid over the sample. Each default means "leave the sample alone", so a
- * track nobody has touched plays exactly as it always did. */
+/** How one track is played and drawn: which instrument sounds it, the shaping
+ * laid over the sample, and which palette entry its notes take. Each default
+ * means "leave it as it arrived", so a track nobody has touched plays and
+ * reads exactly as it always did. */
 export type Voicing = {
   readonly program: number;
   /** Milliseconds faded in over the sample's own onset. */
@@ -13,14 +15,19 @@ export type Voicing = {
   readonly brightness: number;
   /** Percent of the written velocity. */
   readonly volume: number;
+  /** Which palette entry the track's notes are drawn in. */
+  readonly color: number;
 };
 
-/** A voicing per track index. Absent tracks sound as they were parsed. */
+/** A voicing per track index. Absent tracks sound and read as they were
+ * parsed. */
 export type SongVoicing = ReadonlyMap<number, Voicing>;
 
 /** The same, as it travels and as it is stored: a map keyed by number is not
- * JSON. */
-export type StoredVoicing = Record<string, Voicing>;
+ * JSON, and a row written before tracks could be recoloured names no colour. */
+export type StoredVoicing = Record<string, ReadVoicing>;
+
+type ReadVoicing = Omit<Voicing, "color"> & { readonly color?: number };
 
 export const attackRange = { min: 0, max: 1000 } as const;
 export const releaseRange = { min: 0, max: 4000 } as const;
@@ -42,11 +49,18 @@ export function defaultVoicing(track: SongTrack): Voicing {
     release: releaseRange.min,
     brightness: brightnessRange.max,
     volume: 100,
+    color: homeSlot(track.index),
   };
 }
 
-export function clampVoicing(voicing: Voicing): Voicing {
+/** Given the track it belongs to, since a record that names no colour takes
+ * the one its position gives it. */
+export function clampVoicing(voicing: ReadVoicing, track: number): Voicing {
   return {
+    color:
+      voicing.color === undefined
+        ? homeSlot(track)
+        : paletteSlot(voicing.color),
     program: clamp(voicing.program, programRange.min, programRange.max),
     attack: clamp(voicing.attack, attackRange.min, attackRange.max),
     release: clamp(voicing.release, releaseRange.min, releaseRange.max),
@@ -67,6 +81,21 @@ export function isDefaultVoicing(voicing: Voicing, track: SongTrack): boolean {
     voicing.release === home.release &&
     voicing.brightness === home.brightness &&
     voicing.volume === home.volume
+  );
+}
+
+export function asRecord(voicing: SongVoicing): StoredVoicing {
+  return Object.fromEntries(
+    [...voicing].map(([track, entry]) => [String(track), entry]),
+  );
+}
+
+export function asVoicing(tracks: StoredVoicing): SongVoicing {
+  return new Map(
+    Object.entries(tracks).map(([track, voicing]) => [
+      Number(track),
+      clampVoicing(voicing, Number(track)),
+    ]),
   );
 }
 

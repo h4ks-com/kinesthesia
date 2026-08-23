@@ -68,6 +68,7 @@ const part = {
 function show(theirKeys: () => ReadonlySet<number>) {
   return render(
     <OpponentPanel
+      voicing={new Map()}
       song={song}
       part={part}
       onPart={null}

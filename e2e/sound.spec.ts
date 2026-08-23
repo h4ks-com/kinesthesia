@@ -116,6 +116,44 @@ test("a shaped song sounds the same way when it opens again", async ({
   );
 });
 
+test("a recoloured track comes back that colour, and can be put back", async ({
+  page,
+}) => {
+  await serveFixture(page);
+  await page.goto(`/learn?${playerQuery()}`);
+  await expect(page.locator("canvas")).toBeVisible();
+
+  const openColour = async () => {
+    await page.getByRole("button", { name: "Tracks" }).first().click();
+    await page
+      .getByRole("button", { name: /Change the colour of/ })
+      .first()
+      .click();
+  };
+
+  await openColour();
+  const swatch = page.getByRole("button", { name: /^Red for/ });
+  await expect(swatch).toHaveAttribute("aria-pressed", "false");
+  await swatch.click();
+  await expect(swatch).toHaveAttribute("aria-pressed", "true");
+
+  // Named the way a link off the home page names it, since the colour travels
+  // with the song rather than with the address that opened it.
+  await page.goto(`/watch?${playerQuery()}&source=local`);
+  await expect(page.locator("canvas")).toBeVisible();
+  await openColour();
+  await expect(page.getByRole("button", { name: /^Red for/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+
+  await page.getByRole("button", { name: /Reset the colour of/ }).click();
+  await expect(page.getByRole("button", { name: /^Teal for/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+});
+
 test("a shaped song offers to keep the sound, and to drop it", async ({
   page,
 }) => {
@@ -129,7 +167,7 @@ test("a shaped song offers to keep the sound, and to drop it", async ({
 
   await expect(page.getByText("Kept on this device")).toBeVisible();
 
-  await page.getByRole("button", { name: "Reset all instruments" }).click();
+  await page.getByRole("button", { name: "Reset every track" }).click();
   await expect(page.getByText("Kept on this device")).toHaveCount(0);
 });
 
@@ -215,7 +253,7 @@ test("a song someone else shaped arrives that way, and others can be heard", asy
   await page.getByRole("button", { name: "Tracks" }).first().click();
 
   // Nobody signed in has a version of their own, so the newest one is playing.
-  await expect(page.getByText("Sound by Bo")).toBeVisible();
+  await expect(page.getByText("Shaped by Bo")).toBeVisible();
   await page
     .getByRole("button", { name: /Change how .* sounds/ })
     .first()
@@ -223,9 +261,9 @@ test("a song someone else shaped arrives that way, and others can be heard", asy
   await expect(page.getByText(/Marimba\. Play a key/)).toBeVisible();
 
   await page.getByRole("button", { name: "Back to tracks" }).click();
-  await page.getByLabel("Whose sound to play").selectOption("ana");
+  await page.getByLabel("Whose version to play").selectOption("ana");
 
-  await expect(page.getByText("Sound by Ana")).toBeVisible();
+  await expect(page.getByText("Shaped by Ana")).toBeVisible();
   await page
     .getByRole("button", { name: /Change how .* sounds/ })
     .first()

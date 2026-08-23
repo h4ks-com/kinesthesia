@@ -75,6 +75,7 @@ const flute: Voicing = {
   release: 300,
   brightness: 8000,
   volume: 90,
+  color: 4,
 };
 
 const params: PlayerParams = {

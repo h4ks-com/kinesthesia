@@ -1,3 +1,4 @@
+import type { SongVoicing } from "@/lib/audio/voicing";
 import type { Reach } from "@/lib/input/keyboard-map";
 import type { ExpressionTrail } from "@/lib/midi/expression";
 import { type NoteColor, pitchColor, trackColor } from "@/lib/midi/palette";
@@ -88,6 +89,9 @@ export type Frame = {
   /** The track the player is playing, so a struck key that is not sitting on a
    * sounding note still lights and sparks in their part's colour. */
   readonly playTrack: number;
+  /** How each track is drawn, which is the same record that says how it
+   * sounds, so a colour travels with the song rather than with the screen. */
+  readonly voicing: SongVoicing;
   readonly hiddenTracks: ReadonlySet<number>;
   readonly pressed: ReadonlySet<number>;
   /** The pitches the player still owes at the current gate, so a strike that
@@ -381,7 +385,10 @@ export class PianoRollRenderer {
     }
     this.previousPosition = frame.position;
     for (const pitch of frame.pressed) {
-      active.set(pitch, active.get(pitch) ?? trackColor(frame.playTrack));
+      active.set(
+        pitch,
+        active.get(pitch) ?? trackColor(frame.playTrack, frame.voicing),
+      );
     }
 
     this.paintKeyboardShadow(total, keyboardTop);
@@ -555,7 +562,7 @@ export class PianoRollRenderer {
         continue;
       }
       const ghost = frame.yours !== null && !frame.yours.has(note.id);
-      const color = trackColor(note.track);
+      const color = trackColor(note.track, frame.voicing);
       const started = note.start <= position;
       // A key is lit by a note being played, not by one the pedal is holding
       // on after the hand has gone: the light stands for the strike.
@@ -770,7 +777,7 @@ export class PianoRollRenderer {
       const down = note.end === null;
       const footAge = note.end === null ? 0 : position - note.end;
       const bottom = keyboardTop - footAge * scale;
-      const color = trackColor(note.track);
+      const color = trackColor(note.track, frame.voicing);
       // Claimed before the geometry cull, so a note whose bar has climbed off
       // the roll still owns its key.
       if (down) {
@@ -925,7 +932,7 @@ export class PianoRollRenderer {
       this.sparks.spawn(
         keyCenter(pitch, whiteWidth),
         keyboardTop,
-        active.get(pitch) ?? trackColor(frame.playTrack),
+        active.get(pitch) ?? trackColor(frame.playTrack, frame.voicing),
         frame.owed.has(pitch) ? "bloom" : "strike",
       );
     }
@@ -949,7 +956,7 @@ export class PianoRollRenderer {
       this.sparks.spawn(
         keyCenter(pitch, whiteWidth),
         keyboardTop,
-        active.get(pitch) ?? trackColor(frame.playTrack),
+        active.get(pitch) ?? trackColor(frame.playTrack, frame.voicing),
         "bloom",
       );
     }

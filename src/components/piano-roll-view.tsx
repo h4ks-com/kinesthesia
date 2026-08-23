@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
 } from "react";
+import type { SongVoicing } from "@/lib/audio/voicing";
 import type { Reach } from "@/lib/input/keyboard-map";
 import type { ExpressionTrail } from "@/lib/midi/expression";
 import { chordAt } from "@/lib/midi/harmony";
@@ -69,6 +70,9 @@ type PianoRollViewProps = {
   keyLabels?: ReadonlyMap<number, string> | null;
   noteNames?: boolean;
   plain?: boolean;
+  /** How each track is drawn, taken from the record that also says how it
+   * sounds. */
+  voicing: SongVoicing;
   onStrike?: (pitch: number) => void;
   onRelease?: (pitch: number) => void;
 };
@@ -93,6 +97,7 @@ export function PianoRollView({
   keyLabels = null,
   noteNames = true,
   plain = false,
+  voicing,
   expression,
   skin,
   direction = "down",
@@ -145,6 +150,8 @@ export function PianoRollView({
   noteNamesRef.current = noteNames;
   const plainRef = useRef(plain);
   plainRef.current = plain;
+  const voicingRef = useRef(voicing);
+  voicingRef.current = voicing;
   const gestures = useRef(new Map<number, Gesture>());
   // A rebuilt renderer starts on the lowest keys, so it is framed on creation
   // as well as on a move: the pitch itself often has not changed.
@@ -182,6 +189,7 @@ export function PianoRollView({
         report: skinRef.current === null ? null : reportRef.current,
         rate: rateRef.current,
         playTrack: playTrackRef.current,
+        voicing: voicingRef.current,
         hiddenTracks: hiddenRef.current,
         pressed: getPressed(),
         owed: getOwed(),

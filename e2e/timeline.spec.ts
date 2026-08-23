@@ -44,15 +44,25 @@ test("it redraws when the shown tracks change", async ({ page }) => {
 // which is a step a second. This is what says it runs on the audio clock.
 test("the playhead moves between frames while playing", async ({ page }) => {
   await openWatch(page);
+  const still = await page.locator(playhead).getAttribute("style");
   await page.getByRole("button", { name: "Play" }).click();
 
+  // The audio device is handed over before the clock runs, and a machine with
+  // no sound card can take a moment over it, so the reading starts from the
+  // first frame that actually moved.
+  await expect
+    .poll(() => page.locator(playhead).getAttribute("style"))
+    .not.toBe(still);
+
   const positions: string[] = [];
-  for (let sample = 0; sample < 4; sample += 1) {
-    await page.waitForTimeout(120);
+  for (let sample = 0; sample < 5; sample += 1) {
+    await page.waitForTimeout(150);
     positions.push(
       (await page.locator(playhead).getAttribute("style")) ?? "none",
     );
   }
 
+  // Three readings inside three quarters of a second, which a playhead moved
+  // by a render a second could not produce.
   expect(new Set(positions).size).toBeGreaterThan(2);
 });

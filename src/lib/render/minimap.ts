@@ -1,4 +1,4 @@
-import type { SongVoicing } from "@/lib/audio/voicing";
+import { anyFront, isFront, type SongVoicing } from "@/lib/audio/voicing";
 import { trackColor } from "@/lib/midi/palette";
 import type { SongNote } from "@/lib/midi/song";
 
@@ -13,6 +13,9 @@ export type MappedSong = {
  * a part that stays within an octave still reads as a line rather than a row of
  * dots. */
 const thinnestNote = 1.5;
+
+const oneLayer: readonly boolean[] = [false];
+const bothLayers: readonly boolean[] = [false, true];
 
 /** Left free above and below the outermost note, so the highest note in the
  * song is not drawn flush against the edge. */
@@ -59,18 +62,25 @@ export function drawSongMap(
   const usable = Math.max(1, height - verticalPadding * 2);
   const noteHeight = Math.max(thinnestNote, usable / (pitches + 1));
   ctx.globalAlpha = lit ? 1 : 0.42;
-  for (const note of song.notes) {
-    if (hiddenTracks.has(note.track)) {
-      continue;
+  // A track asked to the front is drawn over the rest here too, so the map
+  // reads the same way round as the roll.
+  for (const inFront of anyFront(voicing) ? bothLayers : oneLayer) {
+    for (const note of song.notes) {
+      if (
+        hiddenTracks.has(note.track) ||
+        isFront(note.track, voicing) !== inFront
+      ) {
+        continue;
+      }
+      const color = trackColor(note.track, voicing);
+      ctx.fillStyle = lit ? color.glow : color.flat;
+      const x = (note.start / duration) * width;
+      const sounded = ((note.end - note.start) / duration) * width;
+      const y =
+        verticalPadding +
+        (1 - (note.pitch - span.low) / pitches) * (usable - noteHeight);
+      ctx.fillRect(x, y, Math.max(1, sounded), noteHeight);
     }
-    const color = trackColor(note.track, voicing);
-    ctx.fillStyle = lit ? color.glow : color.flat;
-    const x = (note.start / duration) * width;
-    const sounded = ((note.end - note.start) / duration) * width;
-    const y =
-      verticalPadding +
-      (1 - (note.pitch - span.low) / pitches) * (usable - noteHeight);
-    ctx.fillRect(x, y, Math.max(1, sounded), noteHeight);
   }
   ctx.globalAlpha = 1;
 }

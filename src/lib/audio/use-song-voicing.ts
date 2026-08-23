@@ -62,7 +62,8 @@ function same(one: SongVoicing, other: SongVoicing): boolean {
       against.release !== voicing.release ||
       against.brightness !== voicing.brightness ||
       against.volume !== voicing.volume ||
-      against.color !== voicing.color
+      against.color !== voicing.color ||
+      against.front !== voicing.front
     ) {
       return false;
     }

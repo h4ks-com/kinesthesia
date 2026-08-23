@@ -697,6 +697,10 @@ const voicingShape = z.object({
     .max(trackColorCount - 1)
     .optional()
     .describe("Palette entry the track's notes are drawn in"),
+  front: z
+    .boolean()
+    .optional()
+    .describe("Draws the track over every track that is not in front"),
 });
 
 const songVoicingShape = z.record(z.string(), voicingShape);

@@ -149,8 +149,8 @@ src/lib/
                               bend, an envelope and a pause all reach it
   audio/soundfont-samples.ts  a soundfont file as decoded buffers, each marked
                               where it loops
-  audio/voicing.ts            the instrument, shaping and palette entry a track
-                              is played and drawn with
+  audio/voicing.ts            the instrument, shaping, palette entry and
+                              stacking a track is played and drawn with
   audio/use-song-voicing.ts   whose sound is playing, kept on this device and
                               saved to your account
   audio/general-midi.ts       program number to soundfont name
@@ -576,12 +576,12 @@ it to their account, one saved version per person per song, and everyone reads
 from the same table. What plays is what you picked this session, then what
 this device last shaped, then your own saved version, then whoever shaped it
 last, then the instruments the file named and the colours a track's position
-gives it. One save carries both, so an offline render draws what the watcher
+gives it, drawn in the order the tracks appear unless one is asked to the
+front. One save carries all of it, so an offline render draws what the watcher
 was looking at and playing someone else's version shows their colours too. It
 stays out of the URL: there is a version per track and a link carrying all of
-it would be unreadable. Free play has no file to key its
-tracks by, so it keeps its own under a name no url can take, on the device
-alone.
+it would be unreadable. Free play has no file to key its tracks by, so it
+keeps its own under a name no url can take, on the device alone.
 
 A song is its url. A voicing is keyed on that alone, on the device and in the
 table, so one file has one sound however the link that opened it named where

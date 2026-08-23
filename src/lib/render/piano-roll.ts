@@ -1,4 +1,4 @@
-import type { SongVoicing } from "@/lib/audio/voicing";
+import { anyFront, isFront, type SongVoicing } from "@/lib/audio/voicing";
 import type { Reach } from "@/lib/input/keyboard-map";
 import type { ExpressionTrail } from "@/lib/midi/expression";
 import { type NoteColor, pitchColor, trackColor } from "@/lib/midi/palette";
@@ -38,6 +38,9 @@ export const lookAhead = 3.5;
  * ahead so a long rest before the next note shows nothing until it nears. */
 const foreshadowLead = 1.6;
 const maxDevicePixelRatio = 1.5;
+/** Read back to front, so the tracks asked to the front are painted last. */
+const oneLayer: readonly boolean[] = [false];
+const bothLayers: readonly boolean[] = [false, true];
 /** How long a struck drum keeps its key lit. The note-off a MIDI writes for a
  * drum is arbitrary and often runs for a beat, which would hold the key long
  * after the hit it stands for. */
@@ -553,201 +556,209 @@ export class PianoRollRenderer {
     const rising = frame.direction === "up";
     const riseScale = keyboardTop / lookAhead;
     const bendTime = momentAt(position, keyboardTop, riseScale, rising);
-    for (let index = first; index < notes.length; index += 1) {
-      const note = notes[index];
-      if (note === undefined || note.start > horizon) {
-        break;
-      }
-      if (frame.hiddenTracks.has(note.track)) {
-        continue;
-      }
-      const ghost = frame.yours !== null && !frame.yours.has(note.id);
-      const color = trackColor(note.track, frame.voicing);
-      const started = note.start <= position;
-      // A key is lit by a note being played, not by one the pedal is holding
-      // on after the hand has gone: the light stands for the strike.
-      const sounding = started && position < note.end;
-      // Marked before any branch below returns, so a note whose whole length
-      // falls inside one frame still counts as having landed.
-      if (!ghost && started && since !== null && note.start > since) {
-        this.onsets.add(note.pitch);
-        frame.report?.strikes.push({
-          x: keyCenter(note.pitch, whiteWidth) - this.pan,
-          color: color.glow,
-          pitch: note.pitch,
-          velocity: note.velocity,
-        });
-      }
-      // A rising note is only starting its climb when its end passes, so this
-      // is the moment it leaves the keys rather than the moment it is spent.
-      if (note.end < position && !rising) {
-        // A note still owed once the song is past it is one being waited for,
-        // and its key is the only thing telling the player what to press.
-        if (!ghost && frame.owed.has(note.pitch)) {
-          active.set(note.pitch, color);
+    // A track asked to the front is painted after the rest, since a note that
+    // starts later would otherwise cover one already sounding whatever part it
+    // belongs to. One pass where nobody has asked, which is most songs.
+    for (const inFront of anyFront(frame.voicing) ? bothLayers : oneLayer) {
+      for (let index = first; index < notes.length; index += 1) {
+        const note = notes[index];
+        if (note === undefined || note.start > horizon) {
+          break;
         }
-        continue;
-      }
-
-      // A drum is an impulse: the mark falls to the line and is spent there,
-      // and the key it lights decays on its own rather than on the note-off.
-      if (drums.has(note.track)) {
-        const struck = position - note.start;
-        if (!ghost && struck >= 0 && struck < drumDecay) {
-          active.set(note.pitch, color);
+        if (frame.hiddenTracks.has(note.track)) {
+          continue;
         }
-        const strike = rising
-          ? keyboardTop - struck * riseScale
-          : (keyboardTop * (struck + lookAhead)) / lookAhead;
-        if (rising ? struck >= 0 && strike >= 0 : strike <= keyboardTop) {
-          const half =
-            Math.min(isBlackKey(note.pitch) ? blackNote : whiteNote, 13) / 2;
-          const centre = keyCenter(note.pitch, whiteWidth);
-          ctx.globalAlpha = ghost ? 0.22 : punchOf(note.velocity);
-          ctx.fillStyle = frame.plain ? color.flat : color.glow;
-          ctx.beginPath();
-          ctx.moveTo(centre, strike - half * 1.6);
-          ctx.lineTo(centre + half, strike);
-          ctx.lineTo(centre, strike + half * 1.6);
-          ctx.lineTo(centre - half, strike);
-          ctx.closePath();
-          ctx.fill();
-          ctx.globalAlpha = 1;
+        if (isFront(note.track, frame.voicing) !== inFront) {
+          continue;
         }
-        continue;
-      }
-
-      if (sounding && !ghost) {
-        active.set(note.pitch, color);
-      }
-
-      // Light the key an owed note is heading for, but only once it is within a
-      // speed-scaled lead of the line, and only the nearest one per key.
-      if (
-        !ghost &&
-        !sounding &&
-        frame.owed.has(note.pitch) &&
-        !this.foreshadow.has(note.pitch)
-      ) {
-        const lead = Math.min(foreshadowLead * frame.rate, lookAhead);
-        const ahead = note.start - position;
-        if (ahead <= lead) {
-          this.foreshadow.set(note.pitch, {
-            color,
-            strength: 1 - ahead / lead,
+        const ghost = frame.yours !== null && !frame.yours.has(note.id);
+        const color = trackColor(note.track, frame.voicing);
+        const started = note.start <= position;
+        // A key is lit by a note being played, not by one the pedal is holding
+        // on after the hand has gone: the light stands for the strike.
+        const sounding = started && position < note.end;
+        // Marked before any branch below returns, so a note whose whole length
+        // falls inside one frame still counts as having landed.
+        if (!ghost && started && since !== null && note.start > since) {
+          this.onsets.add(note.pitch);
+          frame.report?.strikes.push({
+            x: keyCenter(note.pitch, whiteWidth) - this.pan,
+            color: color.glow,
+            pitch: note.pitch,
+            velocity: note.velocity,
           });
         }
-      }
-
-      const bottom = rising
-        ? keyboardTop - Math.max(0, position - note.end) * riseScale
-        : Math.min(
-            keyboardTop,
-            (keyboardTop * (position - note.start + lookAhead)) / lookAhead,
-          );
-      const top = rising
-        ? keyboardTop - Math.max(0, position - note.start) * riseScale
-        : (keyboardTop * (position - note.end + lookAhead)) / lookAhead;
-      if (rising && (bottom < 0 || note.start > position)) {
-        continue;
-      }
-      const noteWidth = isBlackKey(note.pitch) ? blackNote : whiteNote;
-      const x = keyCenter(note.pitch, whiteWidth) - noteWidth / 2;
-      const y = Math.min(top, bottom);
-      const noteHeight = Math.max(2, bottom - y);
-
-      // A note is reported whichever way it is going: a background answers to
-      // where the notes are on screen, and one coming down crosses just as
-      // much of the scene as one climbing out.
-      if (!ghost) {
-        reportTraveller(
-          frame.report,
-          note.pitch,
-          note.velocity,
-          top,
-          whiteWidth,
-          color,
-          this.pan,
-        );
-      }
-
-      // The hue holds across the body and only lifts in the last of the bar,
-      // so the leading edge reads as lit without the note becoming a ramp. A
-      // note being played drops the deep end and burns at its core instead.
-      let fill: string | CanvasGradient;
-      if (frame.plain) {
-        fill = sounding ? color.glow : color.flat;
-      } else if (noteHeight >= gradientNoteHeight) {
-        const gradient = ctx.createLinearGradient(0, y, 0, y + noteHeight);
-        if (sounding) {
-          gradient.addColorStop(0, color.glow);
-          gradient.addColorStop(0.4, color.core);
-          gradient.addColorStop(1, color.core);
-        } else {
-          gradient.addColorStop(0, color.shade);
-          gradient.addColorStop(0.3, color.glow);
-          gradient.addColorStop(0.82, color.glow);
-          gradient.addColorStop(1, color.core);
+        // A rising note is only starting its climb when its end passes, so this
+        // is the moment it leaves the keys rather than the moment it is spent.
+        if (note.end < position && !rising) {
+          // A note still owed once the song is past it is one being waited for,
+          // and its key is the only thing telling the player what to press.
+          if (!ghost && frame.owed.has(note.pitch)) {
+            active.set(note.pitch, color);
+          }
+          continue;
         }
-        fill = gradient;
-      } else {
-        fill = sounding ? color.core : color.glow;
-      }
-      ctx.globalAlpha = ghost ? 0.22 : punchOf(note.velocity);
-      ctx.fillStyle = fill;
-      // A falling note climbs into the future, so a height above the line is a
-      // moment still to come and the file already knows the wheels there.
-      const written = frame.song.expression;
-      const bent =
-        written.touched(note.track) &&
-        written.moves(note.track, note.start, note.release) &&
-        this.traceBentNote(
-          written,
-          note.track,
-          bendTime,
-          { x, y, width: noteWidth, height: noteHeight },
-          whiteWidth,
-        );
-      if (bent) {
-        ctx.fill();
-      } else if (noteHeight >= roundNoteSize && noteWidth >= roundNoteSize) {
-        roundRect(ctx, x, y, noteWidth, noteHeight, 4);
-        ctx.fill();
-      } else {
-        ctx.fillRect(x, y, noteWidth, noteHeight);
-      }
-      ctx.globalAlpha = 1;
 
-      // Sized off the note it sits on, so widening the keys reads the pitch
-      // out larger too. A chip held at one size is the smaller the wider the
-      // keys are set, which is backwards.
-      const chip = Math.min(
-        17,
-        Math.max(9, Math.min(noteWidth * 0.42, (noteHeight - 4) / 2)),
-      );
-      if (
-        frame.noteNames &&
-        !ghost &&
-        !sounding &&
-        noteWidth >= 17 &&
-        noteHeight >= 20
-      ) {
-        const centerX = x + noteWidth / 2;
-        const centerY = y + noteHeight - (chip + 4);
-        const label = noteName(note.pitch);
-        // The chip reads against the note rather than competing with it: the
-        // pitch keeps its colour, but only as the ring.
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, chip, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(6,8,13,0.82)";
-        ctx.fill();
-        ctx.lineWidth = Math.max(1.5, chip * 0.17);
-        ctx.strokeStyle = pitchColor(note.pitch);
-        ctx.stroke();
-        const size = Math.round(chip * (label.length > 1 ? 1 : 1.22));
-        ctx.font = `700 ${size}px system-ui, sans-serif`;
-        ctx.fillStyle = "#ffffff";
-        ctx.fillText(label, centerX, centerY);
+        // A drum is an impulse: the mark falls to the line and is spent there,
+        // and the key it lights decays on its own rather than on the note-off.
+        if (drums.has(note.track)) {
+          const struck = position - note.start;
+          if (!ghost && struck >= 0 && struck < drumDecay) {
+            active.set(note.pitch, color);
+          }
+          const strike = rising
+            ? keyboardTop - struck * riseScale
+            : (keyboardTop * (struck + lookAhead)) / lookAhead;
+          if (rising ? struck >= 0 && strike >= 0 : strike <= keyboardTop) {
+            const half =
+              Math.min(isBlackKey(note.pitch) ? blackNote : whiteNote, 13) / 2;
+            const centre = keyCenter(note.pitch, whiteWidth);
+            ctx.globalAlpha = ghost ? 0.22 : punchOf(note.velocity);
+            ctx.fillStyle = frame.plain ? color.flat : color.glow;
+            ctx.beginPath();
+            ctx.moveTo(centre, strike - half * 1.6);
+            ctx.lineTo(centre + half, strike);
+            ctx.lineTo(centre, strike + half * 1.6);
+            ctx.lineTo(centre - half, strike);
+            ctx.closePath();
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          }
+          continue;
+        }
+
+        if (sounding && !ghost) {
+          active.set(note.pitch, color);
+        }
+
+        // Light the key an owed note is heading for, but only once it is within a
+        // speed-scaled lead of the line, and only the nearest one per key.
+        if (
+          !ghost &&
+          !sounding &&
+          frame.owed.has(note.pitch) &&
+          !this.foreshadow.has(note.pitch)
+        ) {
+          const lead = Math.min(foreshadowLead * frame.rate, lookAhead);
+          const ahead = note.start - position;
+          if (ahead <= lead) {
+            this.foreshadow.set(note.pitch, {
+              color,
+              strength: 1 - ahead / lead,
+            });
+          }
+        }
+
+        const bottom = rising
+          ? keyboardTop - Math.max(0, position - note.end) * riseScale
+          : Math.min(
+              keyboardTop,
+              (keyboardTop * (position - note.start + lookAhead)) / lookAhead,
+            );
+        const top = rising
+          ? keyboardTop - Math.max(0, position - note.start) * riseScale
+          : (keyboardTop * (position - note.end + lookAhead)) / lookAhead;
+        if (rising && (bottom < 0 || note.start > position)) {
+          continue;
+        }
+        const noteWidth = isBlackKey(note.pitch) ? blackNote : whiteNote;
+        const x = keyCenter(note.pitch, whiteWidth) - noteWidth / 2;
+        const y = Math.min(top, bottom);
+        const noteHeight = Math.max(2, bottom - y);
+
+        // A note is reported whichever way it is going: a background answers to
+        // where the notes are on screen, and one coming down crosses just as
+        // much of the scene as one climbing out.
+        if (!ghost) {
+          reportTraveller(
+            frame.report,
+            note.pitch,
+            note.velocity,
+            top,
+            whiteWidth,
+            color,
+            this.pan,
+          );
+        }
+
+        // The hue holds across the body and only lifts in the last of the bar,
+        // so the leading edge reads as lit without the note becoming a ramp. A
+        // note being played drops the deep end and burns at its core instead.
+        let fill: string | CanvasGradient;
+        if (frame.plain) {
+          fill = sounding ? color.glow : color.flat;
+        } else if (noteHeight >= gradientNoteHeight) {
+          const gradient = ctx.createLinearGradient(0, y, 0, y + noteHeight);
+          if (sounding) {
+            gradient.addColorStop(0, color.glow);
+            gradient.addColorStop(0.4, color.core);
+            gradient.addColorStop(1, color.core);
+          } else {
+            gradient.addColorStop(0, color.shade);
+            gradient.addColorStop(0.3, color.glow);
+            gradient.addColorStop(0.82, color.glow);
+            gradient.addColorStop(1, color.core);
+          }
+          fill = gradient;
+        } else {
+          fill = sounding ? color.core : color.glow;
+        }
+        ctx.globalAlpha = ghost ? 0.22 : punchOf(note.velocity);
+        ctx.fillStyle = fill;
+        // A falling note climbs into the future, so a height above the line is a
+        // moment still to come and the file already knows the wheels there.
+        const written = frame.song.expression;
+        const bent =
+          written.touched(note.track) &&
+          written.moves(note.track, note.start, note.release) &&
+          this.traceBentNote(
+            written,
+            note.track,
+            bendTime,
+            { x, y, width: noteWidth, height: noteHeight },
+            whiteWidth,
+          );
+        if (bent) {
+          ctx.fill();
+        } else if (noteHeight >= roundNoteSize && noteWidth >= roundNoteSize) {
+          roundRect(ctx, x, y, noteWidth, noteHeight, 4);
+          ctx.fill();
+        } else {
+          ctx.fillRect(x, y, noteWidth, noteHeight);
+        }
+        ctx.globalAlpha = 1;
+
+        // Sized off the note it sits on, so widening the keys reads the pitch
+        // out larger too. A chip held at one size is the smaller the wider the
+        // keys are set, which is backwards.
+        const chip = Math.min(
+          17,
+          Math.max(9, Math.min(noteWidth * 0.42, (noteHeight - 4) / 2)),
+        );
+        if (
+          frame.noteNames &&
+          !ghost &&
+          !sounding &&
+          noteWidth >= 17 &&
+          noteHeight >= 20
+        ) {
+          const centerX = x + noteWidth / 2;
+          const centerY = y + noteHeight - (chip + 4);
+          const label = noteName(note.pitch);
+          // The chip reads against the note rather than competing with it: the
+          // pitch keeps its colour, but only as the ring.
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, chip, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(6,8,13,0.82)";
+          ctx.fill();
+          ctx.lineWidth = Math.max(1.5, chip * 0.17);
+          ctx.strokeStyle = pitchColor(note.pitch);
+          ctx.stroke();
+          const size = Math.round(chip * (label.length > 1 ? 1 : 1.22));
+          ctx.font = `700 ${size}px system-ui, sans-serif`;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText(label, centerX, centerY);
+        }
       }
     }
   }

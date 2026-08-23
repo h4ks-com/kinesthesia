@@ -1,9 +1,19 @@
 import { describe, expect, it } from "vitest";
-import type { SongVoicing } from "@/lib/audio/voicing";
+import { defaultVoicing, type SongVoicing } from "@/lib/audio/voicing";
+import { trackColor } from "@/lib/midi/palette";
 import type { SongNote } from "@/lib/midi/song";
 import { drawSongMap, type MappedSong, pitchSpan } from "@/lib/render/minimap";
 
 const noVoicing: SongVoicing = new Map();
+
+const quiet = defaultVoicing({
+  index: 1,
+  name: "one",
+  instrument: "Acoustic grand piano",
+  program: 0,
+  percussion: false,
+  noteCount: 1,
+});
 
 let next = 0;
 
@@ -132,6 +142,48 @@ describe("drawSongMap", () => {
       expect(mark.height).toBeGreaterThanOrEqual(1.5);
       expect(mark.width).toBeGreaterThanOrEqual(1);
     }
+  });
+
+  // A note that starts later covers one already sounding, so the only way a
+  // part stays readable under a busier one is to be painted after it.
+  it("paints a track asked to the front after every other track", () => {
+    const song = songOf([note(60, 0, 4, 0), note(64, 1, 2, 1)]);
+    const { ctx, painted } = recorder();
+    const front = new Map([[1, { ...quiet, front: true }]]);
+
+    drawSongMap(ctx, {
+      ...wide,
+      song,
+      span: pitchSpan(song),
+      hiddenTracks: new Set<number>(),
+      voicing: front,
+      lit: true,
+    });
+
+    expect(painted.map((mark) => mark.fill)).toEqual([
+      trackColor(0, front).glow,
+      trackColor(1, front).glow,
+    ]);
+  });
+
+  it("leaves the order alone where nobody has asked to be in front", () => {
+    // Track 1 sounds first, so start order alone puts it first.
+    const song = songOf([note(64, 0, 2, 1), note(60, 1, 4, 0)]);
+    const { ctx, painted } = recorder();
+
+    drawSongMap(ctx, {
+      ...wide,
+      song,
+      span: pitchSpan(song),
+      hiddenTracks: new Set<number>(),
+      voicing: noVoicing,
+      lit: true,
+    });
+
+    expect(painted.map((mark) => mark.fill)).toEqual([
+      trackColor(1, noVoicing).glow,
+      trackColor(0, noVoicing).glow,
+    ]);
   });
 
   // The played and unplayed passes are the same picture at two strengths, which

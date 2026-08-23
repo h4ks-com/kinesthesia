@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { defaultVoicing, type SongVoicing } from "@/lib/audio/voicing";
+import { defaultVoicing, isFront, type SongVoicing } from "@/lib/audio/voicing";
 import { formatClock } from "@/lib/format/clock";
 import { trackSlot } from "@/lib/midi/palette";
 import type { Song } from "@/lib/midi/song";
@@ -79,22 +79,36 @@ export function SongMinimap({
     () => [...hiddenTracks].sort((one, next) => one - next).join(","),
     [hiddenTracks],
   );
-  /** The map reads nothing of a voicing but the colours, and a voicing is a new
-   * object on every shaping of the sound, envelope handle included, so the same
-   * rule applies: what it holds is what says the picture is out of date. */
-  const colorKey = useMemo(
-    () => song.tracks.map((track) => trackSlot(track.index, voicing)).join(","),
+  /** The map reads nothing of a voicing but how each track is drawn, and a
+   * voicing is a new object on every shaping of the sound, envelope handle
+   * included, so the same rule applies: what it holds is what says the picture
+   * is out of date. */
+  const drawKey = useMemo(
+    () =>
+      song.tracks
+        .map(
+          (track) =>
+            `${trackSlot(track.index, voicing)}${isFront(track.index, voicing) ? "f" : ""}`,
+        )
+        .join(","),
     [song, voicing],
   );
   const colors = useMemo<SongVoicing>(() => {
-    const slots = colorKey === "" ? [] : colorKey.split(",").map(Number);
+    const marks = drawKey === "" ? [] : drawKey.split(",");
     return new Map(
-      song.tracks.map((track, at) => [
-        track.index,
-        { ...defaultVoicing(track), color: slots[at] ?? track.index },
-      ]),
+      song.tracks.map((track, at) => {
+        const mark = marks[at] ?? String(track.index);
+        return [
+          track.index,
+          {
+            ...defaultVoicing(track),
+            color: Number.parseInt(mark, 10),
+            front: mark.endsWith("f"),
+          },
+        ];
+      }),
     );
-  }, [song, colorKey]);
+  }, [song, drawKey]);
 
   useEffect(() => {
     const frame = frameRef.current;

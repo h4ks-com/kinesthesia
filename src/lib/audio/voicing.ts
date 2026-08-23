@@ -17,6 +17,9 @@ export type Voicing = {
   readonly volume: number;
   /** Which palette entry the track's notes are drawn in. */
   readonly color: number;
+  /** Draws this track over every track that is not in front, so a solo is not
+   * buried by whatever happens to sound after it. */
+  readonly front: boolean;
 };
 
 /** A voicing per track index. Absent tracks sound and read as they were
@@ -27,7 +30,10 @@ export type SongVoicing = ReadonlyMap<number, Voicing>;
  * JSON, and a row written before tracks could be recoloured names no colour. */
 export type StoredVoicing = Record<string, ReadVoicing>;
 
-type ReadVoicing = Omit<Voicing, "color"> & { readonly color?: number };
+type ReadVoicing = Omit<Voicing, "color" | "front"> & {
+  readonly color?: number;
+  readonly front?: boolean;
+};
 
 export const attackRange = { min: 0, max: 1000 } as const;
 export const releaseRange = { min: 0, max: 4000 } as const;
@@ -50,6 +56,7 @@ export function defaultVoicing(track: SongTrack): Voicing {
     brightness: brightnessRange.max,
     volume: 100,
     color: homeSlot(track.index),
+    front: false,
   };
 }
 
@@ -61,6 +68,7 @@ export function clampVoicing(voicing: ReadVoicing, track: number): Voicing {
       voicing.color === undefined
         ? homeSlot(track)
         : paletteSlot(voicing.color),
+    front: voicing.front === true,
     program: clamp(voicing.program, programRange.min, programRange.max),
     attack: clamp(voicing.attack, attackRange.min, attackRange.max),
     release: clamp(voicing.release, releaseRange.min, releaseRange.max),
@@ -82,6 +90,21 @@ export function isDefaultVoicing(voicing: Voicing, track: SongTrack): boolean {
     voicing.brightness === home.brightness &&
     voicing.volume === home.volume
   );
+}
+
+/** Whether any track has been asked to the front, which is what says a second
+ * pass over the notes is worth making. */
+export function anyFront(voicing: SongVoicing): boolean {
+  for (const entry of voicing.values()) {
+    if (entry.front) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function isFront(track: number, voicing: SongVoicing): boolean {
+  return voicing.get(track)?.front === true;
 }
 
 export function asRecord(voicing: SongVoicing): StoredVoicing {

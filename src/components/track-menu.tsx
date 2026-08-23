@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowUpToLine,
   Check,
   Hand,
   Layers,
@@ -265,8 +266,8 @@ export function TrackMenu({
                         setTinting(tinting === track.index ? null : track.index)
                       }
                       aria-expanded={tinting === track.index}
-                      aria-label={`Change the colour of ${track.name}`}
-                      data-tip="Edit colour"
+                      aria-label={`Change how ${track.name} is drawn`}
+                      data-tip="Colour and layer"
                       className={`shrink-0 rounded-lg p-1.5 transition-colors ${
                         tinting === track.index
                           ? "text-accent"
@@ -308,8 +309,12 @@ export function TrackMenu({
                     name={track.name}
                     chosen={shaping.color}
                     home={homeSlot(track.index)}
+                    front={shaping.front}
                     onPick={(slot) =>
                       onVoicing(track.index, { ...shaping, color: slot })
+                    }
+                    onFront={(front) =>
+                      onVoicing(track.index, { ...shaping, front })
                     }
                   />
                 ) : null}
@@ -387,20 +392,23 @@ export function TrackMenu({
 
 const paletteSlots = Array.from({ length: trackColorCount }, (_, slot) => slot);
 
-/** The palette a channel can be drawn in. The same entries the roll cycles
- * through by position, so a recoloured channel still sits in the set of hues
- * chosen to stay apart from one another. */
+/** How a channel is drawn: the palette it takes, which are the same entries the
+ * roll cycles through by position, and whether it is painted over the rest. */
 function Swatches({
   name,
   chosen,
   home,
+  front,
   onPick,
+  onFront,
 }: {
   name: string;
   chosen: number;
   /** The entry this channel's position gives it, which is what a reset is. */
   home: number;
+  front: boolean;
   onPick: (slot: number) => void;
+  onFront: (front: boolean) => void;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5 px-2 pt-0.5 pb-2">
@@ -427,6 +435,18 @@ function Swatches({
           </button>
         );
       })}
+      <button
+        type="button"
+        onClick={() => onFront(!front)}
+        aria-pressed={front}
+        aria-label={`Draw ${name} over the other tracks`}
+        data-tip="Draw over the rest"
+        className={`ml-auto shrink-0 rounded-lg p-1.5 transition-colors ${
+          front ? "text-accent" : "text-faint hover:bg-raised hover:text-accent"
+        }`}
+      >
+        <ArrowUpToLine className="size-4" aria-hidden="true" />
+      </button>
       {/* Held rather than hidden once the colour is home, so pressing it does
           not unmount what the reader is standing on. */}
       <button
@@ -435,7 +455,7 @@ function Swatches({
         disabled={chosen === home}
         aria-label={`Reset the colour of ${name}`}
         data-tip="Reset colour"
-        className="ml-auto shrink-0 rounded-lg p-1.5 text-faint transition-colors hover:bg-raised hover:text-accent disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-faint"
+        className="shrink-0 rounded-lg p-1.5 text-faint transition-colors hover:bg-raised hover:text-accent disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-faint"
       >
         <RotateCcw className="size-4" aria-hidden="true" />
       </button>

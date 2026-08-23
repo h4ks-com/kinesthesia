@@ -74,6 +74,7 @@ describe("clampVoicing", () => {
       brightness: 1,
       volume: 400,
       color: 99,
+      front: true,
     };
     expect(clampVoicing(wild, 0)).toEqual({
       program: 127,
@@ -82,6 +83,7 @@ describe("clampVoicing", () => {
       brightness: 200,
       volume: 150,
       color: 3,
+      front: true,
     });
   });
 

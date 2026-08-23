@@ -126,7 +126,7 @@ test("a recoloured track comes back that colour, and can be put back", async ({
   const openColour = async () => {
     await page.getByRole("button", { name: "Tracks" }).first().click();
     await page
-      .getByRole("button", { name: /Change the colour of/ })
+      .getByRole("button", { name: /Change how .* is drawn/ })
       .first()
       .click();
   };

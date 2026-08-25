@@ -147,8 +147,13 @@ const shortText = z
   .transform((text) => text?.slice(0, longestText));
 
 api.openapi(searchRoute, async (c) => {
-  const { q, source, limit } = c.req.valid("query");
-  const results = await searchMidi({ query: q, source: source ?? null, limit });
+  const { q, source, limit, skip } = c.req.valid("query");
+  const results = await searchMidi({
+    query: q,
+    source: source ?? null,
+    limit,
+    skip,
+  });
   // What was searched for, since which songs people go looking for is the point
   // of asking. How many came back says whether the sources are answering.
   track(

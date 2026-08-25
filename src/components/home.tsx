@@ -227,6 +227,21 @@ export function Home({
         ? `${state.results.length} results`
         : "";
   const keepTyping = state.status === "typing";
+  /** Why the list is as short as it is: a source that was asked and stayed
+   * silent is named, so an empty page reads as that source being down rather
+   * than as the catalogue holding nothing. */
+  const missing =
+    "missing" in state && state.missing.length > 0
+      ? state.missing.join(" and ")
+      : null;
+  const notice =
+    missing !== null
+      ? shown.length > 0
+        ? `${missing} did not answer. Showing what the other sources hold.`
+        : `${missing} did not answer, and nothing else matched. Try again in a moment.`
+      : state.status === "done" && shown.length === 0
+        ? "Nothing matched that. Try fewer words, or drop your own MIDI file."
+        : null;
   const trimmed = query.trim();
   const matchedFavorites = filterLibrary(favorites, trimmed);
   const matchedUploads = filterLibrary(uploads, trimmed);
@@ -387,11 +402,7 @@ export function Home({
           </p>
         ) : null}
 
-        {state.status === "done" && state.results.length === 0 ? (
-          <p className="text-muted">
-            Nothing matched that. Try fewer words, or drop your own MIDI file.
-          </p>
-        ) : null}
+        {notice === null ? null : <p className="text-muted">{notice}</p>}
 
         {shown.length > 0 ? (
           <Section

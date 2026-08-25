@@ -1,14 +1,7 @@
-import { defaultMelodyRate } from "@/lib/midi/melody";
-import { defaultTranspose } from "@/lib/midi/song";
-import {
-  buildPlayerUrl,
-  defaultSpeed,
-  defaultStart,
-  type PlayerMode,
-} from "@/lib/player-url";
+import { fileEndpointOn, searchItem } from "@/lib/midi/listing";
+import { interleave, ranked } from "@/lib/midi/relevance";
 import { config } from "@/server/config";
 import { findSource, midiSources } from "@/server/midi/registry";
-import { ranked } from "@/server/midi/relevance";
 import type {
   MidiListing,
   MidiSearchItem,
@@ -19,38 +12,13 @@ export type SearchMidiParams = {
   readonly query: string;
   readonly source: MidiSourceId | null;
   readonly limit: number;
+  /** Sources the caller reaches for itself. Ours answers without them rather
+   * than holding every other source behind an attempt that is not needed. */
+  readonly skip?: readonly MidiSourceId[];
 };
 
-/** Every file, whatever its source, is fetched through this one endpoint, so a
- * source without cross origin headers still plays and the client never has to
- * know where the bytes actually live. */
 export function fileEndpoint(source: MidiSourceId, id: string): string {
-  const target = new URL("/api/midi/file", config.appBaseUrl);
-  target.searchParams.set("source", source);
-  target.searchParams.set("id", id);
-  return target.toString();
-}
-
-/** Takes one from each source in turn, so a source that does not count plays is
- * not buried under one that does. */
-function interleave(
-  lists: readonly MidiListing[][],
-  limit: number,
-): MidiListing[] {
-  const merged: MidiListing[] = [];
-  const depth = Math.max(0, ...lists.map((list) => list.length));
-  for (let row = 0; row < depth && merged.length < limit; row += 1) {
-    for (const list of lists) {
-      const entry = list[row];
-      if (entry !== undefined) {
-        merged.push(entry);
-        if (merged.length >= limit) {
-          break;
-        }
-      }
-    }
-  }
-  return merged;
+  return fileEndpointOn(config.appBaseUrl, source, id);
 }
 
 /** Searches already asked for, so a player typing a title walks back over their
@@ -66,11 +34,13 @@ function ask({
   query,
   source,
   limit,
+  skip = [],
 }: SearchMidiParams): Promise<MidiListing[]> {
   const targets = source === null ? midiSources : [findSource(source)];
   return Promise.all(
     targets
       .filter((entry) => entry !== null)
+      .filter((entry) => !skip.includes(entry.id))
       .map((entry) =>
         entry.search(query, limit).catch((): MidiListing[] => []),
       ),
@@ -83,7 +53,7 @@ function ask({
 }
 
 async function listingsFor(params: SearchMidiParams): Promise<MidiListing[]> {
-  const key = `${params.source ?? "*"}:${params.limit}:${params.query.trim().toLowerCase()}`;
+  const key = `${params.source ?? "*"}:${[...(params.skip ?? [])].sort().join("+")}:${params.limit}:${params.query.trim().toLowerCase()}`;
   const now = Date.now();
   const known = answered.get(key);
   if (known !== undefined && now - known.at < rememberFor) {
@@ -105,33 +75,5 @@ export async function searchMidi(
   params: SearchMidiParams,
 ): Promise<MidiSearchItem[]> {
   const found = await listingsFor(params);
-
-  return found.map((result) => {
-    const downloadUrl = fileEndpoint(result.source, result.id);
-    const link = (mode: PlayerMode) =>
-      buildPlayerUrl(config.appBaseUrl, mode, {
-        url: downloadUrl,
-        name: result.name,
-        source: result.source,
-        tracks: null,
-        speed: defaultSpeed,
-        simplified: false,
-        melodyRate: defaultMelodyRate,
-        hand: null,
-        transpose: defaultTranspose,
-        focus: false,
-        skin: null,
-        rise: false,
-        notation: null,
-        sheetTheme: null,
-        start: defaultStart,
-      });
-    return {
-      ...result,
-      downloadUrl,
-      playUrl: link("watch"),
-      learnUrl: link("learn"),
-      multiplayerUrl: link("multiplayer"),
-    };
-  });
+  return found.map((result) => searchItem(result, config.appBaseUrl));
 }

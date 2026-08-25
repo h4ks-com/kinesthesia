@@ -1,5 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { midiSourceIds } from "@/server/midi/registry";
+import type { MidiSourceId } from "@/server/midi/types";
 
 export const searchInputShape = {
   q: z.string().min(1).describe("Song or file name to look for"),
@@ -8,6 +9,20 @@ export const searchInputShape = {
     .optional()
     .describe("Restrict the search to a single source"),
   limit: z.coerce.number().int().min(1).max(50).default(10),
+  /** A page that reaches a source for itself says so, and is answered without
+   * waiting on our own attempt at it. Left off by anything that cannot, so an
+   * agent still gets every source this server can read. */
+  skip: z
+    .string()
+    .optional()
+    .transform((raw) =>
+      (raw ?? "")
+        .split(",")
+        .filter((id): id is MidiSourceId =>
+          midiSourceIds.some((known) => known === id),
+        ),
+    )
+    .describe("Comma separated sources the caller is searching itself"),
 };
 
 export const infoInputShape = {

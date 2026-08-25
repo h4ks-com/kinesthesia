@@ -41,3 +41,25 @@ export function ranked(
     return gap === 0 ? other.plays - one.plays : gap;
   });
 }
+
+/** Takes one from each source in turn, so a source that does not count plays is
+ * not buried under one that does. */
+export function interleave<T extends MidiListing>(
+  lists: readonly (readonly T[])[],
+  limit: number,
+): T[] {
+  const merged: T[] = [];
+  const depth = Math.max(0, ...lists.map((list) => list.length));
+  for (let row = 0; row < depth && merged.length < limit; row += 1) {
+    for (const list of lists) {
+      const entry = list[row];
+      if (entry !== undefined) {
+        merged.push(entry);
+        if (merged.length >= limit) {
+          break;
+        }
+      }
+    }
+  }
+  return merged;
+}

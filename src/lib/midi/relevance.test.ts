@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ranked } from "@/server/midi/relevance";
+import { ranked } from "@/lib/midi/relevance";
 import type { MidiListing } from "@/server/midi/types";
 
 function listing(name: string, plays = 0): MidiListing {

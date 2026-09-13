@@ -29,7 +29,11 @@ function packagedApp(): string {
   return found;
 }
 
-async function titleAt(port: number, until: number): Promise<string | null> {
+/** The page the window holds, once it holds one of ours. */
+async function servedPage(
+  port: number,
+  until: number,
+): Promise<{ title: string; url: string } | null> {
   while (Date.now() < until) {
     try {
       const pages = (await (
@@ -37,12 +41,10 @@ async function titleAt(port: number, until: number): Promise<string | null> {
       ).json()) as { type: string; title: string; url: string }[];
       const page = pages.find(
         (entry) =>
-          entry.type === "page" &&
-          entry.url.startsWith("http://127.0.0.1") &&
-          entry.title.length > 0,
+          entry.type === "page" && entry.url.startsWith("http://127.0.0.1"),
       );
       if (page !== undefined) {
-        return `${page.title} at ${page.url}`;
+        return { title: page.title, url: page.url };
       }
     } catch {
       // The app is still starting, so there is nothing to read yet.
@@ -59,10 +61,22 @@ const app = spawn(
   [`--remote-debugging-port=${port}`, "--no-sandbox", "--disable-gpu"],
   { stdio: "inherit" },
 );
-const seen = await titleAt(port, Date.now() + 90_000);
-app.kill();
-if (seen === null) {
-  console.error("The packaged app served nothing");
+const page = await servedPage(port, Date.now() + 90_000);
+if (page === null) {
+  app.kill();
+  console.error("The packaged app opened no window on its own server");
   process.exit(1);
 }
-console.log(`The packaged app served ${seen}`);
+
+// A window alone proves little, since a browser shows an error page the same
+// way, so the page itself has to be the app.
+const body = await (await fetch(page.url)).text();
+app.kill();
+if (!body.includes("Kinesthesia")) {
+  console.error(
+    `The packaged app served something else at ${page.url}, titled "${page.title}":`,
+  );
+  console.error(body.slice(0, 400));
+  process.exit(1);
+}
+console.log(`The packaged app served ${page.title} at ${page.url}`);

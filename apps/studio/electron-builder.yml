@@ -22,5 +22,4 @@ win:
 linux:
   target: [AppImage]
   category: Audio
-  desktopName: kinesthesia-studio.desktop
   synopsis: Watch, learn and play MIDI songs

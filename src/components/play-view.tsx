@@ -325,6 +325,7 @@ export function PlayView({
     onModulation: (channel, depth) =>
       expression.setDepth(trackFor(channel), getPosition(), depth),
     onControl: skinShortcuts.onControl,
+    sysexListening: skinShortcuts.sysexListening,
   });
 
   // The computer keyboard has no pedal, so space stands in for one, but only

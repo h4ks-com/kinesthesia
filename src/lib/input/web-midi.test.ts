@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { decodeMidi } from "@/lib/input/web-midi";
+import {
+  genosSlider,
+  notesOf,
+  sysexBodiesOf,
+} from "@/lib/input/sysex-fixtures";
+import type { SysexListening } from "@/lib/input/sysex-pattern";
+import {
+  connectMidiInputs,
+  decodeMidi,
+  type MidiEvent,
+} from "@/lib/input/web-midi";
 
 function bytes(...values: number[]): Uint8Array {
   return Uint8Array.from(values);
@@ -111,39 +121,107 @@ describe("expression events", () => {
   });
 });
 
-describe("yamaha sysex", () => {
-  it("reads a Genos2 slider as a sysex control with its address as the key", () => {
-    const event = decodeMidi(
-      bytes(0xf0, 0x43, 0x10, 0x4c, 0x10, 0x00, 0x0b, 0x7f, 0xf7),
-      0,
-    );
-    expect(event).toEqual({
-      type: "sysex",
-      key: [0x43, 0x10, 0x4c, 0x10, 0x00, 0x0b],
-      value: 0x7f,
-    });
-  });
-
-  it("carries the swept value through the slider's travel", () => {
-    const mid = decodeMidi(
-      bytes(0xf0, 0x43, 0x10, 0x4c, 0x10, 0x00, 0x0b, 0x40, 0xf7),
-      0,
-    );
-    expect(mid !== null && mid.type === "sysex" ? mid.value : null).toBe(0x40);
-  });
-
-  it("ignores sysex that is not a Yamaha parameter change", () => {
+describe("sysex", () => {
+  it("reads any maker's message as the bytes between F0 and F7", () => {
     expect(
       decodeMidi(
-        bytes(0xf0, 0x7e, 0x10, 0x4c, 0x10, 0x00, 0x0b, 0x7f, 0xf7),
+        bytes(0xf0, 0x43, 0x10, 0x4c, 0x10, 0x00, 0x0b, 0x7f, 0xf7),
         0,
       ),
-    ).toBeNull();
+    ).toEqual({
+      type: "sysex",
+      body: [0x43, 0x10, 0x4c, 0x10, 0x00, 0x0b, 0x7f],
+    });
+    expect(
+      decodeMidi(bytes(0xf0, 0x7f, 0x7f, 0x04, 0x01, 0, 99, 0xf7), 0),
+    ).toEqual({ type: "sysex", body: [0x7f, 0x7f, 0x04, 0x01, 0, 99] });
   });
 
-  it("ignores a Yamaha parameter change of the wrong length", () => {
-    expect(
-      decodeMidi(bytes(0xf0, 0x43, 0x10, 0x4c, 0x10, 0x00, 0x0b, 0xf7), 0),
-    ).toBeNull();
+  it("ignores a message with no end or nothing in it", () => {
+    expect(decodeMidi(bytes(0xf0, 0x43, 0x10), 0)).toBeNull();
+    expect(decodeMidi(bytes(0xf0, 0xf7), 0)).toBeNull();
+  });
+});
+
+type FakeInput = {
+  readonly id: string;
+  onmidimessage:
+    | ((event: { data: Uint8Array; timeStamp: number }) => void)
+    | null;
+};
+
+/** A browser with the given device ports, and a way to send each one bytes. */
+function fakePorts(
+  ids: readonly string[],
+): (id: string, data: number[]) => void {
+  const inputs = new Map<string, FakeInput>(
+    ids.map((id) => [id, { id, onmidimessage: null }]),
+  );
+  Object.defineProperty(navigator, "requestMIDIAccess", {
+    configurable: true,
+    value: () => Promise.resolve({ inputs, onstatechange: null }),
+  });
+  return (id, data) =>
+    inputs.get(id)?.onmidimessage?.({
+      data: Uint8Array.from(data),
+      timeStamp: performance.now(),
+    });
+}
+
+const listenForGenosSlider = (): SysexListening => ({
+  patterns: [genosSlider],
+  learning: false,
+});
+
+/** A slider step whose last byte the browser is still holding, then the next
+ * step, which arrives starting with that byte. */
+const openingStep = [
+  [0x90, 0x43, 0x10],
+  [0x90, 0x4c, 0x10],
+  [0x90, 0x00, 0x0b],
+];
+const followingStep = [
+  [0x90, 0x64, 0x43],
+  [0x90, 0x10, 0x4c],
+  [0x90, 0x10, 0x00],
+  [0x90, 0x0b, 0x65],
+];
+
+describe("a slider split across ports and reconnects", () => {
+  it("keeps each port's held byte apart from what another port sends", async () => {
+    const send = fakePorts(["keys-1", "keys-2"]);
+    const events: MidiEvent[] = [];
+    const disconnect = await connectMidiInputs(
+      (event) => events.push(event),
+      listenForGenosSlider,
+    );
+    for (const message of openingStep) send("keys-1", message);
+    send("keys-2", [0x90, 60, 90]);
+    send("keys-2", [0x90, 60, 0]);
+    for (const message of followingStep) send("keys-1", message);
+    disconnect();
+
+    expect(notesOf(events)).toEqual(["60+", "60-"]);
+    expect(sysexBodiesOf(events).map((body) => body[6])).toEqual([0x64, 0x65]);
+  });
+
+  it("remembers a port's held byte across a reconnect", async () => {
+    const send = fakePorts(["keys-3"]);
+    const events: MidiEvent[] = [];
+    const first = await connectMidiInputs(
+      (event) => events.push(event),
+      listenForGenosSlider,
+    );
+    for (const message of openingStep) send("keys-3", message);
+    first();
+    const second = await connectMidiInputs(
+      (event) => events.push(event),
+      listenForGenosSlider,
+    );
+    for (const message of followingStep) send("keys-3", message);
+    second();
+
+    expect(notesOf(events)).toEqual([]);
+    expect(events.filter((event) => event.type === "sysex")).toHaveLength(2);
   });
 });

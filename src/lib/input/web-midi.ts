@@ -1,3 +1,10 @@
+import {
+  createSysexRecovery,
+  type SysexRecovery,
+  type TimedMessage,
+} from "@/lib/input/chrome-split-sysex";
+import type { SysexListening } from "@/lib/input/sysex-pattern";
+
 /** A note struck or lifted on the device. */
 export type MidiNoteEvent = {
   readonly type: "note";
@@ -49,17 +56,15 @@ export type MidiControlEvent = {
   readonly value: number;
 };
 
-/** A Yamaha parameter-change SysEx, the form a Genos2 slider emits. The address
- * is the slider's identity and the last data byte its position, 0 to 127. */
+/** A system exclusive message, as the bytes between its F0 and F7. What they
+ * mean is up to the maker, so a binding learns its shape from the device. */
 export type MidiSysexEvent = {
   readonly type: "sysex";
-  readonly key: readonly number[];
-  readonly value: number;
+  readonly body: readonly number[];
 };
 
-/** A control the player can bind a background to: a channel controller or a
- * Yamaha SysEx address. The value is the position a slider reports or the press
- * a button reports. */
+/** A control the player can bind a background to: a channel controller with the
+ * position or press it reports, or a SysEx message. */
 export type ControlInput =
   | {
       readonly kind: "cc";
@@ -67,11 +72,7 @@ export type ControlInput =
       readonly controller: number;
       readonly value: number;
     }
-  | {
-      readonly kind: "sysex";
-      readonly key: readonly number[];
-      readonly value: number;
-    };
+  | { readonly kind: "sysex"; readonly body: readonly number[] };
 
 export type MidiEvent =
   | MidiNoteEvent
@@ -104,40 +105,9 @@ export function decodeMidi(data: Uint8Array, at: number): MidiEvent | null {
   }
 
   if (status === 0xf0) {
-    // Yamaha parameter-change: F0 43 1n <model> <a1> <a2> <a3> <value> F7.
-    // A Genos2 slider sweeps <value> 0-127 at a fixed address; the address is
-    // its identity. Anything else (other makers, other layouts) is ignored.
-    const manufacturer = data[1];
-    const sub = data[2];
-    const end = data[8];
-    if (
-      data.length !== 9 ||
-      manufacturer !== 0x43 ||
-      sub === undefined ||
-      (sub & 0xf0) !== 0x10 ||
-      end !== 0xf7
-    ) {
-      return null;
-    }
-    const model = data[3];
-    const a1 = data[4];
-    const a2 = data[5];
-    const a3 = data[6];
-    const value = data[7];
-    if (
-      model === undefined ||
-      a1 === undefined ||
-      a2 === undefined ||
-      a3 === undefined ||
-      value === undefined
-    ) {
-      return null;
-    }
-    return {
-      type: "sysex",
-      key: [manufacturer, sub, model, a1, a2, a3],
-      value,
-    };
+    return data.length > 2 && data[data.length - 1] === 0xf7
+      ? { type: "sysex", body: Array.from(data.subarray(1, -1)) }
+      : null;
   }
   const command = status & 0xf0;
   const channel = status & 0x0f;
@@ -201,32 +171,83 @@ export function decodeMidi(data: Uint8Array, at: number): MidiEvent | null {
   return null;
 }
 
+/** One per device port for the life of the page. The browser keeps a port's
+ * leftover byte across a reconnect and whatever another port sends, so what is
+ * known about that port has to outlast both. */
+const recoveries = new Map<string, SysexRecovery>();
+
+function recoveryFor(port: string): SysexRecovery {
+  const existing = recoveries.get(port);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const made = createSysexRecovery();
+  recoveries.set(port, made);
+  return made;
+}
+
 export async function connectMidiInputs(
   onEvent: (event: MidiEvent) => void,
+  sysexListening: () => SysexListening,
 ): Promise<() => void> {
   if (!isWebMidiSupported()) {
     throw new Error("This browser has no Web MIDI support");
   }
-  // SysEx is asked for so a Yamaha slider's parameter-change reaches the page;
-  // a visitor who refuses the stronger prompt still gets notes and CC, since the
-  // slider alone needs SysEx and the rest does not.
+  // We ask for SysEx so a controller that speaks it can be bound; a visitor who
+  // refuses the stronger prompt still gets notes and CC.
   const access = await navigator
     .requestMIDIAccess({ sysex: true })
     .catch(() => navigator.requestMIDIAccess());
 
-  const handleMessage = (event: MIDIMessageEvent) => {
-    if (event.data === null) {
+  const expiries = new Map<string, ReturnType<typeof setTimeout>>();
+
+  const deliver = (messages: readonly TimedMessage[]): void => {
+    for (const { message, at } of messages) {
+      const decoded = decodeMidi(message, at);
+      if (decoded !== null) {
+        onEvent(decoded);
+      }
+    }
+  };
+
+  const scheduleExpiry = (port: string, recovery: SysexRecovery): void => {
+    clearTimeout(expiries.get(port));
+    expiries.delete(port);
+    const due = recovery.due();
+    if (due === null) {
       return;
     }
-    const decoded = decodeMidi(event.data, event.timeStamp);
-    if (decoded !== null) {
-      onEvent(decoded);
-    }
+    expiries.set(
+      port,
+      setTimeout(
+        () => {
+          expiries.delete(port);
+          deliver(recovery.expire(performance.now()));
+          scheduleExpiry(port, recovery);
+        },
+        Math.max(0, due - performance.now()),
+      ),
+    );
   };
 
   const bind = () => {
     for (const input of access.inputs.values()) {
-      input.onmidimessage = handleMessage;
+      const port = input.id;
+      const recovery = recoveryFor(port);
+      input.onmidimessage = (event: MIDIMessageEvent) => {
+        if (event.data === null) {
+          return;
+        }
+        deliver(
+          recovery.push(
+            event.data,
+            event.timeStamp,
+            performance.now(),
+            sysexListening(),
+          ),
+        );
+        scheduleExpiry(port, recovery);
+      };
     }
   };
 
@@ -234,6 +255,12 @@ export async function connectMidiInputs(
   access.onstatechange = bind;
 
   return () => {
+    // A held message belongs to a page that is gone, so we settle it here and
+    // the next page to connect starts clean.
+    for (const [port, expiry] of expiries) {
+      clearTimeout(expiry);
+      recoveryFor(port).expire(Number.POSITIVE_INFINITY);
+    }
     access.onstatechange = null;
     for (const input of access.inputs.values()) {
       input.onmidimessage = null;

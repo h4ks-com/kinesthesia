@@ -8,8 +8,11 @@ import {
   octaveUpCodes,
   pitchForCode,
 } from "@/lib/input/keyboard-map";
+import type { SysexListening } from "@/lib/input/sysex-pattern";
 import type { ControlInput } from "@/lib/input/web-midi";
 import { connectMidiInputs, isWebMidiSupported } from "@/lib/input/web-midi";
+
+const noSysex: SysexListening = { patterns: [], learning: false };
 
 export type InputStatus = "midi" | "keyboard";
 
@@ -47,9 +50,12 @@ type Options = {
   /** The bend and modulation wheels, per channel. */
   onBend?: (channel: number, amount: number) => void;
   onModulation?: (channel: number, depth: number) => void;
-  /** Any other control change or a bound SysEx slider, so a controller bound to
-   * a background can reach it. */
+  /** Any other control change or SysEx message, so a controller bound to a
+   * background can reach it. */
   onControl?: (control: ControlInput) => void;
+  /** The SysEx controls listened for, read as each message arrives, so one the
+   * browser split into channel messages is put back together. */
+  sysexListening?: () => SysexListening;
   /** Absent in a mode with nothing to toggle, so space is left to activate the
    * focused control instead of being swallowed. */
   onToggle?: () => void;
@@ -90,6 +96,7 @@ export function useNoteInput({
   onBend,
   onModulation,
   onControl,
+  sysexListening,
   onToggle,
 }: Options): NoteInput {
   const [octave, setOctave] = useState(defaultOctave);
@@ -116,6 +123,8 @@ export function useNoteInput({
   modulationRef.current = onModulation;
   const controlRef = useRef(onControl);
   controlRef.current = onControl;
+  const sysexListeningRef = useRef(sysexListening);
+  sysexListeningRef.current = sysexListening;
 
   const press = useCallback(
     (pitch: number, velocity: number, at?: number, channel?: number) => {
@@ -196,34 +205,33 @@ export function useNoteInput({
       return;
     }
     let disconnect: (() => void) | null = null;
-    connectMidiInputs((event) => {
-      if (event.type === "program") {
-        programRef.current?.(event.channel, event.program);
-      } else if (event.type === "sustain") {
-        sustainRef.current?.(event.channel, event.down);
-      } else if (event.type === "bend") {
-        bendRef.current?.(event.channel, event.amount);
-      } else if (event.type === "modulation") {
-        modulationRef.current?.(event.channel, event.depth);
-      } else if (event.type === "control") {
-        controlRef.current?.({
-          kind: "cc",
-          channel: event.channel,
-          controller: event.controller,
-          value: event.value,
-        });
-      } else if (event.type === "sysex") {
-        controlRef.current?.({
-          kind: "sysex",
-          key: event.key,
-          value: event.value,
-        });
-      } else if (event.down) {
-        press(event.pitch, event.velocity, event.at, event.channel);
-      } else {
-        release(event.pitch, event.channel);
-      }
-    })
+    connectMidiInputs(
+      (event) => {
+        if (event.type === "program") {
+          programRef.current?.(event.channel, event.program);
+        } else if (event.type === "sustain") {
+          sustainRef.current?.(event.channel, event.down);
+        } else if (event.type === "bend") {
+          bendRef.current?.(event.channel, event.amount);
+        } else if (event.type === "modulation") {
+          modulationRef.current?.(event.channel, event.depth);
+        } else if (event.type === "control") {
+          controlRef.current?.({
+            kind: "cc",
+            channel: event.channel,
+            controller: event.controller,
+            value: event.value,
+          });
+        } else if (event.type === "sysex") {
+          controlRef.current?.({ kind: "sysex", body: event.body });
+        } else if (event.down) {
+          press(event.pitch, event.velocity, event.at, event.channel);
+        } else {
+          release(event.pitch, event.channel);
+        }
+      },
+      () => sysexListeningRef.current?.() ?? noSysex,
+    )
       .then((cleanup) => {
         disconnect = cleanup;
         setStatus("midi");

@@ -429,6 +429,7 @@ export const Player = forwardRef<PlayerHandle, PlayerProps>(function Player(
       }
     }, [playback, matchActive]),
     onControl: skinShortcuts.onControl,
+    sysexListening: skinShortcuts.sysexListening,
   });
   inputRef.current = input;
 

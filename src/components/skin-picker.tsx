@@ -11,6 +11,7 @@ import {
   sameTarget,
   sliderBinding,
 } from "@/lib/input/midi-shortcuts";
+import { patternHeadLength } from "@/lib/input/sysex-pattern";
 import type { BackgroundChoice } from "@/lib/skins/backdrop";
 import type {
   BackdropSource,
@@ -138,14 +139,15 @@ function Flat() {
 }
 
 /** A control's name as it sits in a badge: a channel controller by its number,
- * a Yamaha slider by the address it reports. */
+ * a SysEx control by the last bytes that name it, where makers put the address. */
 function controlLabel(control: ControlRef): string {
   if (control.kind === "cc") {
     return `CC ${control.controller} · ch${control.channel}`;
   }
-  const address = control.key
+  const address = control.pattern
+    .slice(0, patternHeadLength(control.pattern))
     .slice(-3)
-    .map((byte) => byte.toString(16).padStart(2, "0").toUpperCase())
+    .map((byte) => (byte ?? 0).toString(16).padStart(2, "0").toUpperCase())
     .join(" ");
   return `sysex ${address}`;
 }

@@ -1,6 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  learnPattern,
+  matchesPattern,
+  patternsOverlap,
+  patternValue,
+  type SysexListening,
+  type SysexPattern,
+  samePattern,
+} from "@/lib/input/sysex-pattern";
 import type { ControlInput } from "@/lib/input/web-midi";
 import { type BackgroundChoice, readStoredChoice } from "@/lib/skins/backdrop";
 import {
@@ -8,15 +17,15 @@ import {
   updateGlobalSettings,
 } from "@/lib/storage/settings";
 
-/** The control a background is bound to: a channel controller, or a Yamaha
- * SysEx address (a Genos2 slider). */
+/** The control a background is bound to: a channel controller, or the shape of
+ * the SysEx messages a control sends. */
 export type ControlRef =
   | {
       readonly kind: "cc";
       readonly channel: number;
       readonly controller: number;
     }
-  | { readonly kind: "sysex"; readonly key: readonly number[] };
+  | { readonly kind: "sysex"; readonly pattern: SysexPattern };
 
 /** One button switches to a single background; one slider spreads its travel
  * across every background the mode offers, so a single control reaches them
@@ -69,24 +78,61 @@ export function sameControl(a: ControlRef, b: ControlRef): boolean {
     return a.channel === b.channel && a.controller === b.controller;
   }
   if (a.kind === "sysex" && b.kind === "sysex") {
-    return (
-      a.key.length === b.key.length &&
-      a.key.every((byte, i) => byte === b.key[i])
-    );
+    return samePattern(a.pattern, b.pattern);
   }
   return false;
 }
 
-function toRef(input: ControlInput): ControlRef {
-  return input.kind === "cc"
-    ? { kind: "cc", channel: input.channel, controller: input.controller }
-    : { kind: "sysex", key: input.key };
+/** Whether one incoming message could reach both controls. */
+function controlsOverlap(a: ControlRef, b: ControlRef): boolean {
+  return a.kind === "sysex" && b.kind === "sysex"
+    ? patternsOverlap(a.pattern, b.pattern)
+    : sameControl(a, b);
+}
+
+function controlMatches(ref: ControlRef, input: ControlInput): boolean {
+  if (ref.kind === "cc" && input.kind === "cc") {
+    return ref.channel === input.channel && ref.controller === input.controller;
+  }
+  return (
+    ref.kind === "sysex" &&
+    input.kind === "sysex" &&
+    matchesPattern(input.body, ref.pattern)
+  );
+}
+
+/** The position a matched control reports, or null for a SysEx button that
+ * sends one fixed message. */
+function controlValue(ref: ControlRef, input: ControlInput): number | null {
+  if (input.kind === "cc") {
+    return input.value;
+  }
+  return ref.kind === "sysex" ? patternValue(input.body, ref.pattern) : null;
+}
+
+/** The control being bound, once the input shows enough of it. A button binds
+ * the message it sent. A SysEx slider shows which bytes carry its position only
+ * once it moves, so it is read against the message before. */
+function learnedControl(
+  input: ControlInput,
+  learning: ActiveLearning,
+  previous: readonly number[] | null,
+): ControlRef | null {
+  if (input.kind === "cc") {
+    return { kind: "cc", channel: input.channel, controller: input.controller };
+  }
+  if (learning.kind === "button") {
+    return { kind: "sysex", pattern: input.body };
+  }
+  const pattern =
+    previous === null ? null : learnPattern([previous, input.body]);
+  return pattern === null ? null : { kind: "sysex", pattern };
 }
 
 function controlId(ref: ControlRef): string {
   return ref.kind === "cc"
     ? `cc:${ref.channel}:${ref.controller}`
-    : `sysex:${ref.key.join(":")}`;
+    : `sysex:${ref.pattern.map((byte) => byte ?? "*").join(":")}`;
 }
 
 export function bindingFor(
@@ -127,7 +173,7 @@ function controlConflict(
     return "reserved";
   }
   for (const entry of shortcuts) {
-    if (!sameControl(entry.control, control)) {
+    if (!controlsOverlap(entry.control, control)) {
       continue;
     }
     if (
@@ -153,6 +199,7 @@ function normalizeControl(value: unknown): ControlRef | null {
     kind?: unknown;
     channel?: unknown;
     controller?: unknown;
+    pattern?: unknown;
     key?: unknown;
   };
   if (
@@ -162,12 +209,24 @@ function normalizeControl(value: unknown): ControlRef | null {
   ) {
     return { kind: "cc", channel: v.channel, controller: v.controller };
   }
+  if (v.kind !== "sysex") {
+    return null;
+  }
   if (
-    v.kind === "sysex" &&
-    Array.isArray(v.key) &&
-    v.key.every((b) => typeof b === "number")
+    Array.isArray(v.pattern) &&
+    v.pattern.length > 0 &&
+    v.pattern.every((byte) => typeof byte === "number" || byte === null)
   ) {
-    return { kind: "sysex", key: v.key as number[] };
+    return { kind: "sysex", pattern: v.pattern as SysexPattern };
+  }
+  // Bindings saved before patterns hold a Yamaha parameter change's six byte
+  // address, whose position is the byte after it.
+  if (
+    Array.isArray(v.key) &&
+    v.key.length > 0 &&
+    v.key.every((byte) => typeof byte === "number")
+  ) {
+    return { kind: "sysex", pattern: [...(v.key as number[]), null] };
   }
   return null;
 }
@@ -218,6 +277,7 @@ export type MidiShortcuts = {
   readonly learning: Learning;
   readonly conflict: ShortcutConflict | null;
   onControl: (control: ControlInput) => void;
+  sysexListening: () => SysexListening;
   beginLearnButton: (target: BackgroundChoice | null) => void;
   beginLearnSlider: () => void;
   cancelLearn: () => void;
@@ -250,6 +310,7 @@ export function useMidiShortcuts(options: {
   // A held button reports its value more than once; only the rising edge fires,
   // so a press switches once however long it is held.
   const held = useRef(new Set<string>());
+  const previousSysex = useRef<readonly number[] | null>(null);
 
   useEffect(() => {
     void loadGlobalSettings().then((stored) => {
@@ -267,11 +328,17 @@ export function useMidiShortcuts(options: {
 
   const onControl = useCallback(
     (control: ControlInput) => {
-      const ref = toRef(control);
       const learningNow = learningRef.current;
       const all = bindingsRef.current;
 
       if (learningNow !== null) {
+        const ref = learnedControl(control, learningNow, previousSysex.current);
+        if (control.kind === "sysex") {
+          previousSysex.current = control.body;
+        }
+        if (ref === null) {
+          return;
+        }
         const found = controlConflict(ref, all, learningNow);
         if (found !== null) {
           setConflict(found);
@@ -299,16 +366,26 @@ export function useMidiShortcuts(options: {
               ];
         setConflict(null);
         setLearning(null);
+        // The rest of a sweep arrives before the next render, and must not bind
+        // again or be read as the control it just became.
+        learningRef.current = null;
+        previousSysex.current = null;
         persist(next);
         return;
       }
 
       const buttonHit = all.find(
-        (entry) => entry.kind === "button" && sameControl(entry.control, ref),
+        (entry) =>
+          entry.kind === "button" && controlMatches(entry.control, control),
       );
       if (buttonHit !== undefined && buttonHit.kind === "button") {
-        const id = controlId(ref);
-        const down = control.value >= triggerThreshold;
+        const value = controlValue(buttonHit.control, control);
+        if (value === null) {
+          onTriggerRef.current(buttonHit.target);
+          return;
+        }
+        const id = controlId(buttonHit.control);
+        const down = value >= triggerThreshold;
         const wasDown = held.current.has(id);
         if (down) {
           held.current.add(id);
@@ -322,18 +399,18 @@ export function useMidiShortcuts(options: {
       }
 
       const slider = all.find(
-        (entry) => entry.kind === "slider" && sameControl(entry.control, ref),
+        (entry) =>
+          entry.kind === "slider" && controlMatches(entry.control, control),
       );
-      if (slider !== undefined && slider.kind === "slider") {
+      const value =
+        slider === undefined ? null : controlValue(slider.control, control);
+      if (value !== null) {
         const list = targetsRef.current();
         if (list.length === 0) {
           return;
         }
         const width = 128 / list.length;
-        const index = Math.min(
-          list.length - 1,
-          Math.floor(control.value / width),
-        );
+        const index = Math.min(list.length - 1, Math.floor(value / width));
         onTriggerRef.current(list[index] ?? null);
       }
     },
@@ -342,11 +419,13 @@ export function useMidiShortcuts(options: {
 
   const beginLearnButton = useCallback((target: BackgroundChoice | null) => {
     setConflict(null);
+    previousSysex.current = null;
     setLearning({ kind: "button", target });
   }, []);
 
   const beginLearnSlider = useCallback(() => {
     setConflict(null);
+    previousSysex.current = null;
     setLearning({ kind: "slider" });
   }, []);
 
@@ -370,11 +449,22 @@ export function useMidiShortcuts(options: {
     persist(bindingsRef.current.filter((entry) => entry.kind !== "slider"));
   }, [persist]);
 
+  const sysexListening = useCallback(
+    (): SysexListening => ({
+      patterns: bindingsRef.current.flatMap((entry) =>
+        entry.control.kind === "sysex" ? [entry.control.pattern] : [],
+      ),
+      learning: learningRef.current !== null,
+    }),
+    [],
+  );
+
   return {
     bindings,
     learning,
     conflict,
     onControl,
+    sysexListening,
     beginLearnButton,
     beginLearnSlider,
     cancelLearn,

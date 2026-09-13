@@ -243,6 +243,12 @@ src/lib/
   midi/harmony.ts             what is sounding, named, and read back by a cursor
   input/keyboard-map.ts       computer keyboard to pitch
   input/web-midi.ts           MIDI devices, including hot plug
+  input/sysex-pattern.ts      a SysEx control's shape, learned from any maker's
+                              messages by which bytes hold still
+  input/chrome-split-sysex.ts Chrome on macOS hands a split SysEx over as
+                              channel messages; puts controls back together,
+                              in every browser since none reports it
+  input/sysex-fixtures.ts     test devices from different makers
   input/midi-shortcuts.ts     controller buttons and sliders bound to backgrounds,
                               one button each and one slider across all, on the
                               device and fired in any mode

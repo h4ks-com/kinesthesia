@@ -1,5 +1,7 @@
 appId: com.h4ks.kinesthesia.studio
 productName: Kinesthesia Studio
+# The package is scoped, and a scope cannot be part of a file name.
+executableName: kinesthesia-studio
 directories:
   output: release
 files:
@@ -20,3 +22,5 @@ win:
 linux:
   target: [AppImage]
   category: Audio
+  desktopName: kinesthesia-studio.desktop
+  synopsis: Watch, learn and play MIDI songs

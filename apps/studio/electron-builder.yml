@@ -1,0 +1,22 @@
+appId: com.h4ks.kinesthesia.studio
+productName: Kinesthesia Studio
+directories:
+  output: release
+files:
+  - dist/**
+afterPack: scripts/after-pack.cjs
+# Nothing here is signed, so a first run needs the manual trust step each system
+# asks for. Signing would cost money this project does not spend.
+mac:
+  target: [dmg, zip]
+  category: public.app-category.music
+  identity: null
+  extendInfo:
+    NSCameraUsageDescription: Kinesthesia Studio films your keyboard to place it on screen.
+    NSMicrophoneUsageDescription: Kinesthesia Studio listens to transcribe what you play.
+win:
+  target: [nsis, zip]
+  signAndEditExecutable: false
+linux:
+  target: [AppImage]
+  category: Audio

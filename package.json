@@ -10,6 +10,7 @@
     "dev": "bun run --filter @kinesthesia/web dev",
     "build": "bun run --filter @kinesthesia/web build",
     "start": "bun run --filter @kinesthesia/web start",
+    "studio": "bun run build && bun run --filter @kinesthesia/studio dev",
     "lint": "biome ci .",
     "lint:fix": "biome check --write .",
     "hook": "lint-staged",
@@ -36,6 +37,7 @@
     "unrs-resolver"
   ],
   "trustedDependencies": [
+    "electron",
     "sharp",
     "unrs-resolver"
   ]

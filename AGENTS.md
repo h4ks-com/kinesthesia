@@ -12,6 +12,7 @@ Synthesia-style MIDI player and piano game. Next.js App Router, TypeScript, Bun.
 
 ```
 bun run dev        # dev server on :3000
+bun run studio     # build the web app, then open it in the desktop shell
 bun run ci         # lint, typecheck, test, build. This is what CI runs
 bun run test       # unit and component tests
 bun run test:e2e   # Playwright
@@ -28,9 +29,10 @@ exactly one definition. Change a check in `package.json` and both follow.
 ## Layout
 
 A Bun workspace. `apps/web` is the Next.js app and holds its own source, tests,
-Playwright suite, migrations and env file. The root carries Biome, the git hook
-and the scripts that drive the workspace, so every command above still runs from
-the repo root and each one also runs inside `apps/web`.
+Playwright suite, migrations and env file. `apps/studio` is the desktop shell,
+which serves that same app from this machine. The root carries Biome, the git
+hook and the scripts that drive the workspace, so every command above still runs
+from the repo root and each one also runs inside its app.
 
 `node_modules` links flat (`bunfig.toml` sets the hoisted linker), which is what
 lets the Next standalone build carry its dependencies.

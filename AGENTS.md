@@ -27,6 +27,14 @@ exactly one definition. Change a check in `package.json` and both follow.
 
 ## Layout
 
+A Bun workspace. `apps/web` is the Next.js app and holds its own source, tests,
+Playwright suite, migrations and env file. The root carries Biome, the git hook
+and the scripts that drive the workspace, so every command above still runs from
+the repo root and each one also runs inside `apps/web`.
+
+`node_modules` links flat (`bunfig.toml` sets the hoisted linker), which is what
+lets the Next standalone build carry its dependencies.
+
 `ARCHITECTURE.md` maps the codebase. Update it whenever you add, move or remove
 a module.
 

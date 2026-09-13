@@ -6,7 +6,7 @@
 [![size](https://ghcr-badge.egpl.dev/h4ks-com/kinesthesia/size?label=image%20size)](https://github.com/h4ks-com/kinesthesia/pkgs/container/kinesthesia)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-![Kinesthesia playing a song](public/screenshot.png)
+![Kinesthesia playing a song](apps/web/public/screenshot.png)
 
 A piano roll for the web, inspired by [Synthesia](https://synthesiagame.com/).
 Search a song and its MIDI falls onto an 88 key piano to watch, learn, or play
@@ -17,7 +17,7 @@ Live at [kinesthesia.h4ks.com](https://kinesthesia.h4ks.com).
 ## Run it
 
 ```
-cp .env.example .env
+cp apps/web/.env.example apps/web/.env
 bun install
 bun run dev
 ```

@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { isIP } from "node:net";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { type CountryResponse, Reader } from "maxmind";
 import { PostHog } from "posthog-node";
 import { countryTableFile } from "@/lib/analytics-report";
@@ -79,15 +79,24 @@ const analytics: Analytics | null =
  * apart and none of them is worth a route for.
  */
 function readTable(): Reader<CountryResponse> | null {
-  const path = join(process.cwd(), countryTableFile);
-  try {
-    return new Reader(readFileSync(path));
-  } catch (reason: unknown) {
-    console.warn(
-      `No country table at ${path}, so events carry no country:`,
-      reason,
-    );
-    return null;
+  // A workspace hoists its modules to the repo root, so the table sits either
+  // beside the server or above it, the way a module resolves.
+  let directory = process.cwd();
+  for (;;) {
+    const path = join(directory, countryTableFile);
+    try {
+      return new Reader(readFileSync(path));
+    } catch (reason: unknown) {
+      const parent = dirname(directory);
+      if (parent === directory) {
+        console.warn(
+          `No country table under ${process.cwd()}, so events carry no country:`,
+          reason,
+        );
+        return null;
+      }
+      directory = parent;
+    }
   }
 }
 

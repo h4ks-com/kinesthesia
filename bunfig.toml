@@ -1,0 +1,4 @@
+[install]
+# Next traces the standalone build by copying resolved files, and Bun's default
+# symlinked store does not survive that copy, so the workspace links flat.
+linker = "hoisted"

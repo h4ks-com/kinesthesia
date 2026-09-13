@@ -1,5 +1,9 @@
 # Architecture
 
+A Bun workspace. `apps/web` holds the Next.js app mapped below; the root holds
+Biome, the git hook and the workspace scripts. Every path in this file is
+relative to `apps/web`.
+
 Next.js App Router app. One Hono instance serves the whole API, and Zod schemas
 are the single source for request validation, the OpenAPI spec, the docs page
 and the MCP tools.

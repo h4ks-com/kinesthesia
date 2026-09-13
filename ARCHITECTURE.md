@@ -87,6 +87,8 @@ src/components/
                               side
   player-transport.tsx        play, clock, scrubber, speed, key and settings
   settings-menu.tsx           key size, octave, timing and input
+  midi-monitor-dock.tsx       every message the devices send, live in a sidebar
+                              docked beside any page, to copy or export as CSV
   render-menu.tsx             render the watch view to a video or audio file
   piano-roll-view.tsx         canvas, the frame loop, touch input and panning
   track-menu.tsx              show, hide, solo and claim tracks, and the way
@@ -249,6 +251,8 @@ src/lib/
                               channel messages; puts controls back together,
                               in every browser since none reports it
   input/sysex-fixtures.ts     test devices from different makers
+  input/midi-monitor.ts       the recording the monitor shows: raw messages named,
+                              capped, and the notes left held
   input/midi-shortcuts.ts     controller buttons and sliders bound to backgrounds,
                               one button each and one slider across all, on the
                               device and fired in any mode

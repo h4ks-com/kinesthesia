@@ -92,10 +92,29 @@ const sustainController = 64;
 const modulationController = 1;
 /** Bend arrives as two 7 bit halves around a centre of 8192, so a wheel at rest
  * reads zero and each direction reaches one. */
-const bendCentre = 8192;
+export const bendCentre = 8192;
 
 export function isWebMidiSupported(): boolean {
   return typeof navigator !== "undefined" && "requestMIDIAccess" in navigator;
+}
+
+/** A channel as people and devices number it, counted from one. */
+export function channelLabel(channel: number): string {
+  return `ch${channel + 1}`;
+}
+
+export function hexBytes(bytes: readonly number[]): string {
+  return bytes
+    .map((byte) => byte.toString(16).padStart(2, "0").toUpperCase())
+    .join(" ");
+}
+
+/** We ask for SysEx so a controller that speaks it can be bound; a visitor who
+ * refuses the stronger prompt still gets notes and CC. */
+export function requestMidiAccess(): Promise<MIDIAccess> {
+  return navigator
+    .requestMIDIAccess({ sysex: true })
+    .catch(() => navigator.requestMIDIAccess());
 }
 
 export function decodeMidi(data: Uint8Array, at: number): MidiEvent | null {
@@ -193,11 +212,7 @@ export async function connectMidiInputs(
   if (!isWebMidiSupported()) {
     throw new Error("This browser has no Web MIDI support");
   }
-  // We ask for SysEx so a controller that speaks it can be bound; a visitor who
-  // refuses the stronger prompt still gets notes and CC.
-  const access = await navigator
-    .requestMIDIAccess({ sysex: true })
-    .catch(() => navigator.requestMIDIAccess());
+  const access = await requestMidiAccess();
 
   const expiries = new Map<string, ReturnType<typeof setTimeout>>();
 

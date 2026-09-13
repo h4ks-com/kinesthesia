@@ -1,49 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { seenTour } from "./fixture";
-
-declare global {
-  interface Window {
-    sendMidi: (bytes: number[]) => void;
-    /** True once the app has subscribed to the stand-in device. */
-    midiListening: boolean;
-  }
-}
+import { fakeMidiDevice, seenTour } from "./fixture";
 
 type Page = import("@playwright/test").Page;
 
-/** A MIDI device the test drives by hand. Web MIDI is unavailable in a headless
- * browser, so the page gets a stand-in delivering the bytes a wheel and a key
- * would send. */
 async function fakeDevice(page: Page): Promise<void> {
   await seenTour(page);
-  await page.addInitScript(() => {
-    // A note sent before the app subscribes goes nowhere, so the handler is
-    // watched rather than assumed: the test waits for it.
-    let handler: ((event: unknown) => void) | null = null;
-    const input = {};
-    Object.defineProperty(input, "onmidimessage", {
-      get: () => handler,
-      set: (next: ((event: unknown) => void) | null) => {
-        handler = next;
-        window.midiListening = next !== null;
-      },
-    });
-    window.midiListening = false;
-    const access = {
-      inputs: new Map([["fake", input]]),
-      onstatechange: null,
-    };
-    Object.defineProperty(navigator, "requestMIDIAccess", {
-      configurable: true,
-      value: () => Promise.resolve(access),
-    });
-    window.sendMidi = (bytes: number[]) => {
-      handler?.({
-        data: new Uint8Array(bytes),
-        timeStamp: performance.now(),
-      });
-    };
-  });
+  await fakeMidiDevice(page);
 }
 
 /** The top of the keybed, found from what was painted rather than assumed, so

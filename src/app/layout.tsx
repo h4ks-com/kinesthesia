@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Archivo, JetBrains_Mono } from "next/font/google";
+import { MidiMonitorDock } from "@/components/midi-monitor-dock";
 import "./globals.css";
 
 const archivo = Archivo({
@@ -30,7 +31,7 @@ export default function RootLayout({
       className={`${archivo.variable} ${mono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-void text-text">
-        {children}
+        <MidiMonitorDock>{children}</MidiMonitorDock>
       </body>
     </html>
   );

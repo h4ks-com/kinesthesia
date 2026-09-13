@@ -53,6 +53,51 @@ export function playerQuery(): string {
   return `url=${encodeURIComponent(songUrl)}&name=${encodeURIComponent(songName)}&source=bitmidi`;
 }
 
+declare global {
+  interface Window {
+    sendMidi: (bytes: number[]) => void;
+    /** True once the app has subscribed to the stand-in device. */
+    midiListening: boolean;
+  }
+}
+
+/** A MIDI device the test drives by hand. Web MIDI is unavailable in a headless
+ * browser, so the page gets a stand-in that delivers each message both to the
+ * handler the app sets and to listeners added beside it, as a real input does. */
+export async function fakeMidiDevice(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    // A note sent before the app subscribes goes nowhere, so the handler is
+    // watched rather than assumed: a test can wait for it.
+    let handler: ((event: Event) => void) | null = null;
+    const input = Object.assign(new EventTarget(), {
+      id: "fake",
+      name: "Stand-in Keyboard",
+    });
+    Object.defineProperty(input, "onmidimessage", {
+      get: () => handler,
+      set: (next: ((event: Event) => void) | null) => {
+        handler = next;
+        window.midiListening = next !== null;
+      },
+    });
+    window.midiListening = false;
+    const access = Object.assign(new EventTarget(), {
+      inputs: new Map([["fake", input]]),
+      onstatechange: null,
+    });
+    Object.defineProperty(navigator, "requestMIDIAccess", {
+      configurable: true,
+      value: () => Promise.resolve(access),
+    });
+    window.sendMidi = (bytes: number[]) => {
+      const event = new Event("midimessage");
+      Object.defineProperty(event, "data", { value: new Uint8Array(bytes) });
+      handler?.(event);
+      input.dispatchEvent(event);
+    };
+  });
+}
+
 /** Marks every walkthrough seen, so a spec reads as a returning visitor. */
 export async function seenTour(page: Page): Promise<void> {
   await page.addInitScript(() => {

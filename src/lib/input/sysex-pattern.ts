@@ -62,6 +62,12 @@ export function patternHeadLength(pattern: SysexPattern): number {
   return slot === -1 ? pattern.length - 1 : slot;
 }
 
+export function patternHead(pattern: SysexPattern): number[] {
+  return pattern
+    .slice(0, patternHeadLength(pattern))
+    .filter((byte): byte is number => byte !== null);
+}
+
 export function samePattern(a: SysexPattern, b: SysexPattern): boolean {
   return a.length === b.length && a.every((byte, index) => byte === b[index]);
 }

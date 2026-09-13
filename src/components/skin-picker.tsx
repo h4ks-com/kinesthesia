@@ -11,7 +11,8 @@ import {
   sameTarget,
   sliderBinding,
 } from "@/lib/input/midi-shortcuts";
-import { patternHeadLength } from "@/lib/input/sysex-pattern";
+import { patternHead } from "@/lib/input/sysex-pattern";
+import { channelLabel, hexBytes } from "@/lib/input/web-midi";
 import type { BackgroundChoice } from "@/lib/skins/backdrop";
 import type {
   BackdropSource,
@@ -142,14 +143,9 @@ function Flat() {
  * a SysEx control by the last bytes that name it, where makers put the address. */
 function controlLabel(control: ControlRef): string {
   if (control.kind === "cc") {
-    return `CC ${control.controller} · ch${control.channel}`;
+    return `CC ${control.controller} · ${channelLabel(control.channel)}`;
   }
-  const address = control.pattern
-    .slice(0, patternHeadLength(control.pattern))
-    .slice(-3)
-    .map((byte) => (byte ?? 0).toString(16).padStart(2, "0").toUpperCase())
-    .join(" ");
-  return `sysex ${address}`;
+  return `sysex ${hexBytes(patternHead(control.pattern).slice(-3))}`;
 }
 
 /** The controller button a background is bound to, or the way to bind one. It

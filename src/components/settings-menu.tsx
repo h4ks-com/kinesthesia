@@ -7,6 +7,7 @@ import { Popover } from "@/components/ui/popover";
 import { SliderRow } from "@/components/ui/slider-row";
 import { Toggle } from "@/components/ui/toggle";
 import { latencyRange } from "@/lib/audio/latency";
+import { midiMonitor, useMidiMonitorOpen } from "@/lib/input/midi-monitor";
 import type { InputStatus } from "@/lib/input/use-note-input";
 import { keyWidthRange } from "@/lib/render/keyboard";
 
@@ -66,6 +67,7 @@ export function SettingsMenu({
   risingHeldBy,
   onPlainStyle,
 }: SettingsMenuProps) {
+  const monitorOpen = useMidiMonitorOpen();
   return (
     <Popover
       label="Settings"
@@ -227,6 +229,12 @@ export function SettingsMenu({
                 ? "midi device connected"
                 : "computer keyboard"}
             </p>
+            <Toggle
+              label="show midi events"
+              checked={monitorOpen}
+              onChange={midiMonitor.setOpen}
+              tip="See every message your devices send, live, and copy or export them when something plays wrong."
+            />
           </Section>
         </div>
       )}

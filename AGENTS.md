@@ -60,12 +60,27 @@ a module.
   page loads. `baseLatency` is safe. Sample a device property once when the
   device starts, not during render.
 
+## UI rules
+
+- Build from what the app already has: `src/components/ui`, the header and
+  track menu buttons, the `label` class and the colour tokens in `globals.css`.
+  A new panel looks like the ones beside it.
+- Actions are lucide icon buttons with a `data-tip` tooltip and an `aria-label`
+  that say what the click does. Text buttons belong to menus and dialogs.
+- A tool stays general purpose. It shows what it is for, never a readout shaped
+  around the one bug it was built to chase.
+
 ## Design rules
 
 - Single source of truth. Parallel structures describing one thing collapse into
   one.
 - YAGNI. An abstraction needs a real second consumer.
 - One concern per commit.
+- Fixes are generic. The app serves any device, brand and browser, so a fix
+  holds for all of them. A quirk of one device or browser is a workaround in its
+  own module, named for the case it covers and saying how that case was
+  measured, never baked into the general path or treated as what the app is
+  built for.
 
 ## Conventions
 

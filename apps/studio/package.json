@@ -9,7 +9,8 @@
     "stage:web": "bun scripts/stage-web.ts",
     "dev": "bun run ensure-electron && bun run build:main && electron dist/main.cjs",
     "package": "bun run build:main && bun run stage:web && electron-builder --publish never",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "smoke": "bun scripts/smoke.ts"
   },
   "devDependencies": {
     "electron": "44.3.0",

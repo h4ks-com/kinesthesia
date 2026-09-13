@@ -31,7 +31,16 @@ async function open(): Promise<void> {
     title: "Kinesthesia Studio",
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
-  await window.loadURL(server.url);
+  try {
+    await window.loadURL(server.url);
+  } catch (reason: unknown) {
+    // The first load can lose a race with the server's own socket, and it can
+    // be cut short when the window closes, so we say so and try once more.
+    console.warn(`Loading ${server.url} failed:`, reason);
+    if (!window.isDestroyed()) {
+      await window.loadURL(server.url);
+    }
+  }
 }
 
 app.whenReady().then(open);

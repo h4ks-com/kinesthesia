@@ -39,6 +39,12 @@ jobs:
       - run: bun run --filter @kinesthesia/studio ensure-electron
       - run: bun run --filter @kinesthesia/web build
       - run: bun run --filter @kinesthesia/studio package
+      # A packaged build that opens no window is worth nothing, so each system
+      # starts its own and waits for the app to answer.
+      - if: runner.os == 'Linux'
+        run: xvfb-run -a bun run --filter @kinesthesia/studio smoke
+      - if: runner.os != 'Linux'
+        run: bun run --filter @kinesthesia/studio smoke
       - uses: actions/upload-artifact@v7
         with:
           name: studio-${{ matrix.artifact }}

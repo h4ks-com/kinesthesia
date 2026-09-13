@@ -28,6 +28,13 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    # The suite is spread across runners so the whole run takes about as long as
+    # one shard. A failing shard leaves the others running, so one push reports
+    # every failure at once.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
@@ -39,11 +46,11 @@ jobs:
       # The song clock is the audio clock, so a runner with no sound device is a
       # player that never starts. A dummy sink is enough for it to run.
       - run: sudo apt-get install -y pulseaudio && pulseaudio --start --exit-idle-time=-1
-      - run: bun run test:e2e
+      - run: bun run test:e2e --shard=${{ matrix.shard }}/6
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             playwright-report
             test-results

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Camera,
   CircleHelp,
   Eye,
   GraduationCap,
@@ -345,6 +346,14 @@ export function PlayerHeader({
                     </Link>
                   );
                 })}
+                <Link
+                  href={playerPath("stage", params)}
+                  onClick={close}
+                  className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 pointer-coarse:min-h-11 text-left text-sm text-text transition-colors hover:bg-raised"
+                >
+                  <Camera className="size-4 shrink-0" aria-hidden="true" />
+                  Stage
+                </Link>
               </div>
             )}
           </Popover>

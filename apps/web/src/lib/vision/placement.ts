@@ -59,6 +59,21 @@ export function playerEdge(
   return [inPixels(edge[0] as Point, frame), inPixels(edge[1] as Point, frame)];
 }
 
+/** The edge across the keybed from the player, where the black keys end. */
+export function farEdge(keybed: Keybed, frame: Size): readonly [Point, Point] {
+  const [first, second, third, fourth] = keybed.quad;
+  if (
+    first === undefined ||
+    second === undefined ||
+    third === undefined ||
+    fourth === undefined
+  ) {
+    throw new Error("A keybed is four corners");
+  }
+  const edge = keybed.playerEdgeIsFirst ? [fourth, third] : [first, second];
+  return [inPixels(edge[0] as Point, frame), inPixels(edge[1] as Point, frame)];
+}
+
 /** How far the frame turns so the player's edge of the keys lies flat. */
 export function keybedAngle(keybed: Keybed, frame: Size): number {
   const [from, to] = playerEdge(keybed, frame);
@@ -105,9 +120,19 @@ export function placeKeybed(
   options: PlacementOptions = defaultPlacement,
 ): Placement {
   const [from, to] = playerEdge(keybed, frame);
-  const angle = -keybedAngle(keybed, frame);
-  const scale = (output.width * options.fill) / Math.max(distance(from, to), 1);
   const centre = { x: frame.width / 2, y: frame.height / 2 };
+  const flat = -keybedAngle(keybed, frame);
+  // Turning the player's edge flat leaves the instrument on one side of it or
+  // the other, and which one depends on how the corners were handed over. The
+  // keys belong at the bottom, so the turn that puts the instrument above the
+  // player wins.
+  const far = midpoint(...farEdge(keybed, frame));
+  const near = midpoint(from, to);
+  const angle =
+    rotate(far, flat, centre).y <= rotate(near, flat, centre).y
+      ? flat
+      : flat + Math.PI;
+  const scale = (output.width * options.fill) / Math.max(distance(from, to), 1);
   const edgeCentre = midpoint(
     rotate(from, angle, centre),
     rotate(to, angle, centre),

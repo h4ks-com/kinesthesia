@@ -21,7 +21,7 @@ import type { Keybed } from "@/lib/vision/placement";
  * to answer whether the keyboard is still there, which is a slow question: the
  * instrument does not move while it is played. */
 export const searchEveryMs = 350;
-export const confirmEveryMs = 1000;
+export const confirmEveryMs = 2500;
 
 /** How many agreeing reads in a row it takes to hold a keybed, and how far
  * apart two reads may sit and still agree, as a share of the frame. */

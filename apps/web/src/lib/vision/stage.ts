@@ -35,28 +35,29 @@ export const defaultFade: Fade = { reach: 0.62, softness: 0.8, edges: 0.12 };
  * visible line across the picture; an eased ramp arrives out of nothing. */
 const fadeSteps = 24;
 
-let softened: HTMLCanvasElement | null = null;
-let edgeMask: HTMLCanvasElement | null = null;
-let maskFor = "";
+let edgeVeil: HTMLCanvasElement | null = null;
+let veilFor = "";
 
-/** The shape of the fade at the frame's four edges, which only changes when the
- * camera does. Building it once a frame costs more than the picture it fades. */
-function maskOfEdges(frameSize: Size, edges: number): HTMLCanvasElement | null {
+/** What the stage sits on, which the picture has to fade into without a seam. */
+const voidColour = { red: 7, green: 8, blue: 11 };
+const voidFill = "#07080b";
+
+/** The fade at the frame's four edges, as a sheet of the stage's own colour
+ * that is opaque at the border and clear inside. Painting it over the placed
+ * picture leaves no edge, and it only changes when the camera does. */
+function veilOfEdges(frameSize: Size, edges: number): HTMLCanvasElement | null {
   const wanted = `${frameSize.width}x${frameSize.height}x${edges}`;
-  if (edgeMask !== null && maskFor === wanted) {
-    return edgeMask;
+  if (edgeVeil !== null && veilFor === wanted) {
+    return edgeVeil;
   }
-  edgeMask ??= document.createElement("canvas");
-  edgeMask.width = frameSize.width;
-  edgeMask.height = frameSize.height;
-  const context = edgeMask.getContext("2d");
+  edgeVeil ??= document.createElement("canvas");
+  edgeVeil.width = frameSize.width;
+  edgeVeil.height = frameSize.height;
+  const context = edgeVeil.getContext("2d");
   if (context === null) {
     return null;
   }
   context.clearRect(0, 0, frameSize.width, frameSize.height);
-  context.fillStyle = "#000";
-  context.fillRect(0, 0, frameSize.width, frameSize.height);
-  context.globalCompositeOperation = "destination-out";
   const deep = frameSize.width * edges;
   const tall = frameSize.height * edges;
   const sides: readonly {
@@ -86,7 +87,10 @@ function maskOfEdges(frameSize: Size, edges: number): HTMLCanvasElement | null {
     );
     for (let step = 0; step <= fadeSteps; step += 1) {
       const at = step / fadeSteps;
-      ramp.addColorStop(at, `rgba(0, 0, 0, ${(1 - at) ** 3})`);
+      ramp.addColorStop(
+        at,
+        `rgba(${voidColour.red}, ${voidColour.green}, ${voidColour.blue}, ${(1 - at) ** 3})`,
+      );
     }
     context.fillStyle = ramp;
     context.fillRect(
@@ -96,38 +100,9 @@ function maskOfEdges(frameSize: Size, edges: number): HTMLCanvasElement | null {
       side.strip[3],
     );
   }
-  context.globalCompositeOperation = "source-over";
-  maskFor = wanted;
-  return edgeMask;
+  veilFor = wanted;
+  return edgeVeil;
 }
-
-/** The camera frame with its own four edges dissolved, so what is drawn has no
- * border of its own wherever it lands on the stage. */
-function withSoftEdges(
-  frame: CanvasImageSource,
-  frameSize: Size,
-  edges: number,
-): CanvasImageSource {
-  const mask = maskOfEdges(frameSize, edges);
-  softened ??= document.createElement("canvas");
-  const sheet = softened;
-  sheet.width = frameSize.width;
-  sheet.height = frameSize.height;
-  const context = sheet.getContext("2d");
-  if (context === null || mask === null) {
-    return frame;
-  }
-  context.clearRect(0, 0, frameSize.width, frameSize.height);
-  context.drawImage(frame, 0, 0, frameSize.width, frameSize.height);
-  context.globalCompositeOperation = "destination-in";
-  context.drawImage(mask, 0, 0);
-  context.globalCompositeOperation = "source-over";
-  return sheet;
-}
-
-/** What the stage sits on, which the picture has to fade into without a seam. */
-const voidColour = { red: 7, green: 8, blue: 11 };
-const voidFill = "#07080b";
 
 export function clearFrame(
   context: CanvasRenderingContext2D,
@@ -190,12 +165,11 @@ export function drawCameraLayer(
 ): void {
   const keysAt = keysBaseline(output, options);
   const top = keysAt - output.height * fade.reach;
-  drawPlacedFrame(
-    context,
-    withSoftEdges(frame, frameSize, fade.edges),
-    frameSize,
-    placement,
-  );
+  drawPlacedFrame(context, frame, frameSize, placement);
+  const veil = veilOfEdges(frameSize, fade.edges);
+  if (veil !== null) {
+    drawPlacedFrame(context, veil, frameSize, placement);
+  }
 
   // The room darkens on the way up from the keys, so the picture arrives out of
   // the background rather than sitting in a box. It runs from the top of the

@@ -27,6 +27,10 @@ export const playerModes = ["watch", "learn", "multiplayer"] as const;
 
 export type PlayerMode = (typeof playerModes)[number];
 
+/** Every view a song opens in. The stage is not a player mode: it is the camera
+ * looking at the real instrument, and it reads the same link. */
+export type SongView = PlayerMode | "stage";
+
 export const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5] as const;
 export const defaultSpeed = 1;
 
@@ -168,7 +172,7 @@ export function parseTrustedOrigins(raw: string | undefined): string[] {
  * implicit defers to whatever the recipient's device remembers. */
 export function buildPlayerUrl(
   baseUrl: string,
-  mode: PlayerMode,
+  mode: SongView,
   params: PlayerParams,
   options: { explicit?: boolean } = {},
 ): string {
@@ -248,7 +252,7 @@ export function readSkinChoice(
   return image === null ? null : { kind: "image", image };
 }
 
-export function playerPath(mode: PlayerMode, params: PlayerParams): string {
+export function playerPath(mode: SongView, params: PlayerParams): string {
   return buildPlayerUrl(localBase, mode, params).slice(localBase.length);
 }
 

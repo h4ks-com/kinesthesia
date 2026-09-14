@@ -58,9 +58,9 @@ export function runwayInView(
 }
 
 /** Where the runway begins, in white-key widths out from the far edge of the
- * keys. The notes belong beyond the instrument, never over its own keys, and
- * the player's hands need the keys left to them. */
-export const runwayStart = 1.2;
+ * keys. Nothing stands between the keys and the notes: a note leaves the key it
+ * is played on. */
+export const runwayStart = 0;
 
 /** How the runway leans: 0 carries the keybed's own plane off behind the
  * instrument, 1 stands the notes up square to the camera. Between the two the

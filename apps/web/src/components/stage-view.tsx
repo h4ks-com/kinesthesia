@@ -1,15 +1,7 @@
 "use client";
 
 import { isBlack } from "keybed";
-import {
-  Loader2,
-  Pause,
-  Piano,
-  Play,
-  RotateCcw,
-  Scan,
-  Video,
-} from "lucide-react";
+import { Loader2, Pause, Play, RotateCcw, Scan, Video } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
 import type { SysexListening } from "@/lib/input/sysex-pattern";
@@ -102,10 +94,13 @@ const noSysex: SysexListening = { patterns: [], learning: false };
  * aiming needs longer than that before being told to change anything. */
 const giveUpAfterMs = 12000;
 
-/** How long the reader waits between attempts at the keys. Once they are read
- * they are kept: the camera is static and the keyboard is where it was put, so
- * nothing about it is worked out twice. */
+/** How the keys are read: a few tries a second and a half apart, keeping the
+ * best of them, and then never again. The camera is static and the keyboard is
+ * where it was put, so this is worked out once, carefully, rather than over and
+ * over. A try that explains the picture this well ends it early. */
 const readBoardEveryMs = 1500;
+const readBoardTries = 6;
+const readBoardEnough = 0.9;
 
 /** How wide the picture the board is read from. Colour across the keys needs
  * nothing like the detail the stage is drawn at, and a whole frame of pixels
@@ -149,14 +144,10 @@ function drawKeys(
   to: ToOutput,
   board: PitchRange,
   pressed: ReadonlySet<number>,
-  showKeys: boolean,
 ): void {
   context.save();
   for (const pitch of keysOf(board)) {
     const held = pressed.has(pitch);
-    if (!(showKeys || held)) {
-      continue;
-    }
     const face = keyFace(stage, pitch, board);
     if (face !== null) {
       drawBar(context, face, to, paintFor(pitch, held));
@@ -215,6 +206,8 @@ function aimRoll(roll: Roll, board: PitchRange): void {
 type BoardReader = {
   sheet: HTMLCanvasElement | null;
   at: number;
+  tries: number;
+  agreement: number;
   range: PitchRange | null;
   /** The lowest and highest note the player has sounded, which the board has to
    * be able to play. This is what settles the octave. */
@@ -231,10 +224,13 @@ function readTheBoard(
   size: Size,
   now: number,
 ): void {
-  if (reader.range !== null || now - reader.at < readBoardEveryMs) {
+  const settled =
+    reader.tries >= readBoardTries || reader.agreement >= readBoardEnough;
+  if (settled || now - reader.at < readBoardEveryMs) {
     return;
   }
   reader.at = now;
+  reader.tries += 1;
   const pinned = storedRange();
   if (pinned !== null) {
     reader.range = pinned;
@@ -266,8 +262,9 @@ function readTheBoard(
       ? `stage: board reads ${found.range.lowest} to ${found.range.highest}, ${(found.agreement * 100).toFixed(0)}% of the keys agree, ${(found.darkShare * 100).toFixed(0)}% dark at ${found.depth} deep`
       : `stage: board unread, ${found.reason}`,
   );
-  if (found.kind === "read") {
+  if (found.kind === "read" && found.agreement > reader.agreement) {
     reader.range = found.range;
+    reader.agreement = found.agreement;
   }
 }
 
@@ -288,6 +285,8 @@ function rememberPlayed(reader: BoardReader, pitch: number): void {
           highest: Math.max(seen.highest, pitch),
         };
   reader.at = 0;
+  reader.tries = 0;
+  reader.agreement = 0;
 }
 
 export function StageView({ params }: { params: PlayerParams | null }) {
@@ -351,16 +350,16 @@ export function StageView({ params }: { params: PlayerParams | null }) {
   const board = useRef<BoardReader>({
     sheet: null,
     at: 0,
+    tries: 0,
+    agreement: 0,
     range: null,
     played: null,
   });
   const stage = useRef<HTMLDivElement | null>(null);
   const output = useRef({ width: 1280, height: 720 });
   const view = useRef<View>("camera");
-  const keysShown = useRef(false);
   const huntingSince = useRef<number | null>(null);
   const [showing, setShowing] = useState<View>("camera");
-  const [showingKeys, setShowingKeys] = useState(false);
   const [looking, setLooking] = useState<TrackerState["kind"]>("hunting");
   const [missing, setMissing] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
@@ -642,14 +641,12 @@ export function StageView({ params }: { params: PlayerParams | null }) {
           readTheBoard(board.current, stage, element, size, now);
           const keys = board.current.range;
           if (keys !== null) {
-            drawKeys(
-              context,
-              stage,
-              to,
-              keys,
-              pressed.current,
-              keysShown.current,
-            );
+            // The keys the app believes in are drawn while the camera is being
+            // aimed, where they are the only way to see whether the board was
+            // read right. The stage itself carries the notes and nothing else.
+            if (view.current === "camera") {
+              drawKeys(context, stage, to, keys, pressed.current);
+            }
             layRoll(
               context,
               stage,
@@ -746,25 +743,6 @@ export function StageView({ params }: { params: PlayerParams | null }) {
           className="shrink-0 rounded-lg p-1.5 text-faint transition-colors hover:bg-raised hover:text-accent pointer-coarse:min-h-11"
         >
           <RotateCcw className="size-4" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            keysShown.current = !showingKeys;
-            setShowingKeys(!showingKeys);
-          }}
-          aria-pressed={showingKeys}
-          aria-label={showingKeys ? "Hide the keys" : "Show the keys"}
-          data-tip={showingKeys ? "Hide the keys" : "Show the keys"}
-          data-tip-side="bottom"
-          data-tip-align="right"
-          className={`shrink-0 rounded-lg p-1.5 transition-colors pointer-coarse:min-h-11 ${
-            showingKeys
-              ? "text-accent"
-              : "text-faint hover:bg-raised hover:text-accent"
-          }`}
-        >
-          <Piano className="size-4" aria-hidden="true" />
         </button>
         <button
           type="button"

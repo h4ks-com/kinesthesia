@@ -128,7 +128,6 @@ export async function createKeybedCamera(
   let agreeing: Point[] | null = null;
   let agreed = 0;
   let misses = 0;
-  let byHand: readonly Point[] | null = null;
   let looking = false;
   let lastAt = 0;
   let lastRanAt = 0;
@@ -144,7 +143,6 @@ export async function createKeybedCamera(
     const wasHeld = state.kind === "held";
     agreed = 0;
     agreeing = null;
-    byHand = null;
     steady.reset();
     stillness.forget();
     if (wasHeld) {
@@ -164,7 +162,6 @@ export async function createKeybedCamera(
     } else if (reading.kind === "focal") {
       keepFocal(reading.fraction);
     }
-    byHand = fromHand ? quad : null;
     state = { kind: "held", keybed: keybedOf(quad), byHand: fromHand };
   };
 

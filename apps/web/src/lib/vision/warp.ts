@@ -20,6 +20,9 @@ export type Warp = {
   ) => HTMLCanvasElement | null;
 };
 
+/** How much of the far end of the picture is given over to thinning out. */
+const farFade = 0.14;
+
 const vertexShader = `#version 300 es
 in vec2 corner;
 uniform vec2 output_size;
@@ -39,6 +42,7 @@ uniform mat3 back;
 uniform vec2 taken_size;
 uniform vec2 whole_size;
 uniform sampler2D picture;
+uniform float fade_far;
 out vec4 colour;
 void main() {
   vec3 found = back * vec3(landed, 1.0);
@@ -46,7 +50,10 @@ void main() {
   if (at.x < 0.0 || at.y < 0.0 || at.x > taken_size.x || at.y > taken_size.y) {
     discard;
   }
-  colour = texture(picture, at / whole_size);
+  // The far end of what is laid down thins out rather than stopping at a line,
+  // so a note arrives out of the distance instead of appearing at a seam.
+  float thinned = smoothstep(0.0, fade_far, at.y / taken_size.y);
+  colour = texture(picture, at / whole_size) * thinned;
 }`;
 
 function compile(
@@ -125,6 +132,7 @@ export function createWarp(): Warp | null {
 
   const outputSize = gl.getUniformLocation(program, "output_size");
   const takenSize = gl.getUniformLocation(program, "taken_size");
+  const fadeFar = gl.getUniformLocation(program, "fade_far");
   const wholeSize = gl.getUniformLocation(program, "whole_size");
   const back = gl.getUniformLocation(program, "back");
 
@@ -159,6 +167,7 @@ export function createWarp(): Warp | null {
       gl.uniformMatrix3fv(back, true, new Float32Array(forward));
       gl.uniform2f(outputSize, output.width, output.height);
       gl.uniform2f(takenSize, taken.width, taken.height);
+      gl.uniform1f(fadeFar, farFade);
       gl.uniform2f(wholeSize, whole.width, whole.height);
 
       gl.bindTexture(gl.TEXTURE_2D, texture);

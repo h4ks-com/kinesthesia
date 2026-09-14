@@ -1,5 +1,7 @@
 import type { Point } from "keybed";
 
+export type { Point };
+
 /** Where the camera frame is drawn on the output, as a rotation about the
  * frame's centre, a scale, and a translation. The frame keeps its perspective:
  * flattening it would smear the hands, which stand above the keys. */
@@ -108,6 +110,24 @@ export function placeKeybed(
     x: target.x - (edgeCentre.x - centre.x) * scale - centre.x * scale,
     y: target.y - (edgeCentre.y - centre.y) * scale - centre.y * scale,
   };
+}
+
+/** The corner a pointer is over, or null where it is over none of them. */
+export function nearestCorner(
+  quad: readonly Point[],
+  at: Point,
+  within = 0.04,
+): number | null {
+  let best: number | null = null;
+  let closest = within;
+  for (const [index, corner] of quad.entries()) {
+    const away = Math.hypot(corner.x - at.x, corner.y - at.y);
+    if (away <= closest) {
+      closest = away;
+      best = index;
+    }
+  }
+  return best;
 }
 
 /** Where a point of the camera frame lands on the output. */

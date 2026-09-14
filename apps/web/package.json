@@ -29,7 +29,7 @@
     "drizzle-orm": "0.45.2",
     "hono": "4.12.30",
     "jspdf": "^4.2.1",
-    "keybed": "github:matheusfillipe/keybed#b254f4a361384d9b4162ed0d4ee92134c6ec5dc0",
+    "keybed": "github:matheusfillipe/keybed#1d816a5d12f96ab58f66c6d6e7b9ad5f2a28cf58",
     "lucide-react": "^1.25.0",
     "maxmind": "^5.0.7",
     "minio": "^8.0.7",

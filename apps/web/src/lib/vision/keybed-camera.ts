@@ -28,8 +28,11 @@ export const confirmEveryMs = 1000;
 export const readsToHold = 4;
 export const agreeWithin = 0.02;
 
-/** How many refusals in a row put the camera away again. */
+/** How many refusals in a row put the camera away again. A keybed already held
+ * is given far longer: hands cover the keys for as long as they are played, and
+ * the instrument has not gone anywhere. */
 export const missesBeforeLost = 3;
+export const missesWhileHeld = 20;
 
 /** How far the confirming read may sit from the held corners and still count as
  * the same keyboard, as a share of the frame. */
@@ -168,7 +171,9 @@ export async function createKeybedCamera(
         if (!lock.held) {
           huntReason = lock.reason;
           misses += 1;
-          if (misses < missesBeforeLost) {
+          const patience =
+            state.kind === "held" ? missesWhileHeld : missesBeforeLost;
+          if (misses < patience) {
             return;
           }
           lose();
@@ -176,13 +181,22 @@ export async function createKeybedCamera(
         }
 
         misses = 0;
-        // A held keybed is not re-fitted under the player: the read only has to
-        // agree that the keyboard is still where it was.
+        // A held keybed is not re-fitted under the player. The slow read only
+        // asks whether the keyboard is still where it was, and corners set by
+        // hand are the reader's answer and outlast any read.
         if (state.kind === "held") {
           if (farthestCorner(lock.quad, state.keybed.quad) > staysWithin) {
             misses = missesBeforeLost;
             huntReason = "Piano pattern moved out of place";
             lose();
+            return;
+          }
+          if (byHand === null) {
+            state = {
+              kind: "held",
+              keybed: keybedOf(steady.accept(lock.quad, detection.still)),
+              byHand: false,
+            };
           }
           return;
         }

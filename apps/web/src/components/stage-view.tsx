@@ -2,12 +2,11 @@
 
 import { isBlack } from "keybed";
 import { Loader2, Pause, Play, RotateCcw, Scan, Video } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
-import type { SysexListening } from "@/lib/input/sysex-pattern";
-import { connectMidiInputs, isWebMidiSupported } from "@/lib/input/web-midi";
+import { useSongVoicing } from "@/lib/audio/use-song-voicing";
+import { useNoteInput } from "@/lib/input/use-note-input";
 import { paletteColor } from "@/lib/midi/palette";
-import type { Song } from "@/lib/midi/song";
 import { useSong } from "@/lib/midi/use-song";
 import { keyboardPart, playSong } from "@/lib/play/parts";
 import { usePlayNotes } from "@/lib/play/use-play-notes";
@@ -84,8 +83,6 @@ const keyPaint = {
   },
   struck: { fill: noteColour.glow, edge: noteColour.core, width: 1.5 },
 } as const;
-const noSysex: SysexListening = { patterns: [], learning: false };
-
 /** How long the camera looks before it says it is not finding a keyboard.
  * A detection off a fresh camera takes a few reads, and a reader who is still
  * aiming needs longer than that before being told to change anything. */
@@ -103,6 +100,10 @@ const readBoardEnough = 0.9;
  * nothing like the detail the stage is drawn at, and a whole frame of pixels
  * read at camera size is a hitch the draw loop cannot hide. */
 const readBoardWidth = 640;
+
+/** The part a player plays into on the stage, which is the one the free roam
+ * song carries. */
+const playTrack = 0;
 
 type View = "camera" | "stage";
 
@@ -302,7 +303,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
   const file = loaded.status === "ready" ? loaded.song : null;
   // With no file to play, the stage is free roam: the roll carries what the
   // keys emit and nothing else.
-  const free = useMemo(() => playSong([keyboardPart(0)]), []);
+  const free = useMemo(() => playSong([keyboardPart(playTrack)]), []);
   const song = file ?? free;
   const sounding = useMemo(
     () => new Set(song.notes.map((note) => note.id)),
@@ -325,11 +326,13 @@ export function StageView({ params }: { params: PlayerParams | null }) {
   const live = usePlayNotes(() => playhead.current());
   const liveNotes = useRef(live.get);
   liveNotes.current = live.get;
-  // The same record the player and a render are drawn from, so a song looks on
-  // the instrument the way it looks on screen.
+  // How this song sounds and is coloured is one record, the same one the player
+  // and a render read, so a link opened on the stage looks like the link
+  // opened anywhere else.
+  const sound = useSongVoicing(params, null);
   const shown = useRef<RollView>({
     song,
-    voicing: new Map(),
+    voicing: sound.voicing,
     hiddenTracks: new Set(),
     plain: false,
     rate: 1,
@@ -339,8 +342,13 @@ export function StageView({ params }: { params: PlayerParams | null }) {
   shown.current = {
     ...shown.current,
     song,
+    voicing: sound.voicing,
     rate: params?.speed ?? 1,
   };
+
+  useEffect(() => {
+    playback.setVoicing(sound.voicing);
+  }, [playback.setVoicing, sound.voicing]);
   const speed = useRef(1);
   speed.current = params?.speed ?? 1;
   const roll = useRef<Roll | null>(null);
@@ -366,7 +374,6 @@ export function StageView({ params }: { params: PlayerParams | null }) {
   const camera = useRef<KeybedCamera | null>(null);
   const dragging = useRef<number | null>(null);
   const corners = useRef<Point[] | null>(null);
-  const pressed = useRef(new Set<number>());
   const board = useRef<BoardReader>({
     sheet: null,
     at: 0,
@@ -442,52 +449,35 @@ export function StageView({ params }: { params: PlayerParams | null }) {
     };
   }, [background.source]);
 
-  useEffect(() => {
-    // Web MIDI asks its own permission, and two prompts landing together on a
-    // page the reader has not seen yet is one too many.
-    if (cameraOn === "asking") {
-      return;
-    }
-    if (!isWebMidiSupported()) {
-      console.info("stage: no web midi, the keys cannot be heard here");
-      return;
-    }
-    let disconnect: (() => void) | null = null;
-    let dropped = false;
-    connectMidiInputs(
-      (event) => {
-        if (event.type !== "note") {
-          return;
-        }
-        if (event.down && event.velocity > 0) {
-          pressed.current.add(event.pitch);
-          live.emit(event.pitch, 0, event.velocity);
-          rememberPlayed(board.current, event.pitch);
-          return;
-        }
-        pressed.current.delete(event.pitch);
-        live.lift(event.pitch, 0);
-        live.damp(event.pitch, 0);
-      },
-      () => noSysex,
-    )
-      .then((off) => {
-        if (dropped) {
-          off();
-          return;
-        }
-        disconnect = off;
-      })
-      .catch((reason: unknown) => {
-        // A browser with no device, or one that refuses: the stage still shows
-        // the picture, it just has nothing to emit notes from.
-        console.info(`stage: no midi device, ${reason}`);
-      });
-    return () => {
-      dropped = true;
-      disconnect?.();
-    };
-  }, [live, cameraOn]);
+  const press = useCallback(
+    (pitch: number, velocity: number) => {
+      live.emit(pitch, playTrack, velocity);
+      rememberPlayed(board.current, pitch);
+    },
+    [live],
+  );
+
+  const release = useCallback(
+    (pitch: number) => {
+      live.lift(pitch, playTrack);
+      live.damp(pitch, playTrack);
+    },
+    [live],
+  );
+
+  // The same input every other mode reads, so the computer keyboard reaches the
+  // stage as well as a device does. The instrument in front of the camera makes
+  // its own sound, so nothing here is voiced.
+  const input = useNoteInput({
+    active: true,
+    onPress: press,
+    onRelease: release,
+    onToggle: () => {
+      void playback.toggle();
+    },
+  });
+  const held = useRef(input.pressed);
+  held.current = input.pressed;
 
   useEffect(() => {
     let stop = false;
@@ -632,7 +622,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
             travellers: [],
             strikes: [],
             step: 1 / 60,
-            pressed: [...pressed.current],
+            pressed: [...held.current()],
             chord: null,
             key: shown.current.song.key,
           });
@@ -686,7 +676,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
           const keys = board.current.range;
           if (keys !== null) {
             if (view.current === "camera") {
-              drawKeys(context, space, to, keys, pressed.current);
+              drawKeys(context, space, to, keys, held.current());
             }
             layRoll(
               context,
@@ -694,7 +684,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
               to,
               keys,
               output.current,
-              pressed.current,
+              held.current(),
               playhead.current(),
             );
           }

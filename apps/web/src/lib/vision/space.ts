@@ -10,7 +10,6 @@ import {
   spaceDepth,
   WHITE_KEY_COUNT,
 } from "keybed";
-import { lookAhead } from "@/lib/render/piano-roll";
 import type { Keybed, Size } from "@/lib/vision/placement";
 
 /** The keyboard in front of the camera, as the MIDI pitches of its end keys.

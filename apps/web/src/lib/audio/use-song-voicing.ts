@@ -89,14 +89,16 @@ export function chooseVoicing(
   );
 }
 
+/** Null params is a page with no song on it, which still wants the same shape
+ * back so whatever draws the roll reads one record wherever it runs. */
 export function useSongVoicing(
-  params: PlayerParams,
+  params: PlayerParams | null,
   viewerId: string | null,
 ): SongVoicingState {
   const [saved, setSaved] = useState<readonly SavedVoicing[]>([]);
   const [picked, setPicked] = useState<string | null>(null);
   const [edited, setEdited] = useState<SongVoicing | null>(null);
-  const url = params.url;
+  const url = params?.url ?? null;
 
   /** Counts the times the listener has said how the song should sound. A read
    * or a save started before one of those lands afterwards, and the hand is
@@ -106,6 +108,9 @@ export function useSongVoicing(
   viewer.current = viewerId;
 
   const load = useCallback(async (): Promise<readonly SavedVoicing[]> => {
+    if (url === null) {
+      return [];
+    }
     const response = await fetch(
       `/api/voicings?url=${encodeURIComponent(url)}`,
     );
@@ -125,6 +130,9 @@ export function useSongVoicing(
     setEdited(null);
     setPicked(null);
     setSaved([]);
+    if (url === null) {
+      return;
+    }
     Promise.all([
       loadSongVoicing(url).catch(() => null),
       load().catch(() => []),
@@ -156,7 +164,7 @@ export function useSongVoicing(
   const base = useRef(voicing);
   base.current = voicing;
 
-  const device = useDeviceVoicing(url);
+  const device = useDeviceVoicing(url ?? "");
 
   const change = useCallback(
     (track: number, next: Voicing) => {
@@ -171,6 +179,9 @@ export function useSongVoicing(
 
   const adopt = useCallback(
     (authorId: string) => {
+      if (url === null) {
+        return;
+      }
       setPicked(authorId);
       setEdited(null);
       shaped.current += 1;
@@ -192,6 +203,9 @@ export function useSongVoicing(
   }, [device]);
 
   const save = useCallback(async () => {
+    if (url === null) {
+      return;
+    }
     const at = shaped.current;
     const response = await fetch("/api/voicings", {
       method: "PUT",

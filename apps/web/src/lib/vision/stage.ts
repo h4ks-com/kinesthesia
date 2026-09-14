@@ -133,6 +133,25 @@ export function drawWholeFrame(
   );
 }
 
+/** Anything in the camera's own frame, laid where the keybed was placed. The
+ * same steps `placePoint` takes, in the order the canvas applies them: turn
+ * about the frame's own centre, then scale, then move into place. */
+export function drawPlacedFrame(
+  context: CanvasRenderingContext2D,
+  frame: CanvasImageSource,
+  frameSize: Size,
+  placement: Placement,
+): void {
+  context.save();
+  context.translate(placement.x, placement.y);
+  context.scale(placement.scale, placement.scale);
+  context.translate(frameSize.width / 2, frameSize.height / 2);
+  context.rotate(placement.angle);
+  context.translate(-frameSize.width / 2, -frameSize.height / 2);
+  context.drawImage(frame, 0, 0, frameSize.width, frameSize.height);
+  context.restore();
+}
+
 export function drawCameraLayer(
   context: CanvasRenderingContext2D,
   frame: CanvasImageSource,
@@ -144,22 +163,12 @@ export function drawCameraLayer(
 ): void {
   const keysAt = keysBaseline(output, options);
   const top = keysAt - output.height * fade.reach;
-  // The same steps `placePoint` takes, in the order the canvas applies them:
-  // turn about the frame's own centre, then scale, then move into place.
-  context.save();
-  context.translate(placement.x, placement.y);
-  context.scale(placement.scale, placement.scale);
-  context.translate(frameSize.width / 2, frameSize.height / 2);
-  context.rotate(placement.angle);
-  context.translate(-frameSize.width / 2, -frameSize.height / 2);
-  context.drawImage(
+  drawPlacedFrame(
+    context,
     withSoftEdges(frame, frameSize, fade.edges),
-    0,
-    0,
-    frameSize.width,
-    frameSize.height,
+    frameSize,
+    placement,
   );
-  context.restore();
 
   // The room darkens on the way up from the keys, so the picture arrives out of
   // the background rather than sitting in a box. It runs from the top of the

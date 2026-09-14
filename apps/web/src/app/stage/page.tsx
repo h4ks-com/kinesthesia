@@ -1,14 +1,21 @@
-"use client";
+import { StageStart } from "@/components/stage-start";
+import { parsePlayerParams } from "@/lib/player-url";
+import { type RouteSearchParams, toSearchParams } from "@/lib/search-params";
+import { config } from "@/server/config";
 
-import dynamic from "next/dynamic";
-
-/** The vision runtime reads the browser as it loads, so the whole view waits
- * for one rather than being rendered on the server first. */
-const StageView = dynamic(
-  () => import("@/components/stage-view").then((module) => module.StageView),
-  { ssr: false },
-);
-
-export default function StagePage() {
-  return <StageView />;
+/** A song is optional here: without one the stage still lays the real keys out
+ * and lights what the player plays. */
+export default async function StagePage({
+  searchParams,
+}: {
+  searchParams: Promise<RouteSearchParams>;
+}) {
+  return (
+    <StageStart
+      params={parsePlayerParams(
+        toSearchParams(await searchParams),
+        config.trustedMidiOrigins,
+      )}
+    />
+  );
 }

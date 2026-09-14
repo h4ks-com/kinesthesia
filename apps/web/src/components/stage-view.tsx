@@ -1,14 +1,27 @@
 "use client";
 
 import { isBlack } from "keybed";
-import { Loader2, Piano, RotateCcw, Scan, Video } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import {
+  Loader2,
+  Pause,
+  Piano,
+  Play,
+  RotateCcw,
+  Scan,
+  Video,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePlaybackEngine } from "@/lib/audio/use-playback-engine";
 import type { SysexListening } from "@/lib/input/sysex-pattern";
 import { connectMidiInputs, isWebMidiSupported } from "@/lib/input/web-midi";
 import { paletteColor } from "@/lib/midi/palette";
+import type { Song } from "@/lib/midi/song";
+import { useSong } from "@/lib/midi/use-song";
+import type { PlayerParams } from "@/lib/player-url";
 import { lookAhead } from "@/lib/render/piano-roll";
 import { type BoardRead, readBoard } from "@/lib/vision/board";
 import { storedRange } from "@/lib/vision/calibration";
+import type { HandLayer } from "@/lib/vision/hands";
 import {
   type KeybedCamera,
   type Reading,
@@ -38,6 +51,7 @@ import {
   drawCameraLayer,
   drawHandles,
   drawNote,
+  drawPlacedFrame,
   drawQuad,
   drawWholeFrame,
   placedMap,
@@ -153,6 +167,35 @@ function drawRoll(
   context.restore();
 }
 
+/** The song on its way to the keys. A note stands off the keybed by how long it
+ * has left before it sounds, so it arrives on its own key as it is played. */
+function drawSong(
+  context: CanvasRenderingContext2D,
+  stage: Stage,
+  to: ToOutput,
+  board: PitchRange,
+  song: Song,
+  position: number,
+): void {
+  context.save();
+  for (const note of song.notes) {
+    if (note.end <= position || note.start > position + lookAhead) {
+      continue;
+    }
+    const bar = noteBar(
+      stage,
+      note.pitch,
+      board,
+      note.start - position,
+      note.end - position,
+    );
+    if (bar !== null) {
+      drawNote(context, bar, to, paletteColor(note.track));
+    }
+  }
+  context.restore();
+}
+
 /** What the stage knows about the keyboard in front of it, which is read off
  * the picture rather than assumed. */
 type BoardReader = {
@@ -225,10 +268,30 @@ function rememberPlayed(reader: BoardReader, pitch: number): void {
   }
 }
 
-export function StageView() {
+export function StageView({ params }: { params: PlayerParams | null }) {
+  const loaded = useSong(params);
+  const song = loaded.status === "ready" ? loaded.song : null;
+  const sounding = useMemo(
+    () => new Set((song?.notes ?? []).map((note) => note.id)),
+    [song],
+  );
+  const playback = usePlaybackEngine({
+    song,
+    sourceKey: params?.url ?? "",
+    autoNotes: sounding,
+    speed: params?.speed ?? 1,
+    onRestart: () => {},
+  });
+  // The draw loop starts once and reads the song and the playhead off refs, so
+  // loading a song never restarts the camera.
+  const playhead = useRef(playback.getPosition);
+  playhead.current = playback.getPosition;
+  const playingSong = useRef<Song | null>(null);
+  playingSong.current = song;
   const video = useRef<HTMLVideoElement | null>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const camera = useRef<KeybedCamera | null>(null);
+  const hands = useRef<HandLayer | null>(null);
   const dragging = useRef<number | null>(null);
   const corners = useRef<Point[] | null>(null);
   const struck = useRef(new Map<number, Struck>());
@@ -309,6 +372,18 @@ export function StageView() {
       // wants them, so they arrive only once a camera is running.
       const { createKeybedCamera } = await import("@/lib/vision/keybed-camera");
       camera.current = await createKeybedCamera();
+      // The hands are cut out of the picture so they can be drawn back over the
+      // notes. Failing to read them costs the stage nothing but that.
+      void import("@/lib/vision/hands")
+        .then(async (module) => {
+          const layer = await module.createHandLayer();
+          if (stop) {
+            layer.close();
+            return;
+          }
+          hands.current = layer;
+        })
+        .catch(() => {});
       const context = canvas.current?.getContext("2d") ?? null;
       let lastSaid = "";
 
@@ -354,10 +429,13 @@ export function StageView() {
           quad: corners.current ?? state.keybed.quad,
           playerEdgeIsFirst: state.keybed.playerEdgeIsFirst,
         };
+        hands.current?.look(element, now);
         let to: ToOutput;
+        let overlay: ((layer: CanvasImageSource) => void) | null = null;
         if (view.current === "camera") {
           drawWholeFrame(context, element, size, output);
           to = wholeFrameMap(size, output);
+          overlay = (layer) => drawWholeFrame(context, layer, size, output);
         } else {
           const placement = placeKeybed(keybed, size, output);
           drawCameraLayer(
@@ -369,6 +447,7 @@ export function StageView() {
             defaultFade,
           );
           to = placedMap(placement, size);
+          overlay = (layer) => drawPlacedFrame(context, layer, size, placement);
         }
         const stage = stageSpace(keybed, size);
         if (stage !== null) {
@@ -384,6 +463,16 @@ export function StageView() {
               keysShown.current,
               now / 1000,
             );
+            const playing = playingSong.current;
+            if (playing !== null) {
+              drawSong(context, stage, to, keys, playing, playhead.current());
+            }
+            // The hands are the one thing on the stage that is not behind the
+            // notes: they are on the keys the notes are landing on.
+            const skin = hands.current?.layer() ?? null;
+            if (skin !== null) {
+              overlay?.(skin);
+            }
           }
         }
         if (view.current === "camera") {
@@ -401,6 +490,8 @@ export function StageView() {
 
     return () => {
       stop = true;
+      hands.current?.close();
+      hands.current = null;
       cancelAnimationFrame(frame);
       for (const track of stream?.getTracks() ?? []) {
         track.stop();
@@ -434,9 +525,32 @@ export function StageView() {
     <div className="flex h-dvh flex-col overflow-hidden bg-void">
       <header className="flex h-14 shrink-0 items-center gap-3 border-line border-b bg-panel px-4">
         <h1 className="label">stage</h1>
-        <p className="min-w-0 flex-1 truncate font-mono text-[0.7rem] text-warn">
-          {refused ?? ""}
+        <p
+          className={`min-w-0 flex-1 truncate font-mono text-[0.7rem] ${
+            refused === null ? "text-muted" : "text-warn"
+          }`}
+        >
+          {refused ?? song?.name ?? ""}
         </p>
+        {song === null ? null : (
+          <button
+            type="button"
+            onClick={() => {
+              void playback.toggle();
+            }}
+            aria-label={playback.playing ? "Pause the song" : "Play the song"}
+            data-tip={playback.playing ? "Pause the song" : "Play the song"}
+            data-tip-side="bottom"
+            data-tip-align="right"
+            className="shrink-0 rounded-lg p-1.5 text-faint transition-colors hover:bg-raised hover:text-accent pointer-coarse:min-h-11"
+          >
+            {playback.playing ? (
+              <Pause className="size-4" aria-hidden="true" />
+            ) : (
+              <Play className="size-4" aria-hidden="true" />
+            )}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => camera.current?.release()}

@@ -103,6 +103,8 @@ src/components/
   settings-menu.tsx           key size, octave, timing and input
   midi-monitor-dock.tsx       every message the devices send, live in a sidebar
                               docked beside any page, to copy or export as CSV
+  keybed-camera-view.tsx      the camera page: finds the real keyboard and lays
+                              it along the bottom, the rest faded to black
   render-menu.tsx             render the watch view to a video or audio file
   piano-roll-view.tsx         canvas, the frame loop, touch input and panning
   track-menu.tsx              show, hide, solo and claim tracks, and the way
@@ -265,6 +267,13 @@ src/lib/
                               channel messages; puts controls back together,
                               in every browser since none reports it
   input/sysex-fixtures.ts     test devices from different makers
+  vision/assets.ts            the files the vision runtime fetches, and where the
+                              keybed model lives
+  vision/keybed-camera.ts     the keybed model on a slow poll, holding what it
+                              found until the picture refuses it
+  vision/placement.ts         turning the four corners into a rotate and scale
+                              that lays the keys along the bottom
+  vision/compose.ts           drawing the camera layer and its fade to black
   input/midi-monitor.ts       the recording the monitor shows: raw messages named,
                               capped, and the notes left held
   input/midi-shortcuts.ts     controller buttons and sliders bound to backgrounds,

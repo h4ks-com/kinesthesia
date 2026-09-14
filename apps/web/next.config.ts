@@ -5,6 +5,9 @@ import { countryTableFile } from "./src/lib/analytics-report";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  /** The keybed runtime is TypeScript source, published straight from its own
+   * repo so its browser code and its python twin stay in step. */
+  transpilePackages: ["keybed"],
   /** Bun hoists the workspace's modules to the repo root, so tracing has to
    * start there or the standalone build ships without them. */
   outputFileTracingRoot: join(dirname(fileURLToPath(import.meta.url)), "../.."),

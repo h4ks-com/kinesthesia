@@ -59,7 +59,10 @@ import {
   wholeFrameMap,
 } from "@/lib/vision/stage";
 
-const output = { width: 1280, height: 720 };
+/** The stage is drawn at the size it is shown, so a tall window is a tall stage
+ * with more of the runway in it. Capped, since a wide screen at full device
+ * pixels is a lot of fill for a picture that came off a camera. */
+const mostPixels = 1600;
 const noteColour = paletteColor(0);
 
 /** The keys the app believes are there, drawn over the keys the camera sees.
@@ -302,6 +305,8 @@ export function StageView({ params }: { params: PlayerParams | null }) {
   playhead.current = playback.getPosition;
   const playingSong = useRef<Song | null>(null);
   playingSong.current = song;
+  const rolling = useRef(false);
+  rolling.current = playback.playing;
   const video = useRef<HTMLVideoElement | null>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const camera = useRef<KeybedCamera | null>(null);
@@ -315,6 +320,8 @@ export function StageView({ params }: { params: PlayerParams | null }) {
     range: null,
     played: null,
   });
+  const stage = useRef<HTMLDivElement | null>(null);
+  const output = useRef({ width: 1280, height: 720 });
   const view = useRef<View>("camera");
   const keysShown = useRef(true);
   const huntingSince = useRef<number | null>(null);
@@ -323,6 +330,32 @@ export function StageView({ params }: { params: PlayerParams | null }) {
   const [hunting, setHunting] = useState(true);
   const [missing, setMissing] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
+
+  // The stage is drawn at the size it is shown at, so the window's own shape
+  // decides how much of the runway is in view.
+  useEffect(() => {
+    const box = stage.current;
+    const sheet = canvas.current;
+    if (box === null || sheet === null) {
+      return;
+    }
+    const fit = (): void => {
+      const seen = box.getBoundingClientRect();
+      const ratio = Math.min(
+        window.devicePixelRatio,
+        mostPixels / Math.max(seen.width, 1),
+      );
+      const width = Math.max(2, Math.round(seen.width * ratio));
+      const height = Math.max(2, Math.round(seen.height * ratio));
+      output.current = { width, height };
+      sheet.width = width;
+      sheet.height = height;
+    };
+    fit();
+    const watching = new ResizeObserver(fit);
+    watching.observe(box);
+    return () => watching.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!isWebMidiSupported()) {
@@ -430,14 +463,14 @@ export function StageView({ params }: { params: PlayerParams | null }) {
           corners.current = [...state.keybed.quad];
         }
         const size = { width: element.videoWidth, height: element.videoHeight };
-        clearFrame(context, output);
+        clearFrame(context, output.current);
         if (state.kind !== "held") {
           // Once the hunt is long enough to be a failure, the picture is what
           // the reader needs: they can only fix the aim by seeing it.
           const searching = now - (huntingSince.current ?? now);
           context.filter =
             searching > giveUpAfterMs ? "none" : "blur(14px) brightness(0.6)";
-          drawWholeFrame(context, element, size, output);
+          drawWholeFrame(context, element, size, output.current);
           context.filter = "none";
           return;
         }
@@ -447,25 +480,29 @@ export function StageView({ params }: { params: PlayerParams | null }) {
           quad: corners.current ?? state.keybed.quad,
           playerEdgeIsFirst: state.keybed.playerEdgeIsFirst,
         };
-        // Cutting the hands out costs a model run, and there is nothing for them
-        // to be in front of until the board is known.
-        if (board.current.range !== null) {
+        // Cutting the hands out costs a model run every time, and it is worth
+        // nothing until there are notes over the keys for them to be in front of.
+        if (
+          board.current.range !== null &&
+          (rolling.current || struck.current.size > 0)
+        ) {
           hands.current?.look(element, now);
         }
         let to: ToOutput;
         let overlay: ((layer: CanvasImageSource) => void) | null = null;
         if (view.current === "camera") {
-          drawWholeFrame(context, element, size, output);
-          to = wholeFrameMap(size, output);
-          overlay = (layer) => drawWholeFrame(context, layer, size, output);
+          drawWholeFrame(context, element, size, output.current);
+          to = wholeFrameMap(size, output.current);
+          overlay = (layer) =>
+            drawWholeFrame(context, layer, size, output.current);
         } else {
-          const placement = placeKeybed(keybed, size, output);
+          const placement = placeKeybed(keybed, size, output.current);
           drawCameraLayer(
             context,
             element,
             size,
             placement,
-            output,
+            output.current,
             defaultFade,
           );
           to = placedMap(placement, size);
@@ -526,17 +563,18 @@ export function StageView({ params }: { params: PlayerParams | null }) {
     const box = event.currentTarget.getBoundingClientRect();
     const element = video.current;
     const size = {
-      width: element?.videoWidth ?? output.width,
-      height: element?.videoHeight ?? output.height,
+      width: element?.videoWidth ?? output.current.width,
+      height: element?.videoHeight ?? output.current.height,
     };
+    const shown = output.current;
     const scale = Math.min(
-      output.width / size.width,
-      output.height / size.height,
+      shown.width / size.width,
+      shown.height / size.height,
     );
-    const insetX = (output.width - size.width * scale) / 2;
-    const insetY = (output.height - size.height * scale) / 2;
-    const x = ((event.clientX - box.left) / box.width) * output.width;
-    const y = ((event.clientY - box.top) / box.height) * output.height;
+    const insetX = (shown.width - size.width * scale) / 2;
+    const insetY = (shown.height - size.height * scale) / 2;
+    const x = ((event.clientX - box.left) / box.width) * shown.width;
+    const y = ((event.clientY - box.top) / box.height) * shown.height;
     return {
       x: (x - insetX) / (size.width * scale),
       y: (y - insetY) / (size.height * scale),
@@ -632,7 +670,10 @@ export function StageView({ params }: { params: PlayerParams | null }) {
           )}
         </button>
       </header>
-      <div className="relative flex min-h-0 flex-1 items-center justify-center p-4">
+      <div
+        ref={stage}
+        className="relative min-h-0 flex-1 overflow-hidden bg-void"
+      >
         {hunting ? (
           <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 px-6 text-center">
             <Loader2
@@ -652,8 +693,6 @@ export function StageView({ params }: { params: PlayerParams | null }) {
         ) : null}
         <canvas
           ref={canvas}
-          width={output.width}
-          height={output.height}
           onPointerDown={(event) => {
             if (showing !== "camera" || corners.current === null) {
               return;
@@ -680,7 +719,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
             }
             dragging.current = null;
           }}
-          className="max-h-full max-w-full rounded-xl border border-line bg-void"
+          className="absolute inset-0 block size-full"
         />
         {/* The camera feeds the canvas and is never shown on its own, so what
             leaves this page is only ever what the canvas holds. */}

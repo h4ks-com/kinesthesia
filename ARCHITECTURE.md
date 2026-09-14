@@ -284,6 +284,8 @@ src/lib/
                               its black keys and narrowed by what is played
   vision/hands.ts             the player's hands cut out of the picture, so they
                               are drawn over the notes rather than under them
+  vision/stillness.ts         whether the room around the keys moved, so the
+                              model only runs when the camera has something new
   vision/calibration.ts       the keybed shape, the lens and the board, each kept
                               for this browser once it is known
   input/midi-monitor.ts       the recording the monitor shows: raw messages named,

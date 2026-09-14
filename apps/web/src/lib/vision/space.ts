@@ -29,6 +29,11 @@ export const spanInKeys = WHITE_KEY_COUNT;
  * white-key widths. The runway is about as long as the keyboard is wide. */
 export const runwayLength = WHITE_KEY_COUNT;
 
+/** Where the runway begins, in white-key widths out from the far edge of the
+ * keys. The notes belong beyond the instrument, never over its own keys, and
+ * the player's hands need the keys left to them. */
+export const runwayStart = 1.2;
+
 /** How the runway leans: 0 carries the keybed's own plane off behind the
  * instrument, 1 stands the notes up square to the camera. Between the two the
  * roll keeps the keys' perspective and still faces the room. */
@@ -99,7 +104,11 @@ export function stageSpace(keybed: Keybed, frame: Size): Stage | null {
   return {
     pose,
     at: (along, away) =>
-      project(along * WHITE_KEY_COUNT, away * axis.v, away * axis.w),
+      project(
+        along * WHITE_KEY_COUNT,
+        (runwayStart + away) * axis.v,
+        (runwayStart + away) * axis.w,
+      ),
     onKeys: (along, across) =>
       project(along * WHITE_KEY_COUNT, across * keybedDepth(), 0),
   };

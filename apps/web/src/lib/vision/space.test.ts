@@ -75,7 +75,7 @@ describe("stageSpace", () => {
     near(stage.onKeys(0, 1) ?? { x: 0, y: 0 }, pixels(player), 2);
   });
 
-  it("starts the runway at the far edge and carries it away from the player", () => {
+  it("starts the runway beyond the keys and carries it away from the player", () => {
     const stage = stageSpace(overhead(), frame);
     if (stage === null) {
       throw new Error("The keybed is a rectangle and has a pose");
@@ -92,9 +92,9 @@ describe("stageSpace", () => {
     ) {
       throw new Error("An overhead camera sees all of its own keybed");
     }
-    near(atKeys, onKeys, 0.001);
+    expect(atKeys.y).toBeLessThan(onKeys.y);
     expect(upRunway.y).toBeLessThan(atKeys.y);
-    expect(player.y).toBeGreaterThan(atKeys.y);
+    expect(player.y).toBeGreaterThan(onKeys.y);
   });
 
   it("lands a note on the key it is played on", () => {

@@ -16,12 +16,23 @@ import {
   keepFocal,
 } from "@/lib/vision/calibration";
 import type { Keybed } from "@/lib/vision/placement";
+import { createStillness, type Stillness } from "@/lib/vision/stillness";
 
-/** While it hunts, the model runs often. Once the keybed is held, it only has
- * to answer whether the keyboard is still there, which is a slow question: the
+/** While it hunts, the model runs often. Once the keybed is held it only has to
+ * answer whether the keyboard is still there, which is a slow question: the
  * instrument does not move while it is played. */
 export const searchEveryMs = 350;
 export const confirmEveryMs = 2500;
+
+/** How often a held keybed is looked at at all. Cheap: it compares a thumbnail
+ * of everything around the keys against the last one, and wakes the model only
+ * where the room has moved. A camera pointed at an instrument is still, so the
+ * model costs nothing for as long as nothing happens. */
+export const glanceEveryMs = 500;
+
+/** However still the picture is, the model has the last word this often, so a
+ * lock that drifted or a keyboard swapped out under it is caught. */
+export const trustStillnessForMs = 30000;
 
 /** How many agreeing reads in a row it takes to hold a keybed, and how far
  * apart two reads may sit and still agree, as a share of the frame. */
@@ -102,6 +113,7 @@ export async function createKeybedCamera(
     keybedModelUrl,
   );
   const steady: Steady = createSteady();
+  const stillness: Stillness = createStillness();
 
   let state: TrackerState = {
     kind: "hunting",
@@ -114,6 +126,7 @@ export async function createKeybedCamera(
   let byHand: readonly Point[] | null = null;
   let looking = false;
   let lastAt = 0;
+  let lastRanAt = 0;
 
   let huntReason = "Finding piano pattern";
   let size = { width: 0, height: 0 };
@@ -149,12 +162,22 @@ export async function createKeybedCamera(
 
   return {
     look: async (frame, now) => {
-      const every = state.kind === "held" ? confirmEveryMs : searchEveryMs;
+      const holding = state.kind === "held" ? state.keybed.quad : null;
+      const every = holding === null ? searchEveryMs : glanceEveryMs;
       if (looking || now - lastAt < every) {
         return;
       }
-      looking = true;
       lastAt = now;
+      const held = holding !== null;
+      const moved = stillness.changed(frame, holding);
+      if (held && !moved && now - lastRanAt < trustStillnessForMs) {
+        return;
+      }
+      if (held && moved && now - lastRanAt < confirmEveryMs) {
+        return;
+      }
+      looking = true;
+      lastRanAt = now;
       size = { width: frame.videoWidth, height: frame.videoHeight };
       try {
         const detection = await detector.detect(frame);
@@ -226,6 +249,7 @@ export async function createKeybedCamera(
     hold: (quad) => settle(quad, true),
     release: () => {
       huntReason = "Finding piano pattern";
+      stillness.forget();
       lose();
     },
   };

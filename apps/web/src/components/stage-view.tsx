@@ -1,9 +1,14 @@
 "use client";
 
-import { depthInKeyWidths, measureCorners } from "keybed";
-import { Eye, Hand, RotateCcw, Ruler, Scan } from "lucide-react";
+import { Loader2, RotateCcw, Scan, Video } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { keepDepth, keepFocal } from "@/lib/vision/calibration";
+import {
+  type KeybedCamera,
+  type Reading,
+  readsToHold,
+  type TrackerState,
+} from "@/lib/vision/keybed-camera";
+import { nearestCorner, type Point, placeKeybed } from "@/lib/vision/placement";
 import {
   clearFrame,
   defaultFade,
@@ -11,42 +16,37 @@ import {
   drawHandles,
   drawQuad,
   drawWholeFrame,
-} from "@/lib/vision/compose";
-import type {
-  KeybedCamera,
-  Reading,
-  TrackerState,
-} from "@/lib/vision/keybed-camera";
-import { nearestCorner, type Point, placeKeybed } from "@/lib/vision/placement";
+} from "@/lib/vision/stage";
 
 const output = { width: 1280, height: 720 };
 
-type View = "aim" | "composed";
+type View = "camera" | "stage";
 
-function hint(state: TrackerState, reading: Reading | null): string {
+/** What the reader sees is the picture, so the detail goes to the console for
+ * whoever is chasing a detection rather than into the frame. */
+function report(state: TrackerState, reading: Reading | null): string {
   if (state.kind === "held") {
-    return state.byHand ? "corners set by hand" : "keyboard held";
+    return state.byHand ? "stage: corners set by hand" : "stage: pattern found";
   }
-  if (reading === null) {
-    return "starting the camera";
-  }
-  return `${state.progress.reason} · ${state.progress.agreed}/4 reads · mask ${(
-    reading.coverage * 100
-  ).toFixed(0)}% · ${reading.latencyMs.toFixed(0)} ms`;
+  const seen =
+    reading === null
+      ? ""
+      : ` · mask ${(reading.coverage * 100).toFixed(0)}% · ${reading.latencyMs.toFixed(0)} ms`;
+  return `stage: ${state.progress.reason} · ${state.progress.agreed}/${readsToHold} reads${seen}`;
 }
 
-export function KeybedCameraView() {
+export function StageView() {
   const video = useRef<HTMLVideoElement | null>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const camera = useRef<KeybedCamera | null>(null);
   const dragging = useRef<number | null>(null);
   const corners = useRef<Point[] | null>(null);
-  const view = useRef<View>("aim");
-  const [showing, setShowing] = useState<View>("aim");
+  const view = useRef<View>("camera");
+  const [showing, setShowing] = useState<View>("camera");
   const [status, setStatus] = useState("starting the camera");
+  const [hunting, setHunting] = useState(true);
   const [byHand, setByHand] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
-  const [measured, setMeasured] = useState<string | null>(null);
 
   useEffect(() => {
     let stop = false;
@@ -70,6 +70,7 @@ export function KeybedCameraView() {
       const { createKeybedCamera } = await import("@/lib/vision/keybed-camera");
       camera.current = await createKeybedCamera();
       const context = canvas.current?.getContext("2d") ?? null;
+      let lastSaid = "";
 
       const draw = (now: number): void => {
         frame = requestAnimationFrame(draw);
@@ -79,14 +80,25 @@ export function KeybedCameraView() {
         }
         void reader.look(element, now);
         const state = reader.state();
-        setStatus(hint(state, reader.reading()));
+        const said = report(state, reader.reading());
+        if (said !== lastSaid) {
+          lastSaid = said;
+          console.info(said);
+        }
+        setHunting(state.kind !== "held");
         setByHand(state.kind === "held" && state.byHand);
         if (state.kind === "held" && dragging.current === null) {
           corners.current = [...state.keybed.quad];
         }
         const size = { width: element.videoWidth, height: element.videoHeight };
         clearFrame(context, output);
-        if (view.current === "aim" || state.kind !== "held") {
+        if (state.kind !== "held") {
+          context.filter = "blur(14px) brightness(0.6)";
+          drawWholeFrame(context, element, size, output);
+          context.filter = "none";
+          return;
+        }
+        if (view.current === "camera") {
           drawWholeFrame(context, element, size, output);
           const quad = corners.current;
           if (quad !== null) {
@@ -120,38 +132,6 @@ export function KeybedCameraView() {
     };
   }, []);
 
-  /** What corners placed by hand can settle: the keybed's shape from a view
-   * from above, or the camera's lens from an oblique one. The fit is only as
-   * good as these, which is why a wrong-looking rectangle is worth correcting
-   * by hand once. */
-  const measure = (): void => {
-    const quad = corners.current;
-    const element = video.current;
-    if (quad === null || element === null) {
-      return;
-    }
-    const reading = measureCorners(quad, {
-      width: element.videoWidth,
-      height: element.videoHeight,
-    });
-    if (reading.kind === "refused") {
-      setMeasured(`${reading.reason}, nothing measured`);
-      return;
-    }
-    if (reading.kind === "depth") {
-      keepDepth(reading.units);
-      setMeasured(
-        `shape measured: ${depthInKeyWidths(reading.units).toFixed(2)} key widths per depth`,
-      );
-    } else {
-      keepFocal(reading.fraction);
-      setMeasured(
-        `lens measured: focal ${reading.fraction.toFixed(2)} of the frame width`,
-      );
-    }
-    camera.current?.release();
-  };
-
   /** Where a pointer sits inside the drawn frame, as a share of it. */
   const framePoint = (event: React.PointerEvent<HTMLCanvasElement>): Point => {
     const box = event.currentTarget.getBoundingClientRect();
@@ -177,87 +157,68 @@ export function KeybedCameraView() {
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-void">
       <header className="flex h-14 shrink-0 items-center gap-3 border-line border-b bg-panel px-4">
-        <h1 className="label">keybed camera</h1>
-        <p className="min-w-0 flex-1 truncate font-mono text-[0.7rem] text-faint">
-          {refused ?? measured ?? status}
+        <h1 className="label">stage</h1>
+        <p className="min-w-0 flex-1 truncate font-mono text-[0.7rem] text-warn">
+          {refused ?? ""}
         </p>
-        {showing === "aim" ? (
-          <button
-            type="button"
-            onClick={measure}
-            aria-label="Measure the keyboard from these corners"
-            data-tip="Measure the keyboard from these corners"
-            data-tip-side="bottom"
-            className="shrink-0 rounded-lg p-1.5 text-faint transition-colors hover:bg-raised hover:text-accent pointer-coarse:min-h-11"
-          >
-            <Ruler className="size-4" aria-hidden="true" />
-          </button>
-        ) : null}
-        {byHand ? (
-          <button
-            type="button"
-            onClick={() => {
-              setMeasured(null);
-              camera.current?.release();
-            }}
-            aria-label="Find the keyboard again"
-            data-tip="Find the keyboard again"
-            data-tip-side="bottom"
-            className="shrink-0 rounded-lg p-1.5 text-faint transition-colors hover:bg-raised hover:text-accent pointer-coarse:min-h-11"
-          >
-            <RotateCcw className="size-4" aria-hidden="true" />
-          </button>
-        ) : null}
         <button
           type="button"
-          onClick={() => {
-            view.current = "aim";
-            setShowing("aim");
-          }}
-          aria-pressed={showing === "aim"}
-          aria-label="Aim the camera and drag the corners"
-          data-tip="Aim the camera and drag the corners"
+          onClick={() => camera.current?.release()}
+          aria-label="Detect the keybed again"
+          data-tip="Detect the keybed again"
           data-tip-side="bottom"
-          className={`shrink-0 rounded-lg p-1.5 transition-colors pointer-coarse:min-h-11 ${
-            showing === "aim"
-              ? "text-accent"
-              : "text-faint hover:bg-raised hover:text-accent"
-          }`}
+          data-tip-align="right"
+          className="shrink-0 rounded-lg p-1.5 text-faint transition-colors hover:bg-raised hover:text-accent pointer-coarse:min-h-11"
         >
-          {byHand ? (
-            <Hand className="size-4" aria-hidden="true" />
-          ) : (
-            <Eye className="size-4" aria-hidden="true" />
-          )}
+          <RotateCcw className="size-4" aria-hidden="true" />
         </button>
         <button
           type="button"
           onClick={() => {
-            view.current = "composed";
-            setShowing("composed");
+            const next = showing === "camera" ? "stage" : "camera";
+            view.current = next;
+            setShowing(next);
           }}
-          aria-pressed={showing === "composed"}
-          aria-label="Show the keys alone"
-          data-tip="Show the keys alone"
+          aria-pressed={showing === "stage"}
+          aria-label={
+            showing === "stage" ? "Show the camera" : "Preview the stage"
+          }
+          data-tip={
+            showing === "stage" ? "Show the camera" : "Preview the stage"
+          }
           data-tip-side="bottom"
           data-tip-align="right"
           className={`shrink-0 rounded-lg p-1.5 transition-colors pointer-coarse:min-h-11 ${
-            showing === "composed"
+            showing === "stage"
               ? "text-accent"
               : "text-faint hover:bg-raised hover:text-accent"
           }`}
         >
-          <Scan className="size-4" aria-hidden="true" />
+          {showing === "stage" ? (
+            <Video className="size-4" aria-hidden="true" />
+          ) : (
+            <Scan className="size-4" aria-hidden="true" />
+          )}
         </button>
       </header>
-
       <div className="relative flex min-h-0 flex-1 items-center justify-center p-4">
+        {hunting ? (
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3">
+            <Loader2
+              className="size-6 animate-spin text-accent"
+              aria-hidden="true"
+            />
+            <p className="font-mono text-[0.7rem] text-muted">
+              Finding piano pattern
+            </p>
+          </div>
+        ) : null}
         <canvas
           ref={canvas}
           width={output.width}
           height={output.height}
           onPointerDown={(event) => {
-            if (showing !== "aim" || corners.current === null) {
+            if (showing !== "camera" || corners.current === null) {
               return;
             }
             const found = nearestCorner(corners.current, framePoint(event));

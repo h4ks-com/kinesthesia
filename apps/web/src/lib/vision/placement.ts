@@ -19,11 +19,17 @@ export type Size = {
 
 /** Corner order from the detector: 0 to 1 runs along the keys, and 1 to 2
  * crosses the keybed's depth. `facing` says which of the long edges is the one
- * nearest the player. */
+ * nearest the player. Corners are fractions of the frame, which is how the
+ * detector reads them, so every one is turned into pixels before any angle or
+ * distance is taken from it. */
 export type Keybed = {
   readonly quad: readonly Point[];
   readonly playerEdgeIsFirst: boolean;
 };
+
+function inPixels(point: Point, frame: Size): Point {
+  return { x: point.x * frame.width, y: point.y * frame.height };
+}
 
 function midpoint(a: Point, b: Point): Point {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
@@ -34,7 +40,10 @@ function distance(a: Point, b: Point): number {
 }
 
 /** The edge the player stands at, which the output puts along the bottom. */
-export function playerEdge(keybed: Keybed): readonly [Point, Point] {
+export function playerEdge(
+  keybed: Keybed,
+  frame: Size,
+): readonly [Point, Point] {
   const [first, second, third, fourth] = keybed.quad;
   if (
     first === undefined ||
@@ -44,12 +53,13 @@ export function playerEdge(keybed: Keybed): readonly [Point, Point] {
   ) {
     throw new Error("A keybed is four corners");
   }
-  return keybed.playerEdgeIsFirst ? [first, second] : [fourth, third];
+  const edge = keybed.playerEdgeIsFirst ? [first, second] : [fourth, third];
+  return [inPixels(edge[0] as Point, frame), inPixels(edge[1] as Point, frame)];
 }
 
 /** How far the frame turns so the player's edge of the keys lies flat. */
-export function keybedAngle(keybed: Keybed): number {
-  const [from, to] = playerEdge(keybed);
+export function keybedAngle(keybed: Keybed, frame: Size): number {
+  const [from, to] = playerEdge(keybed, frame);
   return Math.atan2(to.y - from.y, to.x - from.x);
 }
 
@@ -92,8 +102,8 @@ export function placeKeybed(
   output: Size,
   options: PlacementOptions = defaultPlacement,
 ): Placement {
-  const [from, to] = playerEdge(keybed);
-  const angle = -keybedAngle(keybed);
+  const [from, to] = playerEdge(keybed, frame);
+  const angle = -keybedAngle(keybed, frame);
   const scale = (output.width * options.fill) / Math.max(distance(from, to), 1);
   const centre = { x: frame.width / 2, y: frame.height / 2 };
   const edgeCentre = midpoint(

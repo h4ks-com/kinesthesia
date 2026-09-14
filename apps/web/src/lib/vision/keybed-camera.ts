@@ -5,11 +5,16 @@ import {
   createSteady,
   type Detector,
   lockKeybed,
+  measureCorners,
   type Point,
   type Steady,
 } from "keybed";
 import { browserAssets, keybedModelUrl } from "@/lib/vision/assets";
-import { applyStoredCalibration } from "@/lib/vision/calibration";
+import {
+  applyStoredCalibration,
+  keepDepth,
+  keepFocal,
+} from "@/lib/vision/calibration";
 import type { Keybed } from "@/lib/vision/placement";
 
 /** While it hunts, the model runs often. Once the keybed is held, it only has
@@ -25,6 +30,10 @@ export const agreeWithin = 0.02;
 
 /** How many refusals in a row put the camera away again. */
 export const missesBeforeLost = 3;
+
+/** How far the confirming read may sit from the held corners and still count as
+ * the same keyboard, as a share of the frame. */
+export const staysWithin = 0.12;
 
 export type Progress = {
   /** Reads agreeing so far, out of `readsToHold`. */
@@ -46,6 +55,12 @@ export type Reading = {
   readonly latencyMs: number;
   readonly coverage: number;
   readonly confidence: number;
+};
+
+export type CameraOptions = {
+  /** Told when a held keybed stops being there, so whatever draws it can stop.
+   * We never move a held keybed under the player: it is held or it is gone. */
+  readonly onLost?: () => void;
 };
 
 export type KeybedCamera = {
@@ -75,7 +90,9 @@ function keybedOf(quad: readonly Point[]): Keybed {
   return { quad, playerEdgeIsFirst: false };
 }
 
-export async function createKeybedCamera(): Promise<KeybedCamera> {
+export async function createKeybedCamera(
+  options: CameraOptions = {},
+): Promise<KeybedCamera> {
   applyStoredCalibration();
   const detector: Detector = await createDetector(
     browserAssets,
@@ -85,7 +102,7 @@ export async function createKeybedCamera(): Promise<KeybedCamera> {
 
   let state: TrackerState = {
     kind: "hunting",
-    progress: { agreed: 0, reason: "looking for a keyboard" },
+    progress: { agreed: 0, reason: "Finding piano pattern" },
   };
   let reading: Reading | null = null;
   let agreeing: Point[] | null = null;
@@ -95,10 +112,37 @@ export async function createKeybedCamera(): Promise<KeybedCamera> {
   let looking = false;
   let lastAt = 0;
 
+  let huntReason = "Finding piano pattern";
+  let size = { width: 0, height: 0 };
+
   const hunt = (): void => {
     state = { kind: "hunting", progress: { agreed, reason: huntReason } };
   };
-  let huntReason = "looking for a keyboard";
+
+  const lose = (): void => {
+    const wasHeld = state.kind === "held";
+    agreed = 0;
+    agreeing = null;
+    byHand = null;
+    steady.reset();
+    hunt();
+    if (wasHeld) {
+      options.onLost?.();
+    }
+  };
+
+  /** Corners are only as good as the shape and lens the fit assumes, so every
+   * time they settle we measure what they say and keep it for this browser. */
+  const settle = (quad: readonly Point[], fromHand: boolean): void => {
+    const reading = measureCorners(quad, size);
+    if (reading.kind === "depth") {
+      keepDepth(reading.units);
+    } else if (reading.kind === "focal") {
+      keepFocal(reading.fraction);
+    }
+    byHand = fromHand ? quad : null;
+    state = { kind: "held", keybed: keybedOf(quad), byHand: fromHand };
+  };
 
   return {
     look: async (frame, now) => {
@@ -108,6 +152,7 @@ export async function createKeybedCamera(): Promise<KeybedCamera> {
       }
       looking = true;
       lastAt = now;
+      size = { width: frame.videoWidth, height: frame.videoHeight };
       try {
         const detection = await detector.detect(frame);
         reading = {
@@ -126,20 +171,23 @@ export async function createKeybedCamera(): Promise<KeybedCamera> {
           if (misses < missesBeforeLost) {
             return;
           }
-          agreed = 0;
-          agreeing = null;
-          steady.reset();
-          if (byHand === null) {
-            hunt();
-          }
+          lose();
           return;
         }
 
         misses = 0;
-        const settled = steady.accept(lock.quad, detection.still);
-        if (byHand !== null) {
+        // A held keybed is not re-fitted under the player: the read only has to
+        // agree that the keyboard is still where it was.
+        if (state.kind === "held") {
+          if (farthestCorner(lock.quad, state.keybed.quad) > staysWithin) {
+            misses = missesBeforeLost;
+            huntReason = "Piano pattern moved out of place";
+            lose();
+          }
           return;
         }
+
+        const settled = steady.accept(lock.quad, detection.still);
         if (
           agreeing !== null &&
           farthestCorner(settled, agreeing) < agreeWithin
@@ -149,9 +197,9 @@ export async function createKeybedCamera(): Promise<KeybedCamera> {
           agreed = 1;
         }
         agreeing = settled;
-        huntReason = "reading the keyboard";
+        huntReason = "Reading the piano pattern";
         if (agreed >= readsToHold) {
-          state = { kind: "held", keybed: keybedOf(settled), byHand: false };
+          settle(settled, false);
           return;
         }
         hunt();
@@ -161,16 +209,10 @@ export async function createKeybedCamera(): Promise<KeybedCamera> {
     },
     state: () => state,
     reading: () => reading,
-    hold: (quad) => {
-      byHand = quad;
-      state = { kind: "held", keybed: keybedOf(quad), byHand: true };
-    },
+    hold: (quad) => settle(quad, true),
     release: () => {
-      byHand = null;
-      agreed = 0;
-      agreeing = null;
-      steady.reset();
-      hunt();
+      huntReason = "Finding piano pattern";
+      lose();
     },
   };
 }

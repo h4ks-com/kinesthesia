@@ -77,6 +77,10 @@ a module.
   A new panel looks like the ones beside it.
 - Actions are lucide icon buttons with a `data-tip` tooltip and an `aria-label`
   that say what the click does. Text buttons belong to menus and dialogs.
+- A tooltip names the action and the thing it acts on, in the app's own words:
+  "Detect the keybed again", "Preview the keybed". Never a pronoun standing in
+  for the subject ("find it again", "drop these corners"), and never a sentence
+  narrating what the reader will see. Short, concrete, and it names the noun.
 - A tool stays general purpose. It shows what it is for, never a readout shaped
   around the one bug it was built to chase.
 

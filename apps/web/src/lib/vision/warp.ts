@@ -7,9 +7,14 @@ import type { Point, Size } from "@/lib/vision/placement";
  * perspective. The roll is drawn once, as the app draws it everywhere else, and
  * this is what puts it on the plane the camera sees. */
 export type Warp = {
+  /** `taken` is the part of the picture to lay down, measured from its top left;
+   * `whole` is the picture it was cut from. The roll draws its own keyboard at
+   * the bottom of its canvas and the stage has a real one, so what is laid down
+   * is only ever the part above it. */
   readonly onto: (
     source: TexImageSource,
-    sourceSize: Size,
+    taken: Size,
+    whole: Size,
     corners: readonly Point[],
     output: Size,
   ) => HTMLCanvasElement | null;
@@ -31,16 +36,17 @@ const fragmentShader = `#version 300 es
 precision mediump float;
 in vec2 landed;
 uniform mat3 back;
-uniform vec2 source_size;
+uniform vec2 taken_size;
+uniform vec2 whole_size;
 uniform sampler2D picture;
 out vec4 colour;
 void main() {
   vec3 found = back * vec3(landed, 1.0);
   vec2 at = found.xy / found.z;
-  if (at.x < 0.0 || at.y < 0.0 || at.x > source_size.x || at.y > source_size.y) {
+  if (at.x < 0.0 || at.y < 0.0 || at.x > taken_size.x || at.y > taken_size.y) {
     discard;
   }
-  colour = texture(picture, at / source_size);
+  colour = texture(picture, at / whole_size);
 }`;
 
 function compile(
@@ -118,11 +124,12 @@ export function createWarp(): Warp | null {
   gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
   const outputSize = gl.getUniformLocation(program, "output_size");
-  const sourceSize = gl.getUniformLocation(program, "source_size");
+  const takenSize = gl.getUniformLocation(program, "taken_size");
+  const wholeSize = gl.getUniformLocation(program, "whole_size");
   const back = gl.getUniformLocation(program, "back");
 
   return {
-    onto: (source, from, corners, output) => {
+    onto: (source, taken, whole, corners, output) => {
       const [one, two, three, four] = corners;
       if (
         one === undefined ||
@@ -144,14 +151,15 @@ export function createWarp(): Warp | null {
       // backwards so each pixel of the landing knows where it came from.
       const flat = [
         { x: 0, y: 0 },
-        { x: from.width, y: 0 },
-        { x: from.width, y: from.height },
-        { x: 0, y: from.height },
+        { x: taken.width, y: 0 },
+        { x: taken.width, y: taken.height },
+        { x: 0, y: taken.height },
       ];
       const forward = findHomography([one, two, three, four], flat);
       gl.uniformMatrix3fv(back, true, new Float32Array(forward));
       gl.uniform2f(outputSize, output.width, output.height);
-      gl.uniform2f(sourceSize, from.width, from.height);
+      gl.uniform2f(takenSize, taken.width, taken.height);
+      gl.uniform2f(wholeSize, whole.width, whole.height);
 
       gl.bindTexture(gl.TEXTURE_2D, texture);
       gl.texImage2D(

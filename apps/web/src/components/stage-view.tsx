@@ -357,10 +357,10 @@ export function StageView({ params }: { params: PlayerParams | null }) {
   const stage = useRef<HTMLDivElement | null>(null);
   const output = useRef({ width: 1280, height: 720 });
   const view = useRef<View>("camera");
-  const keysShown = useRef(true);
+  const keysShown = useRef(false);
   const huntingSince = useRef<number | null>(null);
   const [showing, setShowing] = useState<View>("camera");
-  const [showingKeys, setShowingKeys] = useState(true);
+  const [showingKeys, setShowingKeys] = useState(false);
   const [looking, setLooking] = useState<TrackerState["kind"]>("hunting");
   const [missing, setMissing] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
@@ -545,6 +545,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
         const laid = paint.onto(
           sheet.sheet,
           { width: rollSize.width, height: band.top },
+          rollSize,
           corners,
           output,
         );

@@ -279,13 +279,17 @@ src/lib/
   vision/stage.ts             drawing the camera layer, its fade to black, and
                               the corners a reader drags
   vision/space.ts             the keybed's own space: where a key sits on the
-                              real instrument and where a note stands off it
+                              real instrument, and the runway the roll is laid
+                              along
   vision/board.ts             which keyboard is in front of the camera, read off
                               its black keys and narrowed by what is played
   vision/hands.ts             the player's hands cut out of the picture, so they
                               are drawn over the notes rather than under them
   vision/stillness.ts         whether the room around the keys moved, so the
                               model only runs when the camera has something new
+  vision/warp.ts              lays a flat picture onto four corners of another,
+                              which is how the app's own roll reaches the plane
+                              the camera sees
   vision/calibration.ts       the keybed shape, the lens and the board, each kept
                               for this browser once it is known
   input/midi-monitor.ts       the recording the monitor shows: raw messages named,

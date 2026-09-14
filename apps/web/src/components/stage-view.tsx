@@ -17,8 +17,18 @@ import { connectMidiInputs, isWebMidiSupported } from "@/lib/input/web-midi";
 import { paletteColor } from "@/lib/midi/palette";
 import type { Song } from "@/lib/midi/song";
 import { useSong } from "@/lib/midi/use-song";
+import { usePlayNotes } from "@/lib/play/use-play-notes";
 import type { PlayerParams } from "@/lib/player-url";
-import { lookAhead } from "@/lib/render/piano-roll";
+import {
+  defaultKeyWidth,
+  keyboardBand,
+  whiteKeyLeft,
+} from "@/lib/render/keyboard";
+import {
+  type Frame,
+  PianoRollRenderer,
+  type SkinReport,
+} from "@/lib/render/piano-roll";
 import type { SkinInstance } from "@/lib/skins/types";
 import { useBackground } from "@/lib/use-background";
 import { type BoardRead, readBoard } from "@/lib/vision/board";
@@ -40,10 +50,11 @@ import {
 import {
   keyFace,
   keysOf,
-  noteBar,
   type PitchRange,
+  runwayInView,
   type Stage,
   stageSpace,
+  whiteKeysOf,
 } from "@/lib/vision/space";
 import {
   type BarStyle,
@@ -52,7 +63,6 @@ import {
   drawBar,
   drawCameraLayer,
   drawHandles,
-  drawNote,
   drawPlacedFrame,
   drawQuad,
   drawWholeFrame,
@@ -60,6 +70,7 @@ import {
   type ToOutput,
   wholeFrameMap,
 } from "@/lib/vision/stage";
+import { createWarp, type Warp } from "@/lib/vision/warp";
 
 /** The stage is drawn at the size it is shown, so a tall window is a tall stage
  * with more of the runway in it. Capped, since a wide screen at full device
@@ -105,13 +116,6 @@ const readBoardWidth = 640;
 
 type View = "camera" | "stage";
 
-/** A note the player is holding, or one still travelling after it was let go.
- * Times are seconds, in the clock the device stamps its messages with. */
-type Struck = {
-  readonly from: number;
-  to: number | null;
-};
-
 /** What the reader sees is the picture, so the detail goes to the console for
  * whoever is chasing a detection rather than into the frame. */
 function report(state: TrackerState, reading: Reading | null): string {
@@ -135,20 +139,20 @@ function paintFor(pitch: number, held: boolean): BarStyle {
   return pitch % 12 === 0 ? keyPaint.c : keyPaint.white;
 }
 
-/** The keys as the camera sees them, and the notes the player has struck
- * leaving them along the runway. */
-function drawRoll(
+/** The keys of the real instrument, outlined where the app believes they are.
+ * Where the two come apart the board was read wrong, so the black keys are
+ * filled to make any drift plain and every C is picked out. */
+function drawKeys(
   context: CanvasRenderingContext2D,
   stage: Stage,
   to: ToOutput,
   board: PitchRange,
-  struck: Map<number, Struck>,
+  pressed: ReadonlySet<number>,
   showKeys: boolean,
-  now: number,
 ): void {
   context.save();
   for (const pitch of keysOf(board)) {
-    const held = struck.get(pitch)?.to === null;
+    const held = pressed.has(pitch);
     if (!(showKeys || held)) {
       continue;
     }
@@ -157,53 +161,52 @@ function drawRoll(
       drawBar(context, face, to, paintFor(pitch, held));
     }
   }
-  for (const [pitch, note] of struck) {
-    const since = now - note.from;
-    if (since > lookAhead) {
-      struck.delete(pitch);
-      continue;
-    }
-    const bar = noteBar(
-      stage,
-      pitch,
-      board,
-      note.to === null ? 0 : now - note.to,
-      since,
-    );
-    if (bar !== null) {
-      drawNote(context, bar, to, noteColour);
-    }
-  }
   context.restore();
 }
 
-/** The song on its way to the keys. A note stands off the keybed by how long it
- * has left before it sounds, so it arrives on its own key as it is played. */
-function drawSong(
-  context: CanvasRenderingContext2D,
-  stage: Stage,
-  to: ToOutput,
-  board: PitchRange,
-  song: Song,
-  position: number,
-): void {
-  context.save();
-  for (const note of song.notes) {
-    if (note.end <= position || note.start > position + lookAhead) {
-      continue;
-    }
-    const bar = noteBar(
-      stage,
-      note.pitch,
-      board,
-      note.start - position,
-      note.end - position,
-    );
-    if (bar !== null) {
-      drawNote(context, bar, to, paletteColor(note.track));
-    }
-  }
-  context.restore();
+/** The app's own roll, drawn once as it is drawn everywhere else and laid onto
+ * the plane the camera sees. What is projected is the part above the roll's own
+ * keyboard, since the keys on the stage are the real ones. */
+type Roll = {
+  readonly sheet: HTMLCanvasElement;
+  readonly renderer: PianoRollRenderer;
+  readonly report: SkinReport;
+};
+
+const rollSize = { width: 1280, height: 720 };
+
+function makeRoll(): Roll {
+  const sheet = document.createElement("canvas");
+  const renderer = new PianoRollRenderer(sheet, defaultKeyWidth, {
+    ...rollSize,
+    ratio: 1,
+  });
+  return {
+    sheet,
+    renderer,
+    report: { keyboardTop: 0, travellers: [], strikes: [] },
+  };
+}
+
+/** Where the roll's own left and right edges fall across the real keyboard, as
+ * shares of its span. The roll shows a window onto the keyboard, so the window
+ * is what is laid down, not an assumed fit. */
+function windowOf(roll: Roll, board: PitchRange): { from: number; to: number } {
+  const whites = whiteKeysOf(board);
+  const wide = roll.renderer.metrics.whiteWidth;
+  const start = whiteKeyLeft(board.lowest, wide);
+  return {
+    from: (roll.renderer.panOffset - start) / (whites * wide),
+    to: (roll.renderer.panOffset + rollSize.width - start) / (whites * wide),
+  };
+}
+
+/** Fits the roll's window to the board, so its keys sit on the real ones. */
+function aimRoll(roll: Roll, board: PitchRange): void {
+  roll.renderer.setKeyWidth(rollSize.width / whiteKeysOf(board));
+  roll.renderer.setPan(
+    whiteKeyLeft(board.lowest, roll.renderer.metrics.whiteWidth),
+  );
 }
 
 /** What the stage knows about the keyboard in front of it, which is read off
@@ -303,12 +306,22 @@ export function StageView({ params }: { params: PlayerParams | null }) {
   });
   // The draw loop starts once and reads the song and the playhead off refs, so
   // loading a song never restarts the camera.
-  const playhead = useRef(playback.getPosition);
-  playhead.current = playback.getPosition;
+  // With a song the roll follows the song's clock; with none it follows the
+  // room's, so a key played still sends a note climbing.
+  const playhead = useRef<() => number>(() => 0);
+  playhead.current =
+    song === null ? () => performance.now() / 1000 : playback.getPosition;
+  const live = usePlayNotes(() => playhead.current());
+  const liveNotes = useRef(live.get);
+  liveNotes.current = live.get;
   const playingSong = useRef<Song | null>(null);
   playingSong.current = song;
-  const rolling = useRef(false);
-  rolling.current = playback.playing;
+  const playing = useRef(false);
+  playing.current = playback.playing;
+  const speed = useRef(1);
+  speed.current = params?.speed ?? 1;
+  const roll = useRef<Roll | null>(null);
+  const warp = useRef<Warp | null>(null);
 
   // The stage shows whatever background the player is set to, so the two views
   // of a song look like the same app.
@@ -327,7 +340,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
   const hands = useRef<HandLayer | null>(null);
   const dragging = useRef<number | null>(null);
   const corners = useRef<Point[] | null>(null);
-  const struck = useRef(new Map<number, Struck>());
+  const pressed = useRef(new Set<number>());
   const board = useRef<BoardReader>({
     sheet: null,
     at: 0,
@@ -353,7 +366,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
     if (box === null || sheet === null) {
       return;
     }
-    const fit = (): void => {
+    const settle = (): void => {
       const seen = box.getBoundingClientRect();
       const ratio = Math.min(
         window.devicePixelRatio,
@@ -365,8 +378,8 @@ export function StageView({ params }: { params: PlayerParams | null }) {
       sheet.width = width;
       sheet.height = height;
     };
-    fit();
-    const watching = new ResizeObserver(fit);
+    settle();
+    const watching = new ResizeObserver(settle);
     watching.observe(box);
     return () => watching.disconnect();
   }, []);
@@ -383,7 +396,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
     if (made === null) {
       return;
     }
-    const fit = (): void => {
+    const settle = (): void => {
       const box = base.getBoundingClientRect();
       made.resize(
         box.width,
@@ -391,8 +404,8 @@ export function StageView({ params }: { params: PlayerParams | null }) {
         Math.min(window.devicePixelRatio, 1.5),
       );
     };
-    fit();
-    const watching = new ResizeObserver(fit);
+    settle();
+    const watching = new ResizeObserver(settle);
     watching.observe(base);
     return () => {
       watching.disconnect();
@@ -412,16 +425,15 @@ export function StageView({ params }: { params: PlayerParams | null }) {
         if (event.type !== "note") {
           return;
         }
-        const at = event.at / 1000;
         if (event.down && event.velocity > 0) {
-          struck.current.set(event.pitch, { from: at, to: null });
+          pressed.current.add(event.pitch);
+          live.emit(event.pitch, 0, event.velocity);
           rememberPlayed(board.current, event.pitch);
           return;
         }
-        const held = struck.current.get(event.pitch);
-        if (held !== undefined) {
-          held.to = at;
-        }
+        pressed.current.delete(event.pitch);
+        live.lift(event.pitch, 0);
+        live.damp(event.pitch, 0);
       },
       () => noSysex,
     )
@@ -440,7 +452,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
       dropped = true;
       disconnect?.();
     };
-  }, []);
+  }, [live]);
 
   useEffect(() => {
     let stop = false;
@@ -463,6 +475,8 @@ export function StageView({ params }: { params: PlayerParams | null }) {
       // wants them, so they arrive only once a camera is running.
       const { createKeybedCamera } = await import("@/lib/vision/keybed-camera");
       camera.current = await createKeybedCamera();
+      roll.current ??= makeRoll();
+      warp.current ??= createWarp();
       // The hands are cut out of the picture so they can be drawn back over the
       // notes. Failing to read them costs the stage nothing but that.
       void import("@/lib/vision/hands")
@@ -481,6 +495,72 @@ export function StageView({ params }: { params: PlayerParams | null }) {
         });
       const context = canvas.current?.getContext("2d") ?? null;
       let lastSaid = "";
+
+      /** The app's roll, drawn for this moment and laid onto the runway. */
+      const layRoll = (
+        context: CanvasRenderingContext2D,
+        stage: Stage,
+        to: ToOutput,
+        board: PitchRange,
+        output: Size,
+        struck: ReadonlySet<number>,
+        position: number,
+      ): void => {
+        const sheet = roll.current;
+        const paint = warp.current;
+        const song = playingSong.current;
+        if (sheet === null || paint === null || song === null) {
+          return;
+        }
+        aimRoll(sheet, board);
+        const frame: Frame = {
+          song,
+          position,
+          live: liveNotes.current(),
+          sustain: false,
+          expression: null,
+          direction: "down",
+          rate: speed.current,
+          playTrack: 0,
+          voicing: new Map(),
+          hiddenTracks: new Set(),
+          pressed: struck,
+          owed: new Set(),
+          hits: new Set(),
+          yours: null,
+          reach: null,
+          keyLabels: null,
+          noteNames: false,
+          plain: false,
+          follow: false,
+          songPresses: true,
+          report: sheet.report,
+        };
+        sheet.renderer.draw(frame);
+        const band = keyboardBand(rollSize.height);
+        const span = windowOf(sheet, board);
+        const far = runwayInView(stage, to, 0);
+        // The runway is solved in the camera's frame, and everything drawn on
+        // the stage goes through the same placement as the picture.
+        const corners = [
+          stage.at(span.from, far),
+          stage.at(span.to, far),
+          stage.at(span.to, 0),
+          stage.at(span.from, 0),
+        ].flatMap((point) => (point === null ? [] : [to(point)]));
+        if (corners.length < 4) {
+          return;
+        }
+        const laid = paint.onto(
+          sheet.sheet,
+          { width: rollSize.width, height: band.top },
+          corners,
+          output,
+        );
+        if (laid !== null) {
+          context.drawImage(laid, 0, 0);
+        }
+      };
 
       const draw = (now: number): void => {
         frame = requestAnimationFrame(draw);
@@ -518,7 +598,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
             travellers: [],
             strikes: [],
             step: 1 / 60,
-            pressed: [...struck.current.keys()],
+            pressed: [...pressed.current],
             chord: null,
             key: playingSong.current?.key ?? null,
           });
@@ -543,7 +623,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
         // nothing until there are notes over the keys for them to be in front of.
         if (
           board.current.range !== null &&
-          (rolling.current || struck.current.size > 0)
+          (playing.current || pressed.current.size > 0)
         ) {
           hands.current?.look(element, now);
         }
@@ -572,19 +652,23 @@ export function StageView({ params }: { params: PlayerParams | null }) {
           readTheBoard(board.current, stage, element, size, now);
           const keys = board.current.range;
           if (keys !== null) {
-            drawRoll(
+            drawKeys(
               context,
               stage,
               to,
               keys,
-              struck.current,
+              pressed.current,
               keysShown.current,
-              now / 1000,
             );
-            const playing = playingSong.current;
-            if (playing !== null) {
-              drawSong(context, stage, to, keys, playing, playhead.current());
-            }
+            layRoll(
+              context,
+              stage,
+              to,
+              keys,
+              output.current,
+              pressed.current,
+              playhead.current(),
+            );
             // The hands are the one thing on the stage that is not behind the
             // notes: they are on the keys the notes are landing on.
             const skin = hands.current?.layer() ?? null;

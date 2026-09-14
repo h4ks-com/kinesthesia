@@ -1,4 +1,3 @@
-import type { NoteColor } from "@/lib/midi/palette";
 import {
   defaultPlacement,
   keysBaseline,
@@ -238,19 +237,6 @@ export function drawBar(
     context.lineWidth = style.width;
     context.stroke();
   }
-}
-
-export function drawNote(
-  context: CanvasRenderingContext2D,
-  bar: Bar,
-  to: ToOutput,
-  colour: NoteColor,
-): void {
-  drawBar(context, bar, to, {
-    fill: colour.glow,
-    edge: colour.core,
-    width: 1.5,
-  });
 }
 
 /** The keybed as the reader has to judge it: its outline, and the edge the

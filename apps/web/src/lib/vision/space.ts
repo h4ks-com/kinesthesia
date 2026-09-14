@@ -29,6 +29,34 @@ export const spanInKeys = WHITE_KEY_COUNT;
  * white-key widths. The runway is about as long as the keyboard is wide. */
 export const runwayLength = WHITE_KEY_COUNT;
 
+/** How far up the runway is worth looking, in white-key widths. Where a camera
+ * stands decides how much of a plane leaving the keys stays in the picture, so
+ * the runway is fitted to the view rather than run off the top of it. */
+export function runwayInView(
+  stage: Stage,
+  onto: (point: Point) => Point,
+  top: number,
+): number {
+  const reaches = (away: number): boolean => {
+    const found = stage.at(0.5, away);
+    return found !== null && onto(found).y > top;
+  };
+  if (reaches(runwayLength)) {
+    return runwayLength;
+  }
+  let near = 0;
+  let far = runwayLength;
+  for (let step = 0; step < 20; step += 1) {
+    const middle = (near + far) / 2;
+    if (reaches(middle)) {
+      near = middle;
+    } else {
+      far = middle;
+    }
+  }
+  return near;
+}
+
 /** Where the runway begins, in white-key widths out from the far edge of the
  * keys. The notes belong beyond the instrument, never over its own keys, and
  * the player's hands need the keys left to them. */
@@ -150,26 +178,6 @@ function quad(corners: readonly (Point | null)[]): Bar | null {
     return null;
   }
   return [a, b, c, d];
-}
-
-/** A note as it is drawn: the key it lands on, carried up the runway for as
- * long as it sounds. Null where any of it is out of sight. */
-export function noteBar(
-  stage: Stage,
-  pitch: number,
-  range: PitchRange,
-  starts: number,
-  ends: number,
-): Bar | null {
-  const band = keyBand(pitch, range);
-  const near = awayAt(Math.max(0, starts));
-  const far = awayAt(Math.max(0, ends));
-  return quad([
-    stage.at(band.from, near),
-    stage.at(band.to, near),
-    stage.at(band.to, far),
-    stage.at(band.from, far),
-  ]);
 }
 
 /** The key itself, drawn flat on the instrument, which is how a reader sees

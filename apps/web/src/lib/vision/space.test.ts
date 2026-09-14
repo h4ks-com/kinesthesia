@@ -1,13 +1,7 @@
 import { keybedDepth, WHITE_KEY_COUNT } from "keybed";
 import { describe, expect, it } from "vitest";
 import type { Keybed, Point, Size } from "@/lib/vision/placement";
-import {
-  awayAt,
-  keyBand,
-  keyFace,
-  noteBar,
-  stageSpace,
-} from "@/lib/vision/space";
+import { awayAt, keyBand, keyFace, stageSpace } from "@/lib/vision/space";
 
 const frame: Size = { width: 1280, height: 720 };
 const board = { lowest: 36, highest: 96 };
@@ -97,18 +91,16 @@ describe("stageSpace", () => {
     expect(player.y).toBeGreaterThan(onKeys.y);
   });
 
-  it("lands a note on the key it is played on", () => {
+  it("lands a key where the camera sees it", () => {
     const stage = stageSpace(overhead(), frame);
     if (stage === null) {
       throw new Error("The keybed is a rectangle and has a pose");
     }
-    const low = noteBar(stage, board.lowest, board, 0, 0.2);
-    const high = noteBar(stage, board.highest, board, 0, 0.2);
-    const face = keyFace(stage, board.lowest, board);
-    if (low === null || high === null || face === null) {
+    const low = keyFace(stage, board.lowest, board);
+    const high = keyFace(stage, board.highest, board);
+    if (low === null || high === null) {
       throw new Error("Both ends of the board are in the picture");
     }
     expect(low[0].x).toBeLessThan(high[0].x);
-    expect(Math.abs(low[0].x - face[0].x)).toBeLessThan(2);
   });
 });

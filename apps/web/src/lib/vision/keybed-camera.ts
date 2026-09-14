@@ -62,7 +62,12 @@ export type TrackerState =
       readonly keybed: Keybed;
       /** True where the corners are the ones a person dragged. */
       readonly byHand: boolean;
-    };
+    }
+  /** Held once, and the keyboard is no longer where it was. Nothing is detected
+   * again until the reader asks for it: a camera pointed at an instrument does
+   * not lose it by accident, so this is worth saying rather than papering
+   * over. */
+  | { readonly kind: "lost"; readonly reason: string };
 
 /** What the last read cost and saw, so a reader can aim the camera. */
 export type Reading = {
@@ -141,10 +146,13 @@ export async function createKeybedCamera(
     agreeing = null;
     byHand = null;
     steady.reset();
-    hunt();
+    stillness.forget();
     if (wasHeld) {
+      state = { kind: "lost", reason: huntReason };
       options.onLost?.();
+      return;
     }
+    hunt();
   };
 
   /** Corners are only as good as the shape and lens the fit assumes, so every
@@ -162,6 +170,11 @@ export async function createKeybedCamera(
 
   return {
     look: async (frame, now) => {
+      // Nothing runs once the keyboard is gone: the reader asks for the next
+      // detection themselves.
+      if (state.kind === "lost") {
+        return;
+      }
       const holding = state.kind === "held" ? state.keybed.quad : null;
       const every = holding === null ? searchEveryMs : glanceEveryMs;
       if (looking || now - lastAt < every) {
@@ -204,22 +217,14 @@ export async function createKeybedCamera(
         }
 
         misses = 0;
-        // A held keybed is not re-fitted under the player. The slow read only
-        // asks whether the keyboard is still where it was, and corners set by
-        // hand are the reader's answer and outlast any read.
+        // Corners are never touched once they are held. The camera is pointed
+        // at an instrument and left there, so the only question a read answers
+        // from here is whether the keyboard is still where it was put.
         if (state.kind === "held") {
           if (farthestCorner(lock.quad, state.keybed.quad) > staysWithin) {
             misses = missesBeforeLost;
             huntReason = "Piano pattern moved out of place";
             lose();
-            return;
-          }
-          if (byHand === null) {
-            state = {
-              kind: "held",
-              keybed: keybedOf(steady.accept(lock.quad, detection.still)),
-              byHand: false,
-            };
           }
           return;
         }

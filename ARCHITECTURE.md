@@ -283,8 +283,6 @@ src/lib/
                               along
   vision/board.ts             which keyboard is in front of the camera, read off
                               its black keys and narrowed by what is played
-  vision/hands.ts             the player's hands cut out of the picture, so they
-                              are drawn over the notes rather than under them
   vision/stillness.ts         whether the room around the keys moved, so the
                               model only runs when the camera has something new
   vision/warp.ts              lays a flat picture onto four corners of another,

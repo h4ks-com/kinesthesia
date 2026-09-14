@@ -17,6 +17,7 @@ import { connectMidiInputs, isWebMidiSupported } from "@/lib/input/web-midi";
 import { paletteColor } from "@/lib/midi/palette";
 import type { Song } from "@/lib/midi/song";
 import { useSong } from "@/lib/midi/use-song";
+import { keyboardPart, playSong } from "@/lib/play/parts";
 import { usePlayNotes } from "@/lib/play/use-play-notes";
 import type { PlayerParams } from "@/lib/player-url";
 import {
@@ -33,7 +34,6 @@ import type { SkinInstance } from "@/lib/skins/types";
 import { useBackground } from "@/lib/use-background";
 import { type BoardRead, readBoard } from "@/lib/vision/board";
 import { storedRange } from "@/lib/vision/calibration";
-import type { HandLayer } from "@/lib/vision/hands";
 import {
   type KeybedCamera,
   type Reading,
@@ -63,7 +63,6 @@ import {
   drawBar,
   drawCameraLayer,
   drawHandles,
-  drawPlacedFrame,
   drawQuad,
   drawWholeFrame,
   placedMap,
@@ -103,11 +102,10 @@ const noSysex: SysexListening = { patterns: [], learning: false };
  * aiming needs longer than that before being told to change anything. */
 const giveUpAfterMs = 12000;
 
-/** How often the keys are read off the picture: often while the board is still
- * unknown, and rarely once it is, since the read costs a whole frame of pixels
- * and the draw loop has to keep its frame rate. */
-const readBoardEveryMs = 2000;
-const rereadBoardEveryMs = 10000;
+/** How long the reader waits between attempts at the keys. Once they are read
+ * they are kept: the camera is static and the keyboard is where it was put, so
+ * nothing about it is worked out twice. */
+const readBoardEveryMs = 1500;
 
 /** How wide the picture the board is read from. Colour across the keys needs
  * nothing like the detail the stage is drawn at, and a whole frame of pixels
@@ -121,6 +119,9 @@ type View = "camera" | "stage";
 function report(state: TrackerState, reading: Reading | null): string {
   if (state.kind === "held") {
     return state.byHand ? "stage: corners set by hand" : "stage: pattern found";
+  }
+  if (state.kind === "lost") {
+    return `stage: keyboard gone, ${state.reason}`;
   }
   const seen =
     reading === null
@@ -230,8 +231,7 @@ function readTheBoard(
   size: Size,
   now: number,
 ): void {
-  const every = reader.range === null ? readBoardEveryMs : rereadBoardEveryMs;
-  if (now - reader.at < every) {
+  if (reader.range !== null || now - reader.at < readBoardEveryMs) {
     return;
   }
   reader.at = now;
@@ -292,13 +292,17 @@ function rememberPlayed(reader: BoardReader, pitch: number): void {
 
 export function StageView({ params }: { params: PlayerParams | null }) {
   const loaded = useSong(params);
-  const song = loaded.status === "ready" ? loaded.song : null;
+  const file = loaded.status === "ready" ? loaded.song : null;
+  // With no file to play, the stage is free roam: the roll carries what the
+  // keys emit and nothing else.
+  const free = useMemo(() => playSong([keyboardPart(0)]), []);
+  const song = file ?? free;
   const sounding = useMemo(
-    () => new Set((song?.notes ?? []).map((note) => note.id)),
+    () => new Set(song.notes.map((note) => note.id)),
     [song],
   );
   const playback = usePlaybackEngine({
-    song,
+    song: file,
     sourceKey: params?.url ?? "",
     autoNotes: sounding,
     speed: params?.speed ?? 1,
@@ -310,17 +314,21 @@ export function StageView({ params }: { params: PlayerParams | null }) {
   // room's, so a key played still sends a note climbing.
   const playhead = useRef<() => number>(() => 0);
   playhead.current =
-    song === null ? () => performance.now() / 1000 : playback.getPosition;
+    file === null ? () => performance.now() / 1000 : playback.getPosition;
   const live = usePlayNotes(() => playhead.current());
   const liveNotes = useRef(live.get);
   liveNotes.current = live.get;
-  const playingSong = useRef<Song | null>(null);
+  const playingSong = useRef<Song>(song);
   playingSong.current = song;
   const playing = useRef(false);
   playing.current = playback.playing;
   const speed = useRef(1);
   speed.current = params?.speed ?? 1;
   const roll = useRef<Roll | null>(null);
+  const solved = useRef<{
+    readonly quad: readonly Point[];
+    readonly stage: Stage | null;
+  } | null>(null);
   const warp = useRef<Warp | null>(null);
 
   // The stage shows whatever background the player is set to, so the two views
@@ -337,7 +345,6 @@ export function StageView({ params }: { params: PlayerParams | null }) {
   const video = useRef<HTMLVideoElement | null>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const camera = useRef<KeybedCamera | null>(null);
-  const hands = useRef<HandLayer | null>(null);
   const dragging = useRef<number | null>(null);
   const corners = useRef<Point[] | null>(null);
   const pressed = useRef(new Set<number>());
@@ -354,7 +361,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
   const huntingSince = useRef<number | null>(null);
   const [showing, setShowing] = useState<View>("camera");
   const [showingKeys, setShowingKeys] = useState(true);
-  const [hunting, setHunting] = useState(true);
+  const [looking, setLooking] = useState<TrackerState["kind"]>("hunting");
   const [missing, setMissing] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
 
@@ -477,22 +484,6 @@ export function StageView({ params }: { params: PlayerParams | null }) {
       camera.current = await createKeybedCamera();
       roll.current ??= makeRoll();
       warp.current ??= createWarp();
-      // The hands are cut out of the picture so they can be drawn back over the
-      // notes. Failing to read them costs the stage nothing but that.
-      void import("@/lib/vision/hands")
-        .then(async (module) => {
-          const layer = await module.createHandLayer();
-          if (stop) {
-            layer.close();
-            return;
-          }
-          hands.current = layer;
-        })
-        .catch((reason: unknown) => {
-          console.info(
-            `stage: no hand layer, ${reason instanceof Error ? reason.message : reason}`,
-          );
-        });
       const context = canvas.current?.getContext("2d") ?? null;
       let lastSaid = "";
 
@@ -509,7 +500,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
         const sheet = roll.current;
         const paint = warp.current;
         const song = playingSong.current;
-        if (sheet === null || paint === null || song === null) {
+        if (sheet === null || paint === null) {
           return;
         }
         aimRoll(sheet, board);
@@ -575,13 +566,13 @@ export function StageView({ params }: { params: PlayerParams | null }) {
           lastSaid = said;
           console.info(said);
         }
-        setHunting(state.kind !== "held");
-        if (state.kind === "held") {
-          huntingSince.current = null;
-          setMissing(false);
-        } else {
+        setLooking(state.kind);
+        if (state.kind === "hunting") {
           huntingSince.current ??= now;
           setMissing(now - huntingSince.current > giveUpAfterMs);
+        } else {
+          huntingSince.current = null;
+          setMissing(false);
         }
         if (state.kind === "held" && dragging.current === null) {
           corners.current = [...state.keybed.quad];
@@ -605,10 +596,13 @@ export function StageView({ params }: { params: PlayerParams | null }) {
         }
         if (state.kind !== "held") {
           // Once the hunt is long enough to be a failure, the picture is what
-          // the reader needs: they can only fix the aim by seeing it.
+          // the reader needs: they can only fix the aim by seeing it, and a
+          // keyboard that has gone is the same question.
           const searching = now - (huntingSince.current ?? now);
           context.filter =
-            searching > giveUpAfterMs ? "none" : "blur(14px) brightness(0.6)";
+            state.kind === "lost" || searching > giveUpAfterMs
+              ? "none"
+              : "blur(14px) brightness(0.6)";
           drawWholeFrame(context, element, size, output.current);
           context.filter = "none";
           return;
@@ -619,21 +613,10 @@ export function StageView({ params }: { params: PlayerParams | null }) {
           quad: corners.current ?? state.keybed.quad,
           playerEdgeIsFirst: state.keybed.playerEdgeIsFirst,
         };
-        // Cutting the hands out costs a model run every time, and it is worth
-        // nothing until there are notes over the keys for them to be in front of.
-        if (
-          board.current.range !== null &&
-          (playing.current || pressed.current.size > 0)
-        ) {
-          hands.current?.look(element, now);
-        }
         let to: ToOutput;
-        let overlay: ((layer: CanvasImageSource) => void) | null = null;
         if (view.current === "camera") {
           drawWholeFrame(context, element, size, output.current);
           to = wholeFrameMap(size, output.current);
-          overlay = (layer) =>
-            drawWholeFrame(context, layer, size, output.current);
         } else {
           const placement = placeKeybed(keybed, size, output.current);
           drawCameraLayer(
@@ -645,9 +628,15 @@ export function StageView({ params }: { params: PlayerParams | null }) {
             defaultFade,
           );
           to = placedMap(placement, size);
-          overlay = (layer) => drawPlacedFrame(context, layer, size, placement);
         }
-        const stage = stageSpace(keybed, size);
+        // The corners do not move once they are held, so neither does the pose.
+        if (solved.current?.quad !== keybed.quad) {
+          solved.current = {
+            quad: keybed.quad,
+            stage: stageSpace(keybed, size),
+          };
+        }
+        const stage = solved.current.stage;
         if (stage !== null) {
           readTheBoard(board.current, stage, element, size, now);
           const keys = board.current.range;
@@ -669,12 +658,6 @@ export function StageView({ params }: { params: PlayerParams | null }) {
               pressed.current,
               playhead.current(),
             );
-            // The hands are the one thing on the stage that is not behind the
-            // notes: they are on the keys the notes are landing on.
-            const skin = hands.current?.layer() ?? null;
-            if (skin !== null) {
-              overlay?.(skin);
-            }
           }
         }
         if (view.current === "camera") {
@@ -692,8 +675,6 @@ export function StageView({ params }: { params: PlayerParams | null }) {
 
     return () => {
       stop = true;
-      hands.current?.close();
-      hands.current = null;
       cancelAnimationFrame(frame);
       for (const track of stream?.getTracks() ?? []) {
         track.stop();
@@ -733,9 +714,9 @@ export function StageView({ params }: { params: PlayerParams | null }) {
             refused === null ? "text-muted" : "text-warn"
           }`}
         >
-          {refused ?? song?.name ?? ""}
+          {refused ?? file?.name ?? ""}
         </p>
-        {song === null ? null : (
+        {file === null ? null : (
           <button
             type="button"
             onClick={() => {
@@ -831,7 +812,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
             />
           </>
         )}
-        {hunting ? (
+        {looking === "hunting" ? (
           <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 px-6 text-center">
             <Loader2
               className="size-6 animate-spin text-accent"
@@ -846,6 +827,16 @@ export function StageView({ params }: { params: PlayerParams | null }) {
                 keybed, from above the keys, and light the keyboard evenly.
               </p>
             ) : null}
+          </div>
+        ) : null}
+        {looking === "lost" ? (
+          <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 px-6 text-center">
+            <p className="font-mono text-[0.7rem] text-warn">
+              Piano pattern out of the picture
+            </p>
+            <p className="max-w-sm text-[0.75rem] text-faint leading-relaxed">
+              Detect the keybed again once the keyboard is back in frame.
+            </p>
           </div>
         ) : null}
         <canvas

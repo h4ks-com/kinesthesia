@@ -18,7 +18,6 @@ import {
 import { keyLabelsFor, reachFor } from "@/lib/input/keyboard-map";
 import { useMidiShortcuts } from "@/lib/input/midi-shortcuts";
 import { type InputChannel, useNoteInput } from "@/lib/input/use-note-input";
-import { blankDigest } from "@/lib/midi/analysis";
 import { ExpressionTrail } from "@/lib/midi/expression";
 import type { Song, SongNote } from "@/lib/midi/song";
 import {
@@ -26,7 +25,7 @@ import {
   keyboardPart,
   type PlayPart,
   partKey,
-  partToTrack,
+  playSong,
 } from "@/lib/play/parts";
 import { usePlayNotes } from "@/lib/play/use-play-notes";
 import { clampKeyWidth, defaultKeyWidth } from "@/lib/render/keyboard";
@@ -58,20 +57,6 @@ const settleMs = 250;
  * part even after the octave has moved on. */
 function inputKey(pitch: number, channel: InputChannel): string {
   return `${channel ?? "self"}:${pitch}`;
-}
-
-function playSong(parts: readonly PlayPart[]): Song {
-  return {
-    name: "Play",
-    duration: Number.POSITIVE_INFINITY,
-    notes: [],
-    tracks: parts.map(partToTrack),
-    expression: new ExpressionTrail(),
-    harmony: [],
-    key: null,
-    report: blankDigest("Play"),
-    hands: new Map(),
-  };
 }
 
 export function PlayView({

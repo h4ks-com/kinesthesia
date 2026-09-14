@@ -1,5 +1,7 @@
 import { instrumentName } from "@/lib/audio/general-midi";
-import type { SongTrack } from "@/lib/midi/song";
+import { blankDigest } from "@/lib/midi/analysis";
+import { ExpressionTrail } from "@/lib/midi/expression";
+import type { Song, SongTrack } from "@/lib/midi/song";
 
 /** One voice you play into during free roam. A part answers to one MIDI
  * channel, or to the computer keyboard and touch when `channel` is null. Its
@@ -40,6 +42,23 @@ export function partToTrack(part: PlayPart): SongTrack {
     program: part.program,
     percussion: part.percussion,
     noteCount: 0,
+  };
+}
+
+/** The song there is no song: what a player plays into when nothing is loaded.
+ * It carries the parts and nothing else, so the roll has the tracks it needs to
+ * colour and voice what arrives from the keys. */
+export function playSong(parts: readonly PlayPart[]): Song {
+  return {
+    name: "Play",
+    duration: Number.POSITIVE_INFINITY,
+    notes: [],
+    tracks: parts.map(partToTrack),
+    expression: new ExpressionTrail(),
+    harmony: [],
+    key: null,
+    report: blankDigest("Play"),
+    hands: new Map(),
   };
 }
 

@@ -2,8 +2,7 @@ name: studio
 
 on:
   push:
-    # studio-monorepo is here so the matrix can be proven before it merges.
-    branches: [main, studio-monorepo]
+    branches: [main]
     paths: ["apps/**", "packages/**", "package.json", "bun.lock", ".github/workflows/studio.yml"]
   pull_request:
     paths: ["apps/**", "packages/**", "package.json", "bun.lock", ".github/workflows/studio.yml"]

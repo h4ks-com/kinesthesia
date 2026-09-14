@@ -278,9 +278,23 @@ function rememberPlayed(reader: BoardReader, pitch: number): void {
           lowest: Math.min(seen.lowest, pitch),
           highest: Math.max(seen.highest, pitch),
         };
-  reader.at = 0;
-  reader.tries = 0;
+  reader.tries = Math.max(0, readBoardTries - 1);
   reader.agreement = 0;
+}
+
+/** Whether a quad is a different four corners from the last one, which is what
+ * decides that the pose has to be solved again. */
+function movedFrom(
+  before: readonly Point[] | null,
+  now: readonly Point[],
+): boolean {
+  if (before === null || before.length !== now.length) {
+    return true;
+  }
+  return now.some((corner, index) => {
+    const was = before[index];
+    return was === undefined || was.x !== corner.x || was.y !== corner.y;
+  });
 }
 
 export function StageView({ params }: { params: PlayerParams | null }) {
@@ -599,7 +613,11 @@ export function StageView({ params }: { params: PlayerParams | null }) {
           huntingSince.current = null;
           setMissing(false);
         }
-        if (state.kind === "held" && dragging.current === null) {
+        if (
+          state.kind === "held" &&
+          dragging.current === null &&
+          corners.current === null
+        ) {
           corners.current = [...state.keybed.quad];
         }
         const size = { width: element.videoWidth, height: element.videoHeight };
@@ -654,14 +672,15 @@ export function StageView({ params }: { params: PlayerParams | null }) {
           );
           to = placedMap(placement, size);
         }
-        // The corners do not move once they are held, so neither does the pose.
-        if (solved.current?.quad !== keybed.quad) {
+        // Solved for the corners themselves, not for the array they arrive in,
+        // so a held keybed costs nothing and a corner being dragged is followed.
+        if (movedFrom(solved.current?.quad ?? null, keybed.quad)) {
           solved.current = {
-            quad: keybed.quad,
+            quad: keybed.quad.map((corner) => ({ ...corner })),
             space: keybedSpace(keybed, size),
           };
         }
-        const space = solved.current.space;
+        const space = solved.current?.space ?? null;
         if (space !== null) {
           refreshBoard(board.current, space, element, size, now);
           const keys = board.current.range;
@@ -700,6 +719,10 @@ export function StageView({ params }: { params: PlayerParams | null }) {
       stop = true;
       cancelAnimationFrame(frame);
       giveBack();
+      warp.current?.dispose();
+      warp.current = null;
+      roll.current = null;
+      camera.current = null;
     };
   }, []);
 

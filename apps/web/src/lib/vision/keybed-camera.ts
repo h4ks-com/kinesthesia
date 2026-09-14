@@ -139,12 +139,19 @@ export async function createKeybedCamera(
     state = { kind: "hunting", progress: { agreed, reason: huntReason } };
   };
 
-  const lose = (): void => {
-    const wasHeld = state.kind === "held";
+  const forget = (): void => {
     agreed = 0;
     agreeing = null;
     steady.reset();
     stillness.forget();
+  };
+
+  /** The keyboard is not where it was. Nothing is detected again until it is
+   * asked for, since a camera left pointing at an instrument does not lose it
+   * by accident and a reader is owed the news. */
+  const lose = (): void => {
+    const wasHeld = state.kind === "held";
+    forget();
     if (wasHeld) {
       state = { kind: "lost", reason: huntReason };
       options.onLost?.();
@@ -249,10 +256,12 @@ export async function createKeybedCamera(
     state: () => state,
     reading: () => reading,
     hold: (quad) => settle(quad, true),
+    // Asked for by the reader, which is the one thing that always starts a
+    // fresh hunt however the last one ended.
     release: () => {
       huntReason = "Finding piano pattern";
-      stillness.forget();
-      lose();
+      forget();
+      hunt();
     },
   };
 }

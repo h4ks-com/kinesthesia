@@ -18,6 +18,9 @@ export type Warp = {
     corners: readonly Point[],
     output: Size,
   ) => HTMLCanvasElement | null;
+  /** Hands the GPU context back. A browser keeps only so many of them, and a
+   * page opened and left a dozen times would take them all. */
+  readonly dispose: () => void;
 };
 
 /** How much of the far end of the picture is given over to thinning out. */
@@ -197,6 +200,14 @@ export function createWarp(): Warp | null {
       );
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       return sheet;
+    },
+    dispose: () => {
+      gl.deleteTexture(texture);
+      gl.deleteBuffer(buffer);
+      gl.deleteProgram(program);
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
+      sheet.width = 0;
+      sheet.height = 0;
     },
   };
 }

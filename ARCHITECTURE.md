@@ -104,7 +104,10 @@ src/components/
   midi-monitor-dock.tsx       every message the devices send, live in a sidebar
                               docked beside any page, to copy or export as CSV
   stage-view.tsx              the stage: the camera finds the real keyboard and
-                              lays it along the bottom, the rest faded to black
+                              lays it along the bottom, the rest faded to black,
+                              with the song falling onto the real keys and the
+                              player's hands drawn in front of it
+  stage-start.tsx             loads the stage once there is a browser to read
   render-menu.tsx             render the watch view to a video or audio file
   piano-roll-view.tsx         canvas, the frame loop, touch input and panning
   track-menu.tsx              show, hide, solo and claim tracks, and the way

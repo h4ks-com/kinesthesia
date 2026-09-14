@@ -383,7 +383,11 @@ export function StageView({ params }: { params: PlayerParams | null }) {
           }
           hands.current = layer;
         })
-        .catch(() => {});
+        .catch((reason: unknown) => {
+          console.info(
+            `stage: no hand layer, ${reason instanceof Error ? reason.message : reason}`,
+          );
+        });
       const context = canvas.current?.getContext("2d") ?? null;
       let lastSaid = "";
 

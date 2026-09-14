@@ -11,6 +11,27 @@ import { browserAssets } from "@/lib/vision/assets";
  * do not have to be cut out every frame to read as being in front. */
 export const segmentEveryMs = 66;
 
+/** MediaPipe's runtime announces the TensorFlow Lite delegate it picked on
+ * console.error the first time it runs an inference. Next's overlay reads any
+ * console.error as a fault and puts it in front of the page, so that one notice
+ * is dropped while the segmenter starts. */
+function quietDelegateNotice(): () => void {
+  const spoke = console.error;
+  console.error = (...said: unknown[]): void => {
+    const first = said[0];
+    if (
+      typeof first === "string" &&
+      first.startsWith("INFO: Created TensorFlow")
+    ) {
+      return;
+    }
+    spoke(...said);
+  };
+  return () => {
+    console.error = spoke;
+  };
+}
+
 export type HandLayer = {
   /** Reads the picture, keeping whatever skin it finds cut out of it. */
   readonly look: (frame: HTMLVideoElement, now: number) => void;
@@ -24,6 +45,7 @@ export type HandLayer = {
  * Everything on the stage is above the keys except the player's own hands,
  * which are on them. */
 export async function createHandLayer(): Promise<HandLayer> {
+  let loud = quietDelegateNotice();
   const segmenter: SkinSegmenter = await createSkinSegmenter(browserAssets);
   const sheet = document.createElement("canvas");
   let context: CanvasRenderingContext2D | null = null;
@@ -37,6 +59,8 @@ export async function createHandLayer(): Promise<HandLayer> {
       }
       lastAt = now;
       const result = segmenter.segment(frame, now);
+      loud();
+      loud = () => {};
       const mask = result.categoryMask;
       if (mask === undefined) {
         return;
@@ -73,6 +97,9 @@ export async function createHandLayer(): Promise<HandLayer> {
       drawn = true;
     },
     layer: () => (drawn ? sheet : null),
-    close: () => segmenter.close(),
+    close: () => {
+      loud();
+      segmenter.close();
+    },
   };
 }

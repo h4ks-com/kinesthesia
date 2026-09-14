@@ -33,12 +33,12 @@ export const runwayLength = WHITE_KEY_COUNT;
  * stands decides how much of a plane leaving the keys stays in the picture, so
  * the runway is fitted to the view rather than run off the top of it. */
 export function runwayInView(
-  stage: Stage,
+  space: KeybedSpace,
   onto: (point: Point) => Point,
   top: number,
 ): number {
   const reaches = (away: number): boolean => {
-    const found = stage.at(0.5, away);
+    const found = space.at(0.5, away);
     return found !== null && onto(found).y > top;
   };
   if (reaches(runwayLength)) {
@@ -57,11 +57,6 @@ export function runwayInView(
   return near;
 }
 
-/** Where the runway begins, in white-key widths out from the far edge of the
- * keys. Nothing stands between the keys and the notes: a note leaves the key it
- * is played on. */
-export const runwayStart = 0;
-
 /** How the runway leans: 0 carries the keybed's own plane off behind the
  * instrument, 1 stands the notes up square to the camera. Between the two the
  * roll keeps the keys' perspective and still faces the room. */
@@ -77,7 +72,7 @@ const nearestDrawable = 1;
 
 export type Bar = readonly [Point, Point, Point, Point];
 
-export type Stage = {
+export type KeybedSpace = {
   readonly pose: PlanePose;
   /** Where a point of the runway lands in the camera frame, in pixels, or null
    * where it sits behind the camera. `along` is a share of the keys' span and
@@ -116,7 +111,7 @@ function poseCorners(keybed: Keybed, frame: Size): Point[] {
   return turned.flatMap((corner) => (corner === undefined ? [] : [corner]));
 }
 
-export function stageSpace(keybed: Keybed, frame: Size): Stage | null {
+export function keybedSpace(keybed: Keybed, frame: Size): KeybedSpace | null {
   const corners = poseCorners(keybed, frame);
   if (corners.length < 4 || frame.width === 0 || frame.height === 0) {
     return null;
@@ -132,11 +127,7 @@ export function stageSpace(keybed: Keybed, frame: Size): Stage | null {
   return {
     pose,
     at: (along, away) =>
-      project(
-        along * WHITE_KEY_COUNT,
-        (runwayStart + away) * axis.v,
-        (runwayStart + away) * axis.w,
-      ),
+      project(along * WHITE_KEY_COUNT, away * axis.v, away * axis.w),
     onKeys: (along, across) =>
       project(along * WHITE_KEY_COUNT, across * keybedDepth(), 0),
   };
@@ -156,11 +147,6 @@ export function keyBand(
   const start = keyUnits(range.lowest).from;
   const units = keyUnits(pitch);
   return { from: (units.from - start) / keys, to: (units.to - start) / keys };
-}
-
-/** How far up the runway a note that sounds in `seconds` stands. */
-export function awayAt(seconds: number): number {
-  return (seconds / lookAhead) * runwayLength;
 }
 
 function quad(corners: readonly (Point | null)[]): Bar | null {
@@ -183,17 +169,17 @@ function quad(corners: readonly (Point | null)[]): Bar | null {
 /** The key itself, drawn flat on the instrument, which is how a reader sees
  * whether the notes land where the keys really are. */
 export function keyFace(
-  stage: Stage,
+  space: KeybedSpace,
   pitch: number,
   range: PitchRange,
 ): Bar | null {
   const band = keyBand(pitch, range);
   const near = isBlack(pitch) ? blackKeyDepth : 1;
   return quad([
-    stage.onKeys(band.from, 0),
-    stage.onKeys(band.to, 0),
-    stage.onKeys(band.to, near),
-    stage.onKeys(band.from, near),
+    space.onKeys(band.from, 0),
+    space.onKeys(band.to, 0),
+    space.onKeys(band.to, near),
+    space.onKeys(band.from, near),
   ]);
 }
 

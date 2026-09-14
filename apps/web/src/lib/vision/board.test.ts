@@ -4,9 +4,9 @@ import { type Picture, readBoard } from "@/lib/vision/board";
 import type { Keybed, Size } from "@/lib/vision/placement";
 import {
   keyBand,
+  keybedSpace,
   keysOf,
   type PitchRange,
-  stageSpace,
 } from "@/lib/vision/space";
 
 const frame: Size = { width: 960, height: 540 };
@@ -57,11 +57,11 @@ function read(
   range: PitchRange,
   played: PitchRange | null = null,
 ): PitchRange | string {
-  const stage = stageSpace(overhead, frame);
-  if (stage === null) {
+  const space = keybedSpace(overhead, frame);
+  if (space === null) {
     throw new Error("A rectangle of the right shape has a pose");
   }
-  const found = readBoard(stage, pictureOf(range), played);
+  const found = readBoard(space, pictureOf(range), played);
   return found.kind === "read" ? found.range : found.reason;
 }
 
@@ -87,8 +87,8 @@ describe("readBoard", () => {
   });
 
   it("says so when the picture holds no keyboard", () => {
-    const stage = stageSpace(overhead, frame);
-    if (stage === null) {
+    const space = keybedSpace(overhead, frame);
+    if (space === null) {
       throw new Error("A rectangle of the right shape has a pose");
     }
     const blank: Picture = {
@@ -97,6 +97,6 @@ describe("readBoard", () => {
       data: new Uint8ClampedArray(frame.width * frame.height * 4).fill(200),
       scale: 1,
     };
-    expect(readBoard(stage, blank).kind).toBe("unsure");
+    expect(readBoard(space, blank).kind).toBe("unsure");
   });
 });

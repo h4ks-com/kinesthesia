@@ -100,6 +100,7 @@ export function createWarp(): Warp | null {
     antialias: true,
   });
   if (gl === null) {
+    console.info("stage: no warp, this browser has no WebGL2");
     return null;
   }
   let program: WebGLProgram;

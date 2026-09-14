@@ -6,7 +6,9 @@ import type { BackdropSource, NoteDirection } from "@/lib/skins/types";
 
 /** The watch view exactly as it stands, handed to an offline render. Nothing
  * here is interactive, so a frame is a pure function of position. */
-export type RenderConfig = {
+/** How a song is shown: everything the roll needs to draw it the same way
+ * wherever it is drawn, on screen, in a file, or onto a real instrument. */
+export type RollView = {
   readonly song: Song;
   readonly voicing: SongVoicing;
   readonly hiddenTracks: ReadonlySet<number>;
@@ -16,13 +18,16 @@ export type RenderConfig = {
   /** Which way the notes were travelling on screen, so the file matches what
    * was being watched. */
   readonly direction: NoteDirection;
+  /** Whether the notes carry their names, as they do on screen. */
+  readonly noteNames: boolean;
+};
+
+export type RenderConfig = RollView & {
   /** The background behind the roll, drawn into the video the same way it is
    * drawn on screen. Null leaves the roll on its own dark backdrop. */
   readonly skin: BackdropSource | null;
   /** How large and how finely the picture is laid down. Audio ignores it. */
   readonly quality: RenderQuality;
-  /** Whether the notes carry their names, as they do on screen. */
-  readonly noteNames: boolean;
   /** The notation stacked above the notes, or in their place. Null is the
    * notation turned off, and is also where a song that cannot be engraved ends
    * up, which leaves the render on the falling notes alone. */
@@ -94,8 +99,10 @@ export const defaultQuality: RenderQuality = "720p";
 
 const noPitches: ReadonlySet<number> = new Set();
 
+/** The roll's frame for a song nobody is playing along to, which is what a
+ * render and the stage both want. */
 export function watchFrame(
-  config: RenderConfig,
+  config: RollView,
   position: number,
   report: SkinReport | null = null,
 ): Frame {

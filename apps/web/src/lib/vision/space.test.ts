@@ -1,7 +1,12 @@
 import { keybedDepth, WHITE_KEY_COUNT } from "keybed";
 import { describe, expect, it } from "vitest";
 import type { Keybed, Point, Size } from "@/lib/vision/placement";
-import { awayAt, keyBand, keyFace, stageSpace } from "@/lib/vision/space";
+import {
+  keyBand,
+  keybedSpace,
+  keyFace,
+  runwayLength,
+} from "@/lib/vision/space";
 
 const frame: Size = { width: 1280, height: 720 };
 const board = { lowest: 36, highest: 96 };
@@ -42,11 +47,11 @@ describe("keyBand", () => {
   });
 });
 
-describe("stageSpace", () => {
+describe("keybedSpace", () => {
   it("puts the ends of the keys on the corners it was given", () => {
-    const stage = stageSpace(overhead(), frame);
-    expect(stage).not.toBeNull();
-    if (stage === null) {
+    const space = keybedSpace(overhead(), frame);
+    expect(space).not.toBeNull();
+    if (space === null) {
       return;
     }
     const quad = overhead().quad;
@@ -63,21 +68,21 @@ describe("stageSpace", () => {
       x: point.x * frame.width,
       y: point.y * frame.height,
     });
-    near(stage.onKeys(0, 0) ?? { x: 0, y: 0 }, pixels(back), 2);
-    near(stage.onKeys(1, 0) ?? { x: 0, y: 0 }, pixels(backEnd), 2);
-    near(stage.onKeys(1, 1) ?? { x: 0, y: 0 }, pixels(playerEnd), 2);
-    near(stage.onKeys(0, 1) ?? { x: 0, y: 0 }, pixels(player), 2);
+    near(space.onKeys(0, 0) ?? { x: 0, y: 0 }, pixels(back), 2);
+    near(space.onKeys(1, 0) ?? { x: 0, y: 0 }, pixels(backEnd), 2);
+    near(space.onKeys(1, 1) ?? { x: 0, y: 0 }, pixels(playerEnd), 2);
+    near(space.onKeys(0, 1) ?? { x: 0, y: 0 }, pixels(player), 2);
   });
 
   it("starts the runway on the far edge of the keys and carries it away from the player", () => {
-    const stage = stageSpace(overhead(), frame);
-    if (stage === null) {
+    const space = keybedSpace(overhead(), frame);
+    if (space === null) {
       throw new Error("The keybed is a rectangle and has a pose");
     }
-    const atKeys = stage.at(0.5, 0);
-    const upRunway = stage.at(0.5, awayAt(1));
-    const onKeys = stage.onKeys(0.5, 0);
-    const player = stage.onKeys(0.5, 1);
+    const atKeys = space.at(0.5, 0);
+    const upRunway = space.at(0.5, runwayLength / 3);
+    const onKeys = space.onKeys(0.5, 0);
+    const player = space.onKeys(0.5, 1);
     if (
       atKeys === null ||
       upRunway === null ||
@@ -92,12 +97,12 @@ describe("stageSpace", () => {
   });
 
   it("lands a key where the camera sees it", () => {
-    const stage = stageSpace(overhead(), frame);
-    if (stage === null) {
+    const space = keybedSpace(overhead(), frame);
+    if (space === null) {
       throw new Error("The keybed is a rectangle and has a pose");
     }
-    const low = keyFace(stage, board.lowest, board);
-    const high = keyFace(stage, board.highest, board);
+    const low = keyFace(space, board.lowest, board);
+    const high = keyFace(space, board.highest, board);
     if (low === null || high === null) {
       throw new Error("Both ends of the board are in the picture");
     }

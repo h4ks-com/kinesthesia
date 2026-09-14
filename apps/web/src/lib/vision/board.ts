@@ -1,7 +1,12 @@
 import { keyUnits } from "keybed";
 import { highestPitch, lowestPitch } from "@/lib/midi/song";
+import { whiteKeys } from "@/lib/render/keyboard";
 import type { Point } from "@/lib/vision/placement";
-import { type PitchRange, type Stage, spanInKeys } from "@/lib/vision/space";
+import {
+  type KeybedSpace,
+  type PitchRange,
+  spanInKeys,
+} from "@/lib/vision/space";
 
 /** A frame to read, as a canvas hands it over. It can be smaller than the frame
  * the stage projects into, since reading colour off the keys needs nothing like
@@ -70,21 +75,9 @@ const pianoCentre = (lowestPitch + highestPitch) / 2;
  * the camera is. It is fitted rather than assumed. */
 const bleeds = [0, 0.1, 0.2, 0.3, 0.4];
 
-const whitePitches: readonly number[] = buildWhites();
 const octaveSteps = 100;
 const octaveWide = 7 * octaveSteps;
 const octaves = new Map<number, Uint8Array>();
-
-function buildWhites(): number[] {
-  const whites: number[] = [];
-  for (let pitch = 12; pitch <= 120; pitch += 1) {
-    const units = keyUnits(pitch);
-    if (units.to - units.from === 1) {
-      whites.push(pitch);
-    }
-  }
-  return whites;
-}
 
 /** Where the black keys fall inside one octave of seven white keys, each spread
  * by what the camera cannot see past. The pattern repeats every seven white
@@ -196,10 +189,14 @@ type Stripe = {
 
 /** What the camera reads across the keys at one depth: true where a black key
  * covers the sample, null where the picture has nothing to say. */
-function readStripe(stage: Stage, picture: Picture, depth: number): Stripe {
+function readStripe(
+  space: KeybedSpace,
+  picture: Picture,
+  depth: number,
+): Stripe {
   const line: (Point | null)[] = [];
   for (let index = 0; index < samples; index += 1) {
-    line.push(stage.onKeys((index + 0.5) / samples, depth));
+    line.push(space.onKeys((index + 0.5) / samples, depth));
   }
   const perSample = spanInKeys / samples;
   const level = line.map((point, index) => {
@@ -281,19 +278,24 @@ type Shape = {
 /** The board's size and where it starts, which is all colour can say: one C
  * reads exactly like the next. */
 function bestShape(stripe: Stripe, played: PitchRange | null): Shape | null {
+  // Which sizes and starting notes are worth scoring does not depend on how far
+  // the black keys bleed, so the boards are found once and only their colour is
+  // scored per bleed.
+  const shapes: { whites: number; phase: number }[] = [];
+  for (let whites = fewestWhites; whites <= mostWhites; whites += 1) {
+    for (let phase = 0; phase < 7; phase += 1) {
+      if (boardOfShape({ whites, phase, bleed: 0, agreement: 0 }, played)) {
+        shapes.push({ whites, phase });
+      }
+    }
+  }
   let best: Shape | null = null;
   for (const bleed of bleeds) {
     const dark = darkOctave(bleed);
-    for (let whites = fewestWhites; whites <= mostWhites; whites += 1) {
-      for (let phase = 0; phase < 7; phase += 1) {
-        const shape = { whites, phase, bleed, agreement: 0 };
-        if (boardOfShape(shape, played) === null) {
-          continue;
-        }
-        const agreement = agreementOf(stripe.seen, phase, whites, dark);
-        if (best === null || agreement > best.agreement) {
-          best = { whites, phase, bleed, agreement };
-        }
+    for (const { whites, phase } of shapes) {
+      const agreement = agreementOf(stripe.seen, phase, whites, dark);
+      if (best === null || agreement > best.agreement) {
+        best = { whites, phase, bleed, agreement };
       }
     }
   }
@@ -308,8 +310,8 @@ function boardOfShape(
   played: PitchRange | null,
 ): PitchRange | null {
   let best: PitchRange | null = null;
-  for (const [index, lowest] of whitePitches.entries()) {
-    const highest = whitePitches[index + shape.whites - 1];
+  for (const [index, lowest] of whiteKeys.entries()) {
+    const highest = whiteKeys[index + shape.whites - 1];
     if (highest === undefined) {
       break;
     }
@@ -341,7 +343,7 @@ function boardOfShape(
  * has to be able to play them. What is left over is settled by taking the
  * octave that leaves the board centred where a full piano is centred. */
 export function readBoard(
-  stage: Stage,
+  space: KeybedSpace,
   picture: Picture,
   played: PitchRange | null = null,
 ): BoardRead {
@@ -349,7 +351,7 @@ export function readBoard(
   let readable = false;
   const tried: string[] = [];
   for (const depth of blackDepths) {
-    const stripe = readStripe(stage, picture, depth);
+    const stripe = readStripe(space, picture, depth);
     if (stripe.seen.filter((seen) => seen !== null).length < samples / 6) {
       continue;
     }

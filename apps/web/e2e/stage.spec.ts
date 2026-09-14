@@ -31,6 +31,9 @@ test.describe("the stage", () => {
     });
 
     await page.goto("/stage");
+    await expect(
+      page.getByText("Allow the camera so the stage can see your keyboard."),
+    ).toBeVisible();
     await expect(page.getByText("Finding piano pattern")).toBeVisible();
     await expect(page.locator("canvas")).toBeVisible();
     await page.waitForTimeout(4000);

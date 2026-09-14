@@ -132,7 +132,7 @@ export function drawWholeFrame(
 /** Anything in the camera's own frame, laid where the keybed was placed. The
  * same steps `placePoint` takes, in the order the canvas applies them: turn
  * about the frame's own centre, then scale, then move into place. */
-export function drawPlacedFrame(
+function drawPlacedFrame(
   context: CanvasRenderingContext2D,
   frame: CanvasImageSource,
   frameSize: Size,

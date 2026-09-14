@@ -50,12 +50,13 @@ export function keepFocal(fraction: number): void {
 export function storedRange(): PitchRange | null {
   const lowest = read(lowPitchKey);
   const highest = read(highPitchKey);
-  return lowest === null || highest === null || lowest >= highest
-    ? null
-    : { lowest, highest };
-}
-
-export function keepRange(range: PitchRange): void {
-  write(lowPitchKey, range.lowest);
-  write(highPitchKey, range.highest);
+  if (
+    lowest === null ||
+    highest === null ||
+    !(Number.isFinite(lowest) && Number.isFinite(highest)) ||
+    lowest >= highest
+  ) {
+    return null;
+  }
+  return { lowest, highest };
 }

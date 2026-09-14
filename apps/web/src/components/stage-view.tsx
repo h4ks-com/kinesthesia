@@ -12,16 +12,13 @@ import { useSong } from "@/lib/midi/use-song";
 import { keyboardPart, playSong } from "@/lib/play/parts";
 import { usePlayNotes } from "@/lib/play/use-play-notes";
 import type { PlayerParams } from "@/lib/player-url";
+import { type RollView, watchFrame } from "@/lib/render/export";
 import {
   defaultKeyWidth,
   keyboardBand,
   whiteKeyLeft,
 } from "@/lib/render/keyboard";
-import {
-  type Frame,
-  PianoRollRenderer,
-  type SkinReport,
-} from "@/lib/render/piano-roll";
+import { PianoRollRenderer, type SkinReport } from "@/lib/render/piano-roll";
 import type { SkinInstance } from "@/lib/skins/types";
 import { useBackground } from "@/lib/use-background";
 import { type BoardRead, readBoard } from "@/lib/vision/board";
@@ -40,12 +37,12 @@ import {
   type Size,
 } from "@/lib/vision/placement";
 import {
+  type KeybedSpace,
+  keybedSpace,
   keyFace,
   keysOf,
   type PitchRange,
   runwayInView,
-  type Stage,
-  stageSpace,
   whiteKeysOf,
 } from "@/lib/vision/space";
 import {
@@ -69,10 +66,10 @@ import { createWarp, type Warp } from "@/lib/vision/warp";
 const mostPixels = 1600;
 const noteColour = paletteColor(0);
 
-/** The keys the app believes are there, drawn over the keys the camera sees.
- * Where the two come apart, the board was read wrong, so the black keys are
- * filled to make any drift plain and every C is picked out to show the octave
- * the notes will land in. */
+/** The keys the app believes are there, drawn over the keys the camera sees
+ * while it is being aimed. Where the two come apart the board was read wrong,
+ * so the black keys are filled to make any drift plain and every C is picked
+ * out to show which octave the notes will land in. */
 const keyPaint = {
   white: { fill: null, edge: "rgba(76, 158, 255, 0.3)", width: 1 },
   black: {
@@ -135,12 +132,9 @@ function paintFor(pitch: number, held: boolean): BarStyle {
   return pitch % 12 === 0 ? keyPaint.c : keyPaint.white;
 }
 
-/** The keys of the real instrument, outlined where the app believes they are.
- * Where the two come apart the board was read wrong, so the black keys are
- * filled to make any drift plain and every C is picked out. */
 function drawKeys(
   context: CanvasRenderingContext2D,
-  stage: Stage,
+  space: KeybedSpace,
   to: ToOutput,
   board: PitchRange,
   pressed: ReadonlySet<number>,
@@ -148,7 +142,7 @@ function drawKeys(
   context.save();
   for (const pitch of keysOf(board)) {
     const held = pressed.has(pitch);
-    const face = keyFace(stage, pitch, board);
+    const face = keyFace(space, pitch, board);
     if (face !== null) {
       drawBar(context, face, to, paintFor(pitch, held));
     }
@@ -217,9 +211,9 @@ type BoardReader = {
 /** The black keys say how many keys the board has and which note it starts on,
  * so nothing here is taken on trust about the instrument. A board the player
  * has pinned down themselves is left alone. */
-function readTheBoard(
+function refreshBoard(
   reader: BoardReader,
-  stage: Stage,
+  space: KeybedSpace,
   frame: CanvasImageSource,
   size: Size,
   now: number,
@@ -248,7 +242,7 @@ function readTheBoard(
   context.drawImage(frame, 0, 0, sheet.width, sheet.height);
   const pixels = context.getImageData(0, 0, sheet.width, sheet.height);
   const found: BoardRead = readBoard(
-    stage,
+    space,
     {
       width: pixels.width,
       height: pixels.height,
@@ -317,16 +311,28 @@ export function StageView({ params }: { params: PlayerParams | null }) {
   const live = usePlayNotes(() => playhead.current());
   const liveNotes = useRef(live.get);
   liveNotes.current = live.get;
-  const playingSong = useRef<Song>(song);
-  playingSong.current = song;
-  const playing = useRef(false);
-  playing.current = playback.playing;
+  // The same record the player and a render are drawn from, so a song looks on
+  // the instrument the way it looks on screen.
+  const shown = useRef<RollView>({
+    song,
+    voicing: new Map(),
+    hiddenTracks: new Set(),
+    plain: false,
+    rate: 1,
+    direction: "down",
+    noteNames: false,
+  });
+  shown.current = {
+    ...shown.current,
+    song,
+    rate: params?.speed ?? 1,
+  };
   const speed = useRef(1);
   speed.current = params?.speed ?? 1;
   const roll = useRef<Roll | null>(null);
   const solved = useRef<{
     readonly quad: readonly Point[];
-    readonly stage: Stage | null;
+    readonly space: KeybedSpace | null;
   } | null>(null);
   const warp = useRef<Warp | null>(null);
 
@@ -355,19 +361,21 @@ export function StageView({ params }: { params: PlayerParams | null }) {
     range: null,
     played: null,
   });
-  const stage = useRef<HTMLDivElement | null>(null);
+  const stageBox = useRef<HTMLDivElement | null>(null);
   const output = useRef({ width: 1280, height: 720 });
   const view = useRef<View>("camera");
   const huntingSince = useRef<number | null>(null);
   const [showing, setShowing] = useState<View>("camera");
   const [looking, setLooking] = useState<TrackerState["kind"]>("hunting");
   const [missing, setMissing] = useState(false);
-  const [refused, setRefused] = useState<string | null>(null);
+  /** Whether the camera is ours yet. Everything on this page is a view of it,
+   * so until it opens there is nothing to say but what it is for. */
+  const [cameraOn, setCameraOn] = useState<"asking" | "open">("asking");
+  /** What stands between the reader and a stage, in the app's own words. */
+  const [trouble, setTrouble] = useState<string | null>(null);
 
-  // The stage is drawn at the size it is shown at, so the window's own shape
-  // decides how much of the runway is in view.
   useEffect(() => {
-    const box = stage.current;
+    const box = stageBox.current;
     const sheet = canvas.current;
     if (box === null || sheet === null) {
       return;
@@ -421,7 +429,13 @@ export function StageView({ params }: { params: PlayerParams | null }) {
   }, [background.source]);
 
   useEffect(() => {
+    // Web MIDI asks its own permission, and two prompts landing together on a
+    // page the reader has not seen yet is one too many.
+    if (cameraOn === "asking") {
+      return;
+    }
     if (!isWebMidiSupported()) {
+      console.info("stage: no web midi, the keys cannot be heard here");
       return;
     }
     let disconnect: (() => void) | null = null;
@@ -450,20 +464,32 @@ export function StageView({ params }: { params: PlayerParams | null }) {
         }
         disconnect = off;
       })
-      .catch(() => {
+      .catch((reason: unknown) => {
         // A browser with no device, or one that refuses: the stage still shows
-        // the keys, it just has nothing to light them with.
+        // the picture, it just has nothing to emit notes from.
+        console.info(`stage: no midi device, ${reason}`);
       });
     return () => {
       dropped = true;
       disconnect?.();
     };
-  }, [live]);
+  }, [live, cameraOn]);
 
   useEffect(() => {
     let stop = false;
     let stream: MediaStream | null = null;
     let frame = 0;
+
+    // Every wait here is long enough to be left during: the permission prompt,
+    // the camera starting, and megabytes of model. Whatever has been taken by
+    // then is given back, or the camera light stays on over a page nobody is
+    // looking at.
+    const giveBack = (): void => {
+      for (const track of stream?.getTracks() ?? []) {
+        track.stop();
+      }
+      stream = null;
+    };
 
     const run = async (): Promise<void> => {
       stream = await navigator.mediaDevices.getUserMedia({
@@ -472,24 +498,40 @@ export function StageView({ params }: { params: PlayerParams | null }) {
       });
       const element = video.current;
       if (element === null || stop) {
+        giveBack();
         return;
       }
       element.srcObject = stream;
       await element.play();
+      if (stop) {
+        giveBack();
+        return;
+      }
+      setCameraOn("open");
 
       // The model and its runtime are megabytes, and nothing outside this page
       // wants them, so they arrive only once a camera is running.
       const { createKeybedCamera } = await import("@/lib/vision/keybed-camera");
-      camera.current = await createKeybedCamera();
+      const reading = await createKeybedCamera();
+      if (stop) {
+        giveBack();
+        return;
+      }
+      camera.current = reading;
       roll.current ??= makeRoll();
       warp.current ??= createWarp();
+      if (warp.current === null) {
+        setTrouble(
+          "This browser has no WebGL2, so the notes cannot be laid onto the keys.",
+        );
+      }
       const context = canvas.current?.getContext("2d") ?? null;
       let lastSaid = "";
 
       /** The app's roll, drawn for this moment and laid onto the runway. */
       const layRoll = (
         context: CanvasRenderingContext2D,
-        stage: Stage,
+        space: KeybedSpace,
         to: ToOutput,
         board: PitchRange,
         output: Size,
@@ -498,45 +540,28 @@ export function StageView({ params }: { params: PlayerParams | null }) {
       ): void => {
         const sheet = roll.current;
         const paint = warp.current;
-        const song = playingSong.current;
         if (sheet === null || paint === null) {
           return;
         }
         aimRoll(sheet, board);
-        const frame: Frame = {
-          song,
-          position,
+        // The roll is handed the same frame a render is, so a song looks on the
+        // instrument exactly as it looks on screen. The keys are the one thing
+        // the stage adds: they are real, and being played.
+        sheet.renderer.draw({
+          ...watchFrame(shown.current, position, sheet.report),
           live: liveNotes.current(),
-          sustain: false,
-          expression: null,
-          direction: "down",
-          rate: speed.current,
-          playTrack: 0,
-          voicing: new Map(),
-          hiddenTracks: new Set(),
           pressed: struck,
-          owed: new Set(),
-          hits: new Set(),
-          yours: null,
-          reach: null,
-          keyLabels: null,
-          noteNames: false,
-          plain: false,
-          follow: false,
-          songPresses: true,
-          report: sheet.report,
-        };
-        sheet.renderer.draw(frame);
+        });
         const band = keyboardBand(rollSize.height);
         const span = windowOf(sheet, board);
-        const far = runwayInView(stage, to, 0);
+        const far = runwayInView(space, to, 0);
         // The runway is solved in the camera's frame, and everything drawn on
         // the stage goes through the same placement as the picture.
         const corners = [
-          stage.at(span.from, far),
-          stage.at(span.to, far),
-          stage.at(span.to, 0),
-          stage.at(span.from, 0),
+          space.at(span.from, far),
+          space.at(span.to, far),
+          space.at(span.to, 0),
+          space.at(span.from, 0),
         ].flatMap((point) => (point === null ? [] : [to(point)]));
         if (corners.length < 4) {
           return;
@@ -581,7 +606,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
         clearFrame(context, output.current);
         const behind = skin.current;
         if (behind !== null) {
-          skinFrom.current ||= now;
+          skinFrom.current = skinFrom.current === 0 ? now : skinFrom.current;
           behind.draw({
             keyboardTop: output.current.height,
             elapsed: (now - skinFrom.current) / 1000,
@@ -591,7 +616,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
             step: 1 / 60,
             pressed: [...pressed.current],
             chord: null,
-            key: playingSong.current?.key ?? null,
+            key: shown.current.song.key,
           });
         }
         if (state.kind !== "held") {
@@ -633,23 +658,20 @@ export function StageView({ params }: { params: PlayerParams | null }) {
         if (solved.current?.quad !== keybed.quad) {
           solved.current = {
             quad: keybed.quad,
-            stage: stageSpace(keybed, size),
+            space: keybedSpace(keybed, size),
           };
         }
-        const stage = solved.current.stage;
-        if (stage !== null) {
-          readTheBoard(board.current, stage, element, size, now);
+        const space = solved.current.space;
+        if (space !== null) {
+          refreshBoard(board.current, space, element, size, now);
           const keys = board.current.range;
           if (keys !== null) {
-            // The keys the app believes in are drawn while the camera is being
-            // aimed, where they are the only way to see whether the board was
-            // read right. The stage itself carries the notes and nothing else.
             if (view.current === "camera") {
-              drawKeys(context, stage, to, keys, pressed.current);
+              drawKeys(context, space, to, keys, pressed.current);
             }
             layRoll(
               context,
-              stage,
+              space,
               to,
               keys,
               output.current,
@@ -668,15 +690,16 @@ export function StageView({ params }: { params: PlayerParams | null }) {
     };
 
     run().catch((reason: unknown) => {
-      setRefused(reason instanceof Error ? reason.message : `${reason}`);
+      console.info(`stage: no camera, ${reason}`);
+      setTrouble(
+        "No camera, so there is nothing to lay the notes onto. Allow the camera for this page, then reload.",
+      );
     });
 
     return () => {
       stop = true;
       cancelAnimationFrame(frame);
-      for (const track of stream?.getTracks() ?? []) {
-        track.stop();
-      }
+      giveBack();
     };
   }, []);
 
@@ -707,12 +730,8 @@ export function StageView({ params }: { params: PlayerParams | null }) {
     <div className="flex h-dvh flex-col overflow-hidden bg-void">
       <header className="flex h-14 shrink-0 items-center gap-3 border-line border-b bg-panel px-4">
         <h1 className="label">stage</h1>
-        <p
-          className={`min-w-0 flex-1 truncate font-mono text-[0.7rem] ${
-            refused === null ? "text-muted" : "text-warn"
-          }`}
-        >
-          {refused ?? file?.name ?? ""}
+        <p className="min-w-0 flex-1 truncate font-mono text-[0.7rem] text-muted">
+          {file?.name ?? ""}
         </p>
         {file === null ? null : (
           <button
@@ -752,9 +771,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
             setShowing(next);
           }}
           aria-pressed={showing === "stage"}
-          aria-label={
-            showing === "stage" ? "Show the camera" : "Preview the stage"
-          }
+          aria-label="Preview the stage"
           data-tip={
             showing === "stage" ? "Show the camera" : "Preview the stage"
           }
@@ -774,7 +791,7 @@ export function StageView({ params }: { params: PlayerParams | null }) {
         </button>
       </header>
       <div
-        ref={stage}
+        ref={stageBox}
         className="relative min-h-0 flex-1 overflow-hidden bg-void"
       >
         {background.source === null ? null : (
@@ -791,7 +808,28 @@ export function StageView({ params }: { params: PlayerParams | null }) {
             />
           </>
         )}
-        {looking === "hunting" ? (
+        {trouble === null && cameraOn === "asking" ? (
+          <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 px-6 text-center">
+            <Loader2
+              className="size-6 animate-spin text-accent"
+              aria-hidden="true"
+            />
+            <p className="max-w-sm text-[0.75rem] text-faint leading-relaxed">
+              Allow the camera so the stage can see your keyboard.
+            </p>
+          </div>
+        ) : null}
+        {trouble === null ? null : (
+          <div
+            role="status"
+            className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center px-6 text-center"
+          >
+            <p className="max-w-sm text-[0.75rem] text-warn leading-relaxed">
+              {trouble}
+            </p>
+          </div>
+        )}
+        {trouble === null && cameraOn === "open" && looking === "hunting" ? (
           <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 px-6 text-center">
             <Loader2
               className="size-6 animate-spin text-accent"
@@ -802,13 +840,13 @@ export function StageView({ params }: { params: PlayerParams | null }) {
             </p>
             {missing ? (
               <p className="max-w-sm text-[0.75rem] text-faint leading-relaxed">
-                No piano pattern found yet. Point the camera at the whole
-                keybed, from above the keys, and light the keyboard evenly.
+                Point the camera at the whole keybed, from above the keys, and
+                light it evenly.
               </p>
             ) : null}
           </div>
         ) : null}
-        {looking === "lost" ? (
+        {trouble === null && looking === "lost" ? (
           <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 px-6 text-center">
             <p className="font-mono text-[0.7rem] text-warn">
               Piano pattern out of the picture
@@ -820,6 +858,8 @@ export function StageView({ params }: { params: PlayerParams | null }) {
         ) : null}
         <canvas
           ref={canvas}
+          role="img"
+          aria-label="The camera's view of your keyboard, with the song's notes laid onto the keys"
           onPointerDown={(event) => {
             if (showing !== "camera" || corners.current === null) {
               return;

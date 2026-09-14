@@ -275,6 +275,12 @@ src/lib/
                               that lays the keys along the bottom
   vision/stage.ts             drawing the camera layer, its fade to black, and
                               the corners a reader drags
+  vision/space.ts             the keybed's own space: where a key sits on the
+                              real instrument and where a note stands off it
+  vision/board.ts             which keyboard is in front of the camera, read off
+                              its black keys and narrowed by what is played
+  vision/calibration.ts       the keybed shape, the lens and the board, each kept
+                              for this browser once it is known
   input/midi-monitor.ts       the recording the monitor shows: raw messages named,
                               capped, and the notes left held
   input/midi-shortcuts.ts     controller buttons and sliders bound to backgrounds,

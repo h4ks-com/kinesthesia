@@ -1,26 +1,92 @@
 "use client";
 
-import { Loader2, RotateCcw, Scan, Video } from "lucide-react";
+import { isBlack } from "keybed";
+import { Loader2, Piano, RotateCcw, Scan, Video } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import type { SysexListening } from "@/lib/input/sysex-pattern";
+import { connectMidiInputs, isWebMidiSupported } from "@/lib/input/web-midi";
+import { paletteColor } from "@/lib/midi/palette";
+import { lookAhead } from "@/lib/render/piano-roll";
+import { type BoardRead, readBoard } from "@/lib/vision/board";
+import { storedRange } from "@/lib/vision/calibration";
 import {
   type KeybedCamera,
   type Reading,
   readsToHold,
   type TrackerState,
 } from "@/lib/vision/keybed-camera";
-import { nearestCorner, type Point, placeKeybed } from "@/lib/vision/placement";
 import {
+  inPixels,
+  nearestCorner,
+  type Point,
+  placeKeybed,
+  type Size,
+} from "@/lib/vision/placement";
+import {
+  keyFace,
+  keysOf,
+  noteBar,
+  type PitchRange,
+  type Stage,
+  stageSpace,
+} from "@/lib/vision/space";
+import {
+  type BarStyle,
   clearFrame,
   defaultFade,
+  drawBar,
   drawCameraLayer,
   drawHandles,
+  drawNote,
   drawQuad,
   drawWholeFrame,
+  placedMap,
+  type ToOutput,
+  wholeFrameMap,
 } from "@/lib/vision/stage";
 
 const output = { width: 1280, height: 720 };
+const noteColour = paletteColor(0);
+
+/** The keys the app believes are there, drawn over the keys the camera sees.
+ * Where the two come apart, the board was read wrong, so the black keys are
+ * filled to make any drift plain and every C is picked out to show the octave
+ * the notes will land in. */
+const keyPaint = {
+  white: { fill: null, edge: "rgba(76, 158, 255, 0.3)", width: 1 },
+  black: {
+    fill: "rgba(76, 158, 255, 0.3)",
+    edge: "rgba(76, 158, 255, 0.5)",
+    width: 1,
+  },
+  c: {
+    fill: "rgba(240, 169, 58, 0.16)",
+    edge: "rgba(240, 169, 58, 0.75)",
+    width: 1.5,
+  },
+  struck: { fill: noteColour.glow, edge: noteColour.core, width: 1.5 },
+} as const;
+const noSysex: SysexListening = { patterns: [], learning: false };
+
+/** How long the camera looks before it says it is not finding a keyboard.
+ * A detection off a fresh camera takes a few reads, and a reader who is still
+ * aiming needs longer than that before being told to change anything. */
+const giveUpAfterMs = 12000;
+
+/** How often the keys are read off the picture: often while the board is still
+ * unknown, and rarely once it is, since the read costs a whole frame of pixels
+ * and the draw loop has to keep its frame rate. */
+const readBoardEveryMs = 2000;
+const rereadBoardEveryMs = 10000;
 
 type View = "camera" | "stage";
+
+/** A note the player is holding, or one still travelling after it was let go.
+ * Times are seconds, in the clock the device stamps its messages with. */
+type Struck = {
+  readonly from: number;
+  to: number | null;
+};
 
 /** What the reader sees is the picture, so the detail goes to the console for
  * whoever is chasing a detection rather than into the frame. */
@@ -35,18 +101,192 @@ function report(state: TrackerState, reading: Reading | null): string {
   return `stage: ${state.progress.reason} · ${state.progress.agreed}/${readsToHold} reads${seen}`;
 }
 
+function paintFor(pitch: number, held: boolean): BarStyle {
+  if (held) {
+    return keyPaint.struck;
+  }
+  if (isBlack(pitch)) {
+    return keyPaint.black;
+  }
+  return pitch % 12 === 0 ? keyPaint.c : keyPaint.white;
+}
+
+/** The keys as the camera sees them, and the notes the player has struck
+ * leaving them along the runway. */
+function drawRoll(
+  context: CanvasRenderingContext2D,
+  stage: Stage,
+  to: ToOutput,
+  board: PitchRange,
+  struck: Map<number, Struck>,
+  showKeys: boolean,
+  now: number,
+): void {
+  context.save();
+  for (const pitch of keysOf(board)) {
+    const held = struck.get(pitch)?.to === null;
+    if (!(showKeys || held)) {
+      continue;
+    }
+    const face = keyFace(stage, pitch, board);
+    if (face !== null) {
+      drawBar(context, face, to, paintFor(pitch, held));
+    }
+  }
+  for (const [pitch, note] of struck) {
+    const since = now - note.from;
+    if (since > lookAhead) {
+      struck.delete(pitch);
+      continue;
+    }
+    const bar = noteBar(
+      stage,
+      pitch,
+      board,
+      note.to === null ? 0 : now - note.to,
+      since,
+    );
+    if (bar !== null) {
+      drawNote(context, bar, to, noteColour);
+    }
+  }
+  context.restore();
+}
+
+/** What the stage knows about the keyboard in front of it, which is read off
+ * the picture rather than assumed. */
+type BoardReader = {
+  sheet: HTMLCanvasElement | null;
+  at: number;
+  range: PitchRange | null;
+  /** The lowest and highest note the player has sounded, which the board has to
+   * be able to play. This is what settles the octave. */
+  played: PitchRange | null;
+};
+
+/** The black keys say how many keys the board has and which note it starts on,
+ * so nothing here is taken on trust about the instrument. A board the player
+ * has pinned down themselves is left alone. */
+function readTheBoard(
+  reader: BoardReader,
+  stage: Stage,
+  frame: CanvasImageSource,
+  size: Size,
+  now: number,
+): void {
+  const every = reader.range === null ? readBoardEveryMs : rereadBoardEveryMs;
+  if (now - reader.at < every) {
+    return;
+  }
+  reader.at = now;
+  const pinned = storedRange();
+  if (pinned !== null) {
+    reader.range = pinned;
+    return;
+  }
+  reader.sheet ??= document.createElement("canvas");
+  const sheet = reader.sheet;
+  sheet.width = size.width;
+  sheet.height = size.height;
+  const context = sheet.getContext("2d", { willReadFrequently: true });
+  if (context === null) {
+    return;
+  }
+  context.drawImage(frame, 0, 0, size.width, size.height);
+  const found: BoardRead = readBoard(
+    stage,
+    context.getImageData(0, 0, size.width, size.height),
+    reader.played,
+  );
+  console.info(
+    found.kind === "read"
+      ? `stage: board reads ${found.range.lowest} to ${found.range.highest}, ${(found.agreement * 100).toFixed(0)}% of the keys agree`
+      : `stage: board unread, ${found.reason}`,
+  );
+  if (found.kind === "read") {
+    reader.range = found.range;
+  }
+}
+
+/** A note the board could not have played means the octave was read wrong, so
+ * the next frame reads it again with this note to answer to. */
+function rememberPlayed(reader: BoardReader, pitch: number): void {
+  const seen = reader.played;
+  reader.played =
+    seen === null
+      ? { lowest: pitch, highest: pitch }
+      : {
+          lowest: Math.min(seen.lowest, pitch),
+          highest: Math.max(seen.highest, pitch),
+        };
+  const board = reader.range;
+  if (board !== null && (pitch < board.lowest || pitch > board.highest)) {
+    reader.at = 0;
+  }
+}
+
 export function StageView() {
   const video = useRef<HTMLVideoElement | null>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const camera = useRef<KeybedCamera | null>(null);
   const dragging = useRef<number | null>(null);
   const corners = useRef<Point[] | null>(null);
+  const struck = useRef(new Map<number, Struck>());
+  const board = useRef<BoardReader>({
+    sheet: null,
+    at: 0,
+    range: null,
+    played: null,
+  });
   const view = useRef<View>("camera");
+  const keysShown = useRef(true);
+  const huntingSince = useRef<number | null>(null);
   const [showing, setShowing] = useState<View>("camera");
-  const [status, setStatus] = useState("starting the camera");
+  const [showingKeys, setShowingKeys] = useState(true);
   const [hunting, setHunting] = useState(true);
-  const [byHand, setByHand] = useState(false);
+  const [missing, setMissing] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isWebMidiSupported()) {
+      return;
+    }
+    let disconnect: (() => void) | null = null;
+    let dropped = false;
+    connectMidiInputs(
+      (event) => {
+        if (event.type !== "note") {
+          return;
+        }
+        const at = event.at / 1000;
+        if (event.down && event.velocity > 0) {
+          struck.current.set(event.pitch, { from: at, to: null });
+          rememberPlayed(board.current, event.pitch);
+          return;
+        }
+        const held = struck.current.get(event.pitch);
+        if (held !== undefined) {
+          held.to = at;
+        }
+      },
+      () => noSysex,
+    )
+      .then((off) => {
+        if (dropped) {
+          off();
+          return;
+        }
+        disconnect = off;
+      })
+      .catch(() => {
+        // A browser with no device, or one that refuses: the stage still shows
+        // the keys, it just has nothing to light them with.
+      });
+    return () => {
+      dropped = true;
+      disconnect?.();
+    };
+  }, []);
 
   useEffect(() => {
     let stop = false;
@@ -86,35 +326,71 @@ export function StageView() {
           console.info(said);
         }
         setHunting(state.kind !== "held");
-        setByHand(state.kind === "held" && state.byHand);
+        if (state.kind === "held") {
+          huntingSince.current = null;
+          setMissing(false);
+        } else {
+          huntingSince.current ??= now;
+          setMissing(now - huntingSince.current > giveUpAfterMs);
+        }
         if (state.kind === "held" && dragging.current === null) {
           corners.current = [...state.keybed.quad];
         }
         const size = { width: element.videoWidth, height: element.videoHeight };
         clearFrame(context, output);
         if (state.kind !== "held") {
-          context.filter = "blur(14px) brightness(0.6)";
+          // Once the hunt is long enough to be a failure, the picture is what
+          // the reader needs: they can only fix the aim by seeing it.
+          const searching = now - (huntingSince.current ?? now);
+          context.filter =
+            searching > giveUpAfterMs ? "none" : "blur(14px) brightness(0.6)";
           drawWholeFrame(context, element, size, output);
           context.filter = "none";
           return;
         }
+        // The picture and everything drawn over it come from one keybed, so a
+        // corner dragged moves the stage and the keys together.
+        const keybed = {
+          quad: corners.current ?? state.keybed.quad,
+          playerEdgeIsFirst: state.keybed.playerEdgeIsFirst,
+        };
+        let to: ToOutput;
         if (view.current === "camera") {
           drawWholeFrame(context, element, size, output);
-          const quad = corners.current;
-          if (quad !== null) {
-            drawQuad(context, quad, size, output);
-            drawHandles(context, quad, size, output);
-          }
-          return;
+          to = wholeFrameMap(size, output);
+        } else {
+          const placement = placeKeybed(keybed, size, output);
+          drawCameraLayer(
+            context,
+            element,
+            size,
+            placement,
+            output,
+            defaultFade,
+          );
+          to = placedMap(placement, size);
         }
-        drawCameraLayer(
-          context,
-          element,
-          size,
-          placeKeybed(state.keybed, size, output),
-          output,
-          defaultFade,
-        );
+        const stage = stageSpace(keybed, size);
+        if (stage !== null) {
+          readTheBoard(board.current, stage, element, size, now);
+          const keys = board.current.range;
+          if (keys !== null) {
+            drawRoll(
+              context,
+              stage,
+              to,
+              keys,
+              struck.current,
+              keysShown.current,
+              now / 1000,
+            );
+          }
+        }
+        if (view.current === "camera") {
+          const pixels = keybed.quad.map((corner) => inPixels(corner, size));
+          drawQuad(context, pixels, to);
+          drawHandles(context, pixels, to);
+        }
       };
       frame = requestAnimationFrame(draw);
     };
@@ -175,6 +451,25 @@ export function StageView() {
         <button
           type="button"
           onClick={() => {
+            keysShown.current = !showingKeys;
+            setShowingKeys(!showingKeys);
+          }}
+          aria-pressed={showingKeys}
+          aria-label={showingKeys ? "Hide the keys" : "Show the keys"}
+          data-tip={showingKeys ? "Hide the keys" : "Show the keys"}
+          data-tip-side="bottom"
+          data-tip-align="right"
+          className={`shrink-0 rounded-lg p-1.5 transition-colors pointer-coarse:min-h-11 ${
+            showingKeys
+              ? "text-accent"
+              : "text-faint hover:bg-raised hover:text-accent"
+          }`}
+        >
+          <Piano className="size-4" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
             const next = showing === "camera" ? "stage" : "camera";
             view.current = next;
             setShowing(next);
@@ -203,7 +498,7 @@ export function StageView() {
       </header>
       <div className="relative flex min-h-0 flex-1 items-center justify-center p-4">
         {hunting ? (
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3">
+          <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 px-6 text-center">
             <Loader2
               className="size-6 animate-spin text-accent"
               aria-hidden="true"
@@ -211,6 +506,12 @@ export function StageView() {
             <p className="font-mono text-[0.7rem] text-muted">
               Finding piano pattern
             </p>
+            {missing ? (
+              <p className="max-w-sm text-[0.75rem] text-faint leading-relaxed">
+                No piano pattern found yet. Point the camera at the whole
+                keybed, from above the keys, and light the keyboard evenly.
+              </p>
+            ) : null}
           </div>
         ) : null}
         <canvas

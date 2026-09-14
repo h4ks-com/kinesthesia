@@ -36,7 +36,7 @@
         "drizzle-orm": "0.45.2",
         "hono": "4.12.30",
         "jspdf": "^4.2.1",
-        "keybed": "github:matheusfillipe/keybed#1d816a5d12f96ab58f66c6d6e7b9ad5f2a28cf58",
+        "keybed": "github:matheusfillipe/keybed#4d54a3430dab56b4579221f70e95f40292cb2450",
         "lucide-react": "^1.25.0",
         "maxmind": "^5.0.7",
         "minio": "^8.0.7",
@@ -1069,7 +1069,7 @@
 
     "jszip": ["jszip@3.10.1", "", { "dependencies": { "lie": "~3.3.0", "pako": "~1.0.2", "readable-stream": "~2.3.6", "setimmediate": "^1.0.5" } }, "sha512-xXDvecyTpGLrqFrvkrUSoxxfJI5AH7U8zxxtVclpsUtMCq4JQ290LY8AW5c7Ggnr/Y/oK+bQMbqK2qmtk3pN4g=="],
 
-    "keybed": ["keybed@github:matheusfillipe/keybed#1d816a5", { "peerDependencies": { "@mediapipe/tasks-vision": "^1.0.1", "onnxruntime-web": "^1.29.0", "three": "^0.185.1" } }, "matheusfillipe-keybed-1d816a5", "sha512-rY5wXeUB3QMmggsHF0wIXGzG3tXTO2TOXvkuepV9fmI+4hD/ZgwzHcBz70SauxkJ66PLs++5bSnS31zPthr8WA=="],
+    "keybed": ["keybed@github:matheusfillipe/keybed#4d54a34", { "peerDependencies": { "@mediapipe/tasks-vision": "^1.0.1", "onnxruntime-web": "^1.29.0", "three": "^0.185.1" } }, "matheusfillipe-keybed-4d54a34", "sha512-+OP2AoZjXPnyF1cvD5lg1kyhsxZI3n+RuZ4Fh7EBjkRjozFaUHMkCn4aVklfhuU/MEyLBdcjea0zPJxI7boIhQ=="],
 
     "keyv": ["keyv@4.5.4", "", { "dependencies": { "json-buffer": "3.0.1" } }, "sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw=="],
 

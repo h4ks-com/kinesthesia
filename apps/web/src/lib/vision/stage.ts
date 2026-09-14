@@ -1,10 +1,19 @@
+import type { NoteColor } from "@/lib/midi/palette";
 import {
   defaultPlacement,
   keysBaseline,
   type Placement,
   type PlacementOptions,
+  type Point,
+  placePoint,
   type Size,
 } from "@/lib/vision/placement";
+import type { Bar } from "@/lib/vision/space";
+
+/** Where a point of the camera frame lands on the output, which differs between
+ * showing the whole picture and laying the keys along the bottom. Anything
+ * drawn in the camera's own space goes through one of these. */
+export type ToOutput = (point: Point) => Point;
 
 /** How the camera layer is drawn once the keybed is placed: the keys sit at the
  * bottom, and the picture fades to black above them so nothing of the room, or
@@ -14,15 +23,90 @@ export type Fade = {
   readonly reach: number;
   /** How much of that is the fade itself. */
   readonly softness: number;
+  /** How much of the picture dissolves at each of its own edges, as a share of
+   * the frame. The camera frame ends somewhere, and a straight cut across the
+   * room is the one thing that reads as a video pasted on a page. */
+  readonly edges: number;
 };
 
-export const defaultFade: Fade = { reach: 0.42, softness: 0.55 };
+export const defaultFade: Fade = { reach: 0.62, softness: 0.8, edges: 0.12 };
+
+/** Steps along the fade. A gradient with two stops bands, and its start is a
+ * visible line across the picture; an eased ramp arrives out of nothing. */
+const fadeSteps = 24;
+
+let softened: HTMLCanvasElement | null = null;
+
+/** The camera frame with its own four edges dissolved, so what is drawn has no
+ * border of its own wherever it lands on the stage. */
+function withSoftEdges(
+  frame: CanvasImageSource,
+  frameSize: Size,
+  edges: number,
+): CanvasImageSource {
+  softened ??= document.createElement("canvas");
+  const sheet = softened;
+  sheet.width = frameSize.width;
+  sheet.height = frameSize.height;
+  const context = sheet.getContext("2d");
+  if (context === null) {
+    return frame;
+  }
+  context.clearRect(0, 0, frameSize.width, frameSize.height);
+  context.drawImage(frame, 0, 0, frameSize.width, frameSize.height);
+  context.globalCompositeOperation = "destination-out";
+  const deep = frameSize.width * edges;
+  const tall = frameSize.height * edges;
+  const sides: readonly {
+    from: [number, number];
+    to: [number, number];
+    strip: [number, number, number, number];
+  }[] = [
+    { from: [0, 0], to: [deep, 0], strip: [0, 0, deep, frameSize.height] },
+    {
+      from: [frameSize.width, 0],
+      to: [frameSize.width - deep, 0],
+      strip: [frameSize.width - deep, 0, deep, frameSize.height],
+    },
+    { from: [0, 0], to: [0, tall], strip: [0, 0, frameSize.width, tall] },
+    {
+      from: [0, frameSize.height],
+      to: [0, frameSize.height - tall],
+      strip: [0, frameSize.height - tall, frameSize.width, tall],
+    },
+  ];
+  for (const side of sides) {
+    const ramp = context.createLinearGradient(
+      side.from[0],
+      side.from[1],
+      side.to[0],
+      side.to[1],
+    );
+    for (let step = 0; step <= fadeSteps; step += 1) {
+      const at = step / fadeSteps;
+      ramp.addColorStop(at, `rgba(0, 0, 0, ${(1 - at) ** 3})`);
+    }
+    context.fillStyle = ramp;
+    context.fillRect(
+      side.strip[0],
+      side.strip[1],
+      side.strip[2],
+      side.strip[3],
+    );
+  }
+  context.globalCompositeOperation = "source-over";
+  return sheet;
+}
+
+/** What the stage sits on, which the picture has to fade into without a seam. */
+const voidColour = { red: 7, green: 8, blue: 11 };
+const voidFill = "#07080b";
 
 export function clearFrame(
   context: CanvasRenderingContext2D,
   output: Size,
 ): void {
-  context.fillStyle = "#07080b";
+  context.fillStyle = voidFill;
   context.fillRect(0, 0, output.width, output.height);
 }
 
@@ -60,10 +144,6 @@ export function drawCameraLayer(
 ): void {
   const keysAt = keysBaseline(output, options);
   const top = keysAt - output.height * fade.reach;
-  context.save();
-  context.beginPath();
-  context.rect(0, top, output.width, output.height - top);
-  context.clip();
   // The same steps `placePoint` takes, in the order the canvas applies them:
   // turn about the frame's own centre, then scale, then move into place.
   context.save();
@@ -72,37 +152,100 @@ export function drawCameraLayer(
   context.translate(frameSize.width / 2, frameSize.height / 2);
   context.rotate(placement.angle);
   context.translate(-frameSize.width / 2, -frameSize.height / 2);
-  context.drawImage(frame, 0, 0, frameSize.width, frameSize.height);
+  context.drawImage(
+    withSoftEdges(frame, frameSize, fade.edges),
+    0,
+    0,
+    frameSize.width,
+    frameSize.height,
+  );
   context.restore();
 
-  // The gradient runs from the room down towards the keys, so the picture
-  // arrives out of the background rather than sitting in a box.
+  // The room darkens on the way up from the keys, so the picture arrives out of
+  // the background rather than sitting in a box. It runs from the top of the
+  // stage, so nothing above the keys is cut off anywhere.
   const gradient = context.createLinearGradient(0, top, 0, keysAt);
-  gradient.addColorStop(0, "rgba(0, 0, 0, 1)");
-  gradient.addColorStop(Math.min(1, fade.softness), "rgba(0, 0, 0, 0)");
+  for (let step = 0; step <= fadeSteps; step += 1) {
+    const at = step / fadeSteps;
+    const alpha = (1 - Math.min(1, at / Math.max(fade.softness, 0.01))) ** 3;
+    gradient.addColorStop(
+      at,
+      `rgba(${voidColour.red}, ${voidColour.green}, ${voidColour.blue}, ${alpha})`,
+    );
+  }
+  context.save();
+  context.fillStyle = voidFill;
+  context.fillRect(0, 0, output.width, top);
   context.fillStyle = gradient;
   context.fillRect(0, top, output.width, keysAt - top);
   context.restore();
 }
 
-/** Where a frame point lands on the output while the whole frame is shown. */
-function onOutput(
-  point: { x: number; y: number },
-  frameSize: Size,
-  output: Size,
-): { x: number; y: number } {
+/** The whole picture shown inside the output, which is the view for aiming. */
+export function wholeFrameMap(frameSize: Size, output: Size): ToOutput {
   const scale = Math.min(
     output.width / frameSize.width,
     output.height / frameSize.height,
   );
-  return {
-    x:
-      (output.width - frameSize.width * scale) / 2 +
-      point.x * frameSize.width * scale,
-    y:
-      (output.height - frameSize.height * scale) / 2 +
-      point.y * frameSize.height * scale,
-  };
+  const insetX = (output.width - frameSize.width * scale) / 2;
+  const insetY = (output.height - frameSize.height * scale) / 2;
+  return (point) => ({
+    x: insetX + point.x * scale,
+    y: insetY + point.y * scale,
+  });
+}
+
+/** The keys laid along the bottom, which is the stage itself. */
+export function placedMap(placement: Placement, frameSize: Size): ToOutput {
+  return (point) => placePoint(point, placement, frameSize);
+}
+
+/** How a bar is painted: a fill, an outline, or both. */
+export type BarStyle = {
+  readonly fill: string | null;
+  readonly edge: string | null;
+  readonly width: number;
+};
+
+/** A note on its way to the keys, or the face of a key it lands on. */
+export function drawBar(
+  context: CanvasRenderingContext2D,
+  bar: Bar,
+  to: ToOutput,
+  style: BarStyle,
+): void {
+  const [first, ...rest] = bar.map(to);
+  if (first === undefined) {
+    return;
+  }
+  context.beginPath();
+  context.moveTo(first.x, first.y);
+  for (const point of rest) {
+    context.lineTo(point.x, point.y);
+  }
+  context.closePath();
+  if (style.fill !== null) {
+    context.fillStyle = style.fill;
+    context.fill();
+  }
+  if (style.edge !== null) {
+    context.strokeStyle = style.edge;
+    context.lineWidth = style.width;
+    context.stroke();
+  }
+}
+
+export function drawNote(
+  context: CanvasRenderingContext2D,
+  bar: Bar,
+  to: ToOutput,
+  colour: NoteColor,
+): void {
+  drawBar(context, bar, to, {
+    fill: colour.glow,
+    edge: colour.core,
+    width: 1.5,
+  });
 }
 
 /** The keybed as the reader has to judge it: its outline, and the edge the
@@ -110,11 +253,10 @@ function onOutput(
  * to fall onto them the same way. */
 export function drawQuad(
   context: CanvasRenderingContext2D,
-  quad: readonly { x: number; y: number }[],
-  frameSize: Size,
-  output: Size,
+  quad: readonly Point[],
+  to: ToOutput,
 ): void {
-  const points = quad.map((corner) => onOutput(corner, frameSize, output));
+  const points = quad.map(to);
   const [back, backEnd, playerEnd, player] = points;
   if (
     back === undefined ||
@@ -151,7 +293,7 @@ export function drawQuad(
  * only make sense played from one side. */
 function drawPlayerMark(
   context: CanvasRenderingContext2D,
-  points: readonly { x: number; y: number }[],
+  points: readonly Point[],
 ): void {
   const [back, backEnd, playerEnd, player] = points;
   if (
@@ -187,13 +329,12 @@ function drawPlayerMark(
 /** A handle on each corner, so the reader can correct what the model read. */
 export function drawHandles(
   context: CanvasRenderingContext2D,
-  quad: readonly { x: number; y: number }[],
-  frameSize: Size,
-  output: Size,
+  quad: readonly Point[],
+  to: ToOutput,
 ): void {
   context.save();
   for (const corner of quad) {
-    const point = onOutput(corner, frameSize, output);
+    const point = to(corner);
     context.beginPath();
     context.arc(point.x, point.y, 9, 0, Math.PI * 2);
     context.fillStyle = "rgba(7, 8, 11, 0.75)";

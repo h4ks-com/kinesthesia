@@ -27,7 +27,9 @@ export type Keybed = {
   readonly playerEdgeIsFirst: boolean;
 };
 
-function inPixels(point: Point, frame: Size): Point {
+/** Corners arrive as fractions of the frame, and every distance, angle and
+ * projection is taken in pixels. */
+export function inPixels(point: Point, frame: Size): Point {
   return { x: point.x * frame.width, y: point.y * frame.height };
 }
 

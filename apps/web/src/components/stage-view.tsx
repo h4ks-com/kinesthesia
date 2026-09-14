@@ -93,6 +93,11 @@ const giveUpAfterMs = 12000;
 const readBoardEveryMs = 2000;
 const rereadBoardEveryMs = 10000;
 
+/** How wide the picture the board is read from. Colour across the keys needs
+ * nothing like the detail the stage is drawn at, and a whole frame of pixels
+ * read at camera size is a hitch the draw loop cannot hide. */
+const readBoardWidth = 640;
+
 type View = "camera" | "stage";
 
 /** A note the player is holding, or one still travelling after it was let go.
@@ -229,21 +234,28 @@ function readTheBoard(
   }
   reader.sheet ??= document.createElement("canvas");
   const sheet = reader.sheet;
-  sheet.width = size.width;
-  sheet.height = size.height;
+  const scale = Math.min(1, readBoardWidth / size.width);
+  sheet.width = Math.round(size.width * scale);
+  sheet.height = Math.round(size.height * scale);
   const context = sheet.getContext("2d", { willReadFrequently: true });
   if (context === null) {
     return;
   }
-  context.drawImage(frame, 0, 0, size.width, size.height);
+  context.drawImage(frame, 0, 0, sheet.width, sheet.height);
+  const pixels = context.getImageData(0, 0, sheet.width, sheet.height);
   const found: BoardRead = readBoard(
     stage,
-    context.getImageData(0, 0, size.width, size.height),
+    {
+      width: pixels.width,
+      height: pixels.height,
+      data: pixels.data,
+      scale,
+    },
     reader.played,
   );
   console.info(
     found.kind === "read"
-      ? `stage: board reads ${found.range.lowest} to ${found.range.highest}, ${(found.agreement * 100).toFixed(0)}% of the keys agree`
+      ? `stage: board reads ${found.range.lowest} to ${found.range.highest}, ${(found.agreement * 100).toFixed(0)}% of the keys agree, ${(found.darkShare * 100).toFixed(0)}% dark at ${found.depth} deep`
       : `stage: board unread, ${found.reason}`,
   );
   if (found.kind === "read") {
@@ -251,10 +263,15 @@ function readTheBoard(
   }
 }
 
-/** A note the board could not have played means the octave was read wrong, so
- * the next frame reads it again with this note to answer to. */
+/** Every note played tells the reader something the picture cannot: colour says
+ * how many keys there are and which note the board starts on inside an octave,
+ * never which octave. A note outside what has been sounded before narrows that,
+ * so the board is read again on the next frame. */
 function rememberPlayed(reader: BoardReader, pitch: number): void {
   const seen = reader.played;
+  if (seen !== null && pitch >= seen.lowest && pitch <= seen.highest) {
+    return;
+  }
   reader.played =
     seen === null
       ? { lowest: pitch, highest: pitch }
@@ -262,10 +279,7 @@ function rememberPlayed(reader: BoardReader, pitch: number): void {
           lowest: Math.min(seen.lowest, pitch),
           highest: Math.max(seen.highest, pitch),
         };
-  const board = reader.range;
-  if (board !== null && (pitch < board.lowest || pitch > board.highest)) {
-    reader.at = 0;
-  }
+  reader.at = 0;
 }
 
 export function StageView({ params }: { params: PlayerParams | null }) {
@@ -433,7 +447,11 @@ export function StageView({ params }: { params: PlayerParams | null }) {
           quad: corners.current ?? state.keybed.quad,
           playerEdgeIsFirst: state.keybed.playerEdgeIsFirst,
         };
-        hands.current?.look(element, now);
+        // Cutting the hands out costs a model run, and there is nothing for them
+        // to be in front of until the board is known.
+        if (board.current.range !== null) {
+          hands.current?.look(element, now);
+        }
         let to: ToOutput;
         let overlay: ((layer: CanvasImageSource) => void) | null = null;
         if (view.current === "camera") {

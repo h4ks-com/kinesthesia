@@ -36,24 +36,26 @@ export const defaultFade: Fade = { reach: 0.62, softness: 0.8, edges: 0.12 };
 const fadeSteps = 24;
 
 let softened: HTMLCanvasElement | null = null;
+let edgeMask: HTMLCanvasElement | null = null;
+let maskFor = "";
 
-/** The camera frame with its own four edges dissolved, so what is drawn has no
- * border of its own wherever it lands on the stage. */
-function withSoftEdges(
-  frame: CanvasImageSource,
-  frameSize: Size,
-  edges: number,
-): CanvasImageSource {
-  softened ??= document.createElement("canvas");
-  const sheet = softened;
-  sheet.width = frameSize.width;
-  sheet.height = frameSize.height;
-  const context = sheet.getContext("2d");
+/** The shape of the fade at the frame's four edges, which only changes when the
+ * camera does. Building it once a frame costs more than the picture it fades. */
+function maskOfEdges(frameSize: Size, edges: number): HTMLCanvasElement | null {
+  const wanted = `${frameSize.width}x${frameSize.height}x${edges}`;
+  if (edgeMask !== null && maskFor === wanted) {
+    return edgeMask;
+  }
+  edgeMask ??= document.createElement("canvas");
+  edgeMask.width = frameSize.width;
+  edgeMask.height = frameSize.height;
+  const context = edgeMask.getContext("2d");
   if (context === null) {
-    return frame;
+    return null;
   }
   context.clearRect(0, 0, frameSize.width, frameSize.height);
-  context.drawImage(frame, 0, 0, frameSize.width, frameSize.height);
+  context.fillStyle = "#000";
+  context.fillRect(0, 0, frameSize.width, frameSize.height);
   context.globalCompositeOperation = "destination-out";
   const deep = frameSize.width * edges;
   const tall = frameSize.height * edges;
@@ -94,6 +96,31 @@ function withSoftEdges(
       side.strip[3],
     );
   }
+  context.globalCompositeOperation = "source-over";
+  maskFor = wanted;
+  return edgeMask;
+}
+
+/** The camera frame with its own four edges dissolved, so what is drawn has no
+ * border of its own wherever it lands on the stage. */
+function withSoftEdges(
+  frame: CanvasImageSource,
+  frameSize: Size,
+  edges: number,
+): CanvasImageSource {
+  const mask = maskOfEdges(frameSize, edges);
+  softened ??= document.createElement("canvas");
+  const sheet = softened;
+  sheet.width = frameSize.width;
+  sheet.height = frameSize.height;
+  const context = sheet.getContext("2d");
+  if (context === null || mask === null) {
+    return frame;
+  }
+  context.clearRect(0, 0, frameSize.width, frameSize.height);
+  context.drawImage(frame, 0, 0, frameSize.width, frameSize.height);
+  context.globalCompositeOperation = "destination-in";
+  context.drawImage(mask, 0, 0);
   context.globalCompositeOperation = "source-over";
   return sheet;
 }

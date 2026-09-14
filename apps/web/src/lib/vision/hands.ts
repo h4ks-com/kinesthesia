@@ -9,7 +9,7 @@ import { browserAssets } from "@/lib/vision/assets";
 
 /** How often the skin is read. The notes move every frame, the hands over them
  * do not have to be cut out every frame to read as being in front. */
-export const segmentEveryMs = 66;
+export const segmentEveryMs = 110;
 
 /** MediaPipe's runtime announces the TensorFlow Lite delegate it picked on
  * console.error the first time it runs an inference. Next's overlay reads any

@@ -21,6 +21,10 @@ export type PitchRange = {
   readonly highest: number;
 };
 
+/** The keys of the keybed the pose spans, which is what `along` is a share of.
+ * A board with another number of keys on it is still this wide. */
+export const spanInKeys = WHITE_KEY_COUNT;
+
 /** How far a note stands off the keys when it is `lookAhead` seconds away, in
  * white-key widths. The runway is about as long as the keyboard is wide. */
 export const runwayLength = WHITE_KEY_COUNT;

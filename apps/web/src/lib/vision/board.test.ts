@@ -50,7 +50,7 @@ function pictureOf(range: PitchRange): Picture {
       data[at + 3] = 255;
     }
   }
-  return { width: frame.width, height: frame.height, data };
+  return { width: frame.width, height: frame.height, data, scale: 1 };
 }
 
 function read(
@@ -95,6 +95,7 @@ describe("readBoard", () => {
       width: frame.width,
       height: frame.height,
       data: new Uint8ClampedArray(frame.width * frame.height * 4).fill(200),
+      scale: 1,
     };
     expect(readBoard(stage, blank).kind).toBe("unsure");
   });

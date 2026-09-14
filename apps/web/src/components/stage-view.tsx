@@ -19,6 +19,8 @@ import type { Song } from "@/lib/midi/song";
 import { useSong } from "@/lib/midi/use-song";
 import type { PlayerParams } from "@/lib/player-url";
 import { lookAhead } from "@/lib/render/piano-roll";
+import type { SkinInstance } from "@/lib/skins/types";
+import { useBackground } from "@/lib/use-background";
 import { type BoardRead, readBoard } from "@/lib/vision/board";
 import { storedRange } from "@/lib/vision/calibration";
 import type { HandLayer } from "@/lib/vision/hands";
@@ -307,6 +309,18 @@ export function StageView({ params }: { params: PlayerParams | null }) {
   playingSong.current = song;
   const rolling = useRef(false);
   rolling.current = playback.playing;
+
+  // The stage shows whatever background the player is set to, so the two views
+  // of a song look like the same app.
+  const background = useBackground({
+    fixed: "down",
+    plain: false,
+    fromLink: { skin: params?.skin ?? null, rise: false },
+  });
+  const skinBase = useRef<HTMLCanvasElement | null>(null);
+  const skinOverlay = useRef<HTMLCanvasElement | null>(null);
+  const skin = useRef<SkinInstance | null>(null);
+  const skinFrom = useRef(0);
   const video = useRef<HTMLVideoElement | null>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const camera = useRef<KeybedCamera | null>(null);
@@ -356,6 +370,36 @@ export function StageView({ params }: { params: PlayerParams | null }) {
     watching.observe(box);
     return () => watching.disconnect();
   }, []);
+
+  useEffect(() => {
+    const base = skinBase.current;
+    const over = skinOverlay.current;
+    const source = background.source;
+    if (base === null || over === null || source === null) {
+      return;
+    }
+    const made = source.create({ base, overlay: over });
+    skin.current = made;
+    if (made === null) {
+      return;
+    }
+    const fit = (): void => {
+      const box = base.getBoundingClientRect();
+      made.resize(
+        box.width,
+        box.height,
+        Math.min(window.devicePixelRatio, 1.5),
+      );
+    };
+    fit();
+    const watching = new ResizeObserver(fit);
+    watching.observe(base);
+    return () => {
+      watching.disconnect();
+      made.dispose();
+      skin.current = null;
+    };
+  }, [background.source]);
 
   useEffect(() => {
     if (!isWebMidiSupported()) {
@@ -464,6 +508,21 @@ export function StageView({ params }: { params: PlayerParams | null }) {
         }
         const size = { width: element.videoWidth, height: element.videoHeight };
         clearFrame(context, output.current);
+        const behind = skin.current;
+        if (behind !== null) {
+          skinFrom.current ||= now;
+          behind.draw({
+            keyboardTop: output.current.height,
+            elapsed: (now - skinFrom.current) / 1000,
+            position: playhead.current(),
+            travellers: [],
+            strikes: [],
+            step: 1 / 60,
+            pressed: [...struck.current.keys()],
+            chord: null,
+            key: playingSong.current?.key ?? null,
+          });
+        }
         if (state.kind !== "held") {
           // Once the hunt is long enough to be a failure, the picture is what
           // the reader needs: they can only fix the aim by seeing it.
@@ -674,6 +733,20 @@ export function StageView({ params }: { params: PlayerParams | null }) {
         ref={stage}
         className="relative min-h-0 flex-1 overflow-hidden bg-void"
       >
+        {background.source === null ? null : (
+          <>
+            <canvas
+              key="skin-base"
+              ref={skinBase}
+              className="absolute inset-0 block size-full"
+            />
+            <canvas
+              key="skin-overlay"
+              ref={skinOverlay}
+              className="absolute inset-0 block size-full"
+            />
+          </>
+        )}
         {hunting ? (
           <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 px-6 text-center">
             <Loader2

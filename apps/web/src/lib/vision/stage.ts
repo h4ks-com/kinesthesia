@@ -38,10 +38,6 @@ const fadeSteps = 24;
 let edgeVeil: HTMLCanvasElement | null = null;
 let veilFor = "";
 
-/** What the stage sits on, which the picture has to fade into without a seam. */
-const voidColour = { red: 7, green: 8, blue: 11 };
-const voidFill = "#07080b";
-
 /** The fade at the frame's four edges, as a sheet of the stage's own colour
  * that is opaque at the border and clear inside. Painting it over the placed
  * picture leaves no edge, and it only changes when the camera does. */
@@ -87,10 +83,7 @@ function veilOfEdges(frameSize: Size, edges: number): HTMLCanvasElement | null {
     );
     for (let step = 0; step <= fadeSteps; step += 1) {
       const at = step / fadeSteps;
-      ramp.addColorStop(
-        at,
-        `rgba(${voidColour.red}, ${voidColour.green}, ${voidColour.blue}, ${(1 - at) ** 3})`,
-      );
+      ramp.addColorStop(at, `rgba(0, 0, 0, ${(1 - at) ** 3})`);
     }
     context.fillStyle = ramp;
     context.fillRect(
@@ -104,12 +97,14 @@ function veilOfEdges(frameSize: Size, edges: number): HTMLCanvasElement | null {
   return edgeVeil;
 }
 
+/** The stage is drawn on nothing, so whatever is mounted behind it, a
+ * background or the page's own ground, shows through wherever the picture has
+ * faded out. */
 export function clearFrame(
   context: CanvasRenderingContext2D,
   output: Size,
 ): void {
-  context.fillStyle = voidFill;
-  context.fillRect(0, 0, output.width, output.height);
+  context.clearRect(0, 0, output.width, output.height);
 }
 
 /** The whole camera frame, fitted inside the output. Used while aiming, where
@@ -168,23 +163,23 @@ export function drawCameraLayer(
   drawPlacedFrame(context, frame, frameSize, placement);
   const veil = veilOfEdges(frameSize, fade.edges);
   if (veil !== null) {
+    context.save();
+    context.globalCompositeOperation = "destination-out";
     drawPlacedFrame(context, veil, frameSize, placement);
+    context.restore();
   }
 
-  // The room darkens on the way up from the keys, so the picture arrives out of
-  // the background rather than sitting in a box. It runs from the top of the
-  // stage, so nothing above the keys is cut off anywhere.
+  // The room thins out on the way up from the keys, taking the picture with it,
+  // so what is drawn behind the stage comes through above the instrument.
   const gradient = context.createLinearGradient(0, top, 0, keysAt);
   for (let step = 0; step <= fadeSteps; step += 1) {
     const at = step / fadeSteps;
     const alpha = (1 - Math.min(1, at / Math.max(fade.softness, 0.01))) ** 3;
-    gradient.addColorStop(
-      at,
-      `rgba(${voidColour.red}, ${voidColour.green}, ${voidColour.blue}, ${alpha})`,
-    );
+    gradient.addColorStop(at, `rgba(0, 0, 0, ${alpha})`);
   }
   context.save();
-  context.fillStyle = voidFill;
+  context.globalCompositeOperation = "destination-out";
+  context.fillStyle = "#000";
   context.fillRect(0, 0, output.width, top);
   context.fillStyle = gradient;
   context.fillRect(0, top, output.width, keysAt - top);

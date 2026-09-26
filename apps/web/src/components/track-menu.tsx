@@ -268,6 +268,7 @@ export function TrackMenu({
                       aria-expanded={tinting === track.index}
                       aria-label={`Change how ${track.name} is drawn`}
                       data-tip="Colour and layer"
+                      data-tip-align="right"
                       className={`shrink-0 rounded-lg p-1.5 transition-colors ${
                         tinting === track.index
                           ? "text-accent"
@@ -411,54 +412,63 @@ function Swatches({
   onFront: (front: boolean) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5 px-2 pt-0.5 pb-2">
-      {paletteSlots.map((slot) => {
-        const color = paletteColor(slot);
-        const picked = slot === chosen;
-        return (
-          <button
-            key={slot}
-            type="button"
-            onClick={() => onPick(slot)}
-            aria-pressed={picked}
-            aria-label={`${color.name} for ${name}`}
-            data-tip={color.name}
-            // Marked by a glyph rather than a ring, which at this size reads as
-            // a slightly larger dot and is covered by the focus outline.
-            className="flex size-6 shrink-0 items-center justify-center rounded-full transition-transform hover:scale-110 pointer-coarse:size-9"
-            style={{ background: color.glow }}
-          >
-            <Check
-              className={`size-3.5 text-void pointer-coarse:size-5 ${picked ? "" : "invisible"}`}
-              aria-hidden="true"
-            />
-          </button>
-        );
-      })}
-      <button
-        type="button"
-        onClick={() => onFront(!front)}
-        aria-pressed={front}
-        aria-label={`Draw ${name} over the other tracks`}
-        data-tip="Draw over the rest"
-        className={`ml-auto shrink-0 rounded-lg p-1.5 transition-colors ${
-          front ? "text-accent" : "text-faint hover:bg-raised hover:text-accent"
-        }`}
-      >
-        <ArrowUpToLine className="size-4" aria-hidden="true" />
-      </button>
-      {/* Held rather than hidden once the colour is home, so pressing it does
+    <div className="flex items-start gap-2 px-2 pt-0.5 pb-2">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+        {paletteSlots.map((slot) => {
+          const color = paletteColor(slot);
+          const picked = slot === chosen;
+          return (
+            <button
+              key={slot}
+              type="button"
+              onClick={() => onPick(slot)}
+              aria-pressed={picked}
+              aria-label={`${color.name} for ${name}`}
+              data-tip={color.name}
+              // Marked by a glyph rather than a ring, which at this size reads as
+              // a slightly larger dot and is covered by the focus outline.
+              className="flex size-6 shrink-0 items-center justify-center rounded-full transition-transform hover:scale-110 pointer-coarse:size-9"
+              style={{ background: color.glow }}
+            >
+              <Check
+                className={`size-3.5 text-void pointer-coarse:size-5 ${picked ? "" : "invisible"}`}
+                aria-hidden="true"
+              />
+            </button>
+          );
+        })}
+      </div>
+      {/* We group the two actions so a narrow panel wraps only the swatches. */}
+      <div className="flex shrink-0 items-center">
+        <button
+          type="button"
+          onClick={() => onFront(!front)}
+          aria-pressed={front}
+          aria-label={`Draw ${name} over the other tracks`}
+          data-tip="Draw this track over the rest"
+          data-tip-align="right"
+          className={`shrink-0 rounded-lg p-1.5 transition-colors ${
+            front
+              ? "text-accent"
+              : "text-faint hover:bg-raised hover:text-accent"
+          }`}
+        >
+          <ArrowUpToLine className="size-4" aria-hidden="true" />
+        </button>
+        {/* Held rather than hidden once the colour is home, so pressing it does
           not unmount what the reader is standing on. */}
-      <button
-        type="button"
-        onClick={() => onPick(home)}
-        disabled={chosen === home}
-        aria-label={`Reset the colour of ${name}`}
-        data-tip="Reset colour"
-        className="shrink-0 rounded-lg p-1.5 text-faint transition-colors hover:bg-raised hover:text-accent disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-faint"
-      >
-        <RotateCcw className="size-4" aria-hidden="true" />
-      </button>
+        <button
+          type="button"
+          onClick={() => onPick(home)}
+          disabled={chosen === home}
+          aria-label={`Reset the colour of ${name}`}
+          data-tip="Reset colour"
+          data-tip-align="right"
+          className="shrink-0 rounded-lg p-1.5 text-faint transition-colors hover:bg-raised hover:text-accent disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-faint"
+        >
+          <RotateCcw className="size-4" aria-hidden="true" />
+        </button>
+      </div>
     </div>
   );
 }

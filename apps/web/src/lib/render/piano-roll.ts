@@ -1,4 +1,4 @@
-import { anyFront, isFront, type SongVoicing } from "@/lib/audio/voicing";
+import { layersOf, paintedIn, type SongVoicing } from "@/lib/audio/voicing";
 import type { Reach } from "@/lib/input/keyboard-map";
 import type { ExpressionTrail } from "@/lib/midi/expression";
 import { type NoteColor, pitchColor, trackColor } from "@/lib/midi/palette";
@@ -38,9 +38,6 @@ export const lookAhead = 3.5;
  * ahead so a long rest before the next note shows nothing until it nears. */
 const foreshadowLead = 1.6;
 const maxDevicePixelRatio = 1.5;
-/** Read back to front, so the tracks asked to the front are painted last. */
-const oneLayer: readonly boolean[] = [false];
-const bothLayers: readonly boolean[] = [false, true];
 /** How long a struck drum keeps its key lit. The note-off a MIDI writes for a
  * drum is arbitrary and often runs for a beat, which would hold the key long
  * after the hit it stands for. */
@@ -558,17 +555,16 @@ export class PianoRollRenderer {
     const bendTime = momentAt(position, keyboardTop, riseScale, rising);
     // A track asked to the front is painted after the rest, since a note that
     // starts later would otherwise cover one already sounding whatever part it
-    // belongs to. One pass where nobody has asked, which is most songs.
-    for (const inFront of anyFront(frame.voicing) ? bothLayers : oneLayer) {
+    // belongs to.
+    for (const inFront of layersOf(frame.voicing)) {
       for (let index = first; index < notes.length; index += 1) {
         const note = notes[index];
         if (note === undefined || note.start > horizon) {
           break;
         }
-        if (frame.hiddenTracks.has(note.track)) {
-          continue;
-        }
-        if (isFront(note.track, frame.voicing) !== inFront) {
+        if (
+          !paintedIn(note.track, frame.hiddenTracks, frame.voicing, inFront)
+        ) {
           continue;
         }
         const ghost = frame.yours !== null && !frame.yours.has(note.id);
@@ -780,84 +776,91 @@ export class PianoRollRenderer {
     const blackNote = blackKeyWidth(whiteWidth);
     const whiteNote = whiteWidth * 0.86;
 
-    for (const note of live) {
-      const headAge = position - note.start;
-      if (headAge < 0) {
-        continue;
-      }
-      const down = note.end === null;
-      const footAge = note.end === null ? 0 : position - note.end;
-      const bottom = keyboardTop - footAge * scale;
-      const color = trackColor(note.track, frame.voicing);
-      // Claimed before the geometry cull, so a note whose bar has climbed off
-      // the roll still owns its key.
-      if (down) {
-        active.set(note.pitch, color);
-      }
-      if (bottom < 0) {
-        continue;
-      }
-      const since = this.onsetSince;
-      if (since !== null && note.start > since) {
-        this.onsets.add(note.pitch);
-        frame.report?.strikes.push({
-          x: keyCenter(note.pitch, whiteWidth) - this.pan,
-          color: color.glow,
-          pitch: note.pitch,
-          velocity: note.velocity,
-        });
-      }
+    for (const inFront of layersOf(frame.voicing)) {
+      for (const note of live) {
+        if (
+          !paintedIn(note.track, frame.hiddenTracks, frame.voicing, inFront)
+        ) {
+          continue;
+        }
+        const headAge = position - note.start;
+        if (headAge < 0) {
+          continue;
+        }
+        const down = note.end === null;
+        const footAge = note.end === null ? 0 : position - note.end;
+        const bottom = keyboardTop - footAge * scale;
+        const color = trackColor(note.track, frame.voicing);
+        // Claimed before the geometry cull, so a note whose bar has climbed off
+        // the roll still owns its key.
+        if (down) {
+          active.set(note.pitch, color);
+        }
+        if (bottom < 0) {
+          continue;
+        }
+        const since = this.onsetSince;
+        if (since !== null && note.start > since) {
+          this.onsets.add(note.pitch);
+          frame.report?.strikes.push({
+            x: keyCenter(note.pitch, whiteWidth) - this.pan,
+            color: color.glow,
+            pitch: note.pitch,
+            velocity: note.velocity,
+          });
+        }
 
-      const top = keyboardTop - headAge * scale;
-      reportTraveller(
-        frame.report,
-        note.pitch,
-        note.velocity,
-        top,
-        whiteWidth,
-        color,
-        this.pan,
-      );
-      const noteWidth = isBlackKey(note.pitch) ? blackNote : whiteNote;
-      const x = keyCenter(note.pitch, whiteWidth) - noteWidth / 2;
-      const y = Math.max(0, top);
-      const noteHeight = Math.max(2, bottom - y);
-
-      // Brightest at the leading edge climbing away from the keys, deepening
-      // toward the foot once the note has been let go.
-      let fill: string | CanvasGradient;
-      if (frame.plain) {
-        fill = color.flat;
-      } else if (noteHeight >= gradientNoteHeight) {
-        const gradient = ctx.createLinearGradient(0, y, 0, y + noteHeight);
-        gradient.addColorStop(0, color.core);
-        gradient.addColorStop(down ? 0.6 : 0.25, color.glow);
-        gradient.addColorStop(1, down ? color.glow : color.shade);
-        fill = gradient;
-      } else {
-        fill = color.glow;
-      }
-      ctx.globalAlpha = punchOf(note.velocity);
-      ctx.fillStyle = fill;
-      const trail = frame.expression;
-      const bent =
-        trail?.touched(note.track) === true &&
-        this.traceBentNote(
-          trail,
-          note.track,
-          momentAt(position, keyboardTop, scale, true),
-          { x, y, width: noteWidth, height: noteHeight },
+        const top = keyboardTop - headAge * scale;
+        reportTraveller(
+          frame.report,
+          note.pitch,
+          note.velocity,
+          top,
           whiteWidth,
+          color,
+          this.pan,
         );
-      if (bent) {
-        ctx.fill();
-      } else if (noteHeight >= roundNoteSize && noteWidth >= roundNoteSize) {
-        roundRect(ctx, x, y, noteWidth, noteHeight, 4);
-        ctx.fill();
-      } else {
-        ctx.fillRect(x, y, noteWidth, noteHeight);
+        const noteWidth = isBlackKey(note.pitch) ? blackNote : whiteNote;
+        const x = keyCenter(note.pitch, whiteWidth) - noteWidth / 2;
+        const y = Math.max(0, top);
+        const noteHeight = Math.max(2, bottom - y);
+
+        // Brightest at the leading edge climbing away from the keys, deepening
+        // toward the foot once the note has been let go.
+        let fill: string | CanvasGradient;
+        if (frame.plain) {
+          fill = color.flat;
+        } else if (noteHeight >= gradientNoteHeight) {
+          const gradient = ctx.createLinearGradient(0, y, 0, y + noteHeight);
+          gradient.addColorStop(0, color.core);
+          gradient.addColorStop(down ? 0.6 : 0.25, color.glow);
+          gradient.addColorStop(1, down ? color.glow : color.shade);
+          fill = gradient;
+        } else {
+          fill = color.glow;
+        }
+        ctx.globalAlpha = punchOf(note.velocity);
+        ctx.fillStyle = fill;
+        const trail = frame.expression;
+        const bent =
+          trail?.touched(note.track) === true &&
+          this.traceBentNote(
+            trail,
+            note.track,
+            momentAt(position, keyboardTop, scale, true),
+            { x, y, width: noteWidth, height: noteHeight },
+            whiteWidth,
+          );
+        if (bent) {
+          ctx.fill();
+        } else if (noteHeight >= roundNoteSize && noteWidth >= roundNoteSize) {
+          roundRect(ctx, x, y, noteWidth, noteHeight, 4);
+          ctx.fill();
+        } else {
+          ctx.fillRect(x, y, noteWidth, noteHeight);
+        }
+        ctx.globalAlpha = 1;
       }
-      ctx.globalAlpha = 1;
     }
   }
 

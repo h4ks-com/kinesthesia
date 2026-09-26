@@ -107,6 +107,26 @@ export function isFront(track: number, voicing: SongVoicing): boolean {
   return voicing.get(track)?.front === true;
 }
 
+const oneLayer: readonly boolean[] = [false];
+const bothLayers: readonly boolean[] = [false, true];
+
+/** We paint back to front, and one pass is enough when no track asks for the
+ * front, which is most songs. */
+export function layersOf(voicing: SongVoicing): readonly boolean[] {
+  return anyFront(voicing) ? bothLayers : oneLayer;
+}
+
+/** Every painter asks this, so the roll, the notes a player sends and the map
+ * hide and stack tracks by one rule. */
+export function paintedIn(
+  track: number,
+  hiddenTracks: ReadonlySet<number>,
+  voicing: SongVoicing,
+  inFront: boolean,
+): boolean {
+  return !hiddenTracks.has(track) && isFront(track, voicing) === inFront;
+}
+
 export function asRecord(voicing: SongVoicing): StoredVoicing {
   return Object.fromEntries(
     [...voicing].map(([track, entry]) => [String(track), entry]),

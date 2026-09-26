@@ -1,4 +1,4 @@
-import { anyFront, isFront, type SongVoicing } from "@/lib/audio/voicing";
+import { layersOf, paintedIn, type SongVoicing } from "@/lib/audio/voicing";
 import { trackColor } from "@/lib/midi/palette";
 import type { SongNote } from "@/lib/midi/song";
 
@@ -13,9 +13,6 @@ export type MappedSong = {
  * a part that stays within an octave still reads as a line rather than a row of
  * dots. */
 const thinnestNote = 1.5;
-
-const oneLayer: readonly boolean[] = [false];
-const bothLayers: readonly boolean[] = [false, true];
 
 /** Left free above and below the outermost note, so the highest note in the
  * song is not drawn flush against the edge. */
@@ -64,12 +61,9 @@ export function drawSongMap(
   ctx.globalAlpha = lit ? 1 : 0.42;
   // A track asked to the front is drawn over the rest here too, so the map
   // reads the same way round as the roll.
-  for (const inFront of anyFront(voicing) ? bothLayers : oneLayer) {
+  for (const inFront of layersOf(voicing)) {
     for (const note of song.notes) {
-      if (
-        hiddenTracks.has(note.track) ||
-        isFront(note.track, voicing) !== inFront
-      ) {
+      if (!paintedIn(note.track, hiddenTracks, voicing, inFront)) {
         continue;
       }
       const color = trackColor(note.track, voicing);
